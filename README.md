@@ -36,7 +36,7 @@ Tudo isso é feito automaticamente — basta escolher a opção e deixar o scrip
 
 1 - Vá para o modo desktop no Steam Deck;
 
-2 - Baixe o arquivo [TurboDecky.desktop ](https://github.com/zarpon/Turbo-Decky-/releases/download/TURBODECKY/TurboDecky.desktop)da página de Releases;
+2 - Baixe o arquivo TurboDecky.desktop da página de Releases;
 
 3 - Clique e execute o arquivo.
 
