@@ -107,8 +107,9 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente ---
 readonly game_env_vars=(
     "radv_perftest=sam,gpl"
+    "mesa_glthread=true"
     "winefsync=1"
-    "mesa_shader_cache_max_size=10G"
+    "mesa_shader_cache_max_size=8G"
 )
 
 # --- Funções ---
