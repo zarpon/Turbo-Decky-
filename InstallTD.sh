@@ -13,6 +13,12 @@ readonly zswap_swapfile_size_gb="8"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
+# --- Constantes para otimização do MicroSD ---
+readonly sdcard_mount_point="/run/media/mmcblk0p1"
+readonly sdcard_steamapps_path="${sdcard_mount_point}/steamapps"
+readonly sdcard_shadercache_path="${sdcard_steamapps_path}/shadercache"
+readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
+
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
     "vm.swappiness=40"
@@ -408,6 +414,85 @@ UNIT
 }
 # --- FIM DA FUNÇÃO CORRIGIDA ---
 
+
+# --- NOVA FUNÇÃO DE OTIMIZAÇÃO DO MICROSD ---
+otimizar_sdcard_cache() {
+    _log "iniciando otimização de cache do microsd..."
+    
+    # 1. Verifica se o microsd e a pasta steamapps existem
+    if ! [ -d "$sdcard_steamapps_path" ]; then
+        _ui_info "erro" "diretório 'steamapps' não encontrado em $sdcard_mount_point. o microsd está inserido e formatado pelo steam?"
+        _log "falha: $sdcard_steamapps_path não encontrado."
+        return 1
+    fi
+
+    # 2. Verifica se já não foi otimizado (se é um link simbólico)
+    if [ -L "$sdcard_shadercache_path" ]; then
+        _ui_info "info" "o cache do microsd já parece estar otimizado (link simbólico encontrado)."
+        _log "otimização do microsd já aplicada."
+        return 0
+    fi
+
+    # 3. Cria o diretório de destino no NVMe
+    _log "criando diretório de destino no nvme: $nvme_shadercache_target_path"
+    mkdir -p "$nvme_shadercache_target_path"
+    
+    # 4. Tenta descobrir o usuário e grupo de /home/deck para definir as permissões corretas
+    local deck_user
+    local deck_group
+    deck_user=$(stat -c '%U' /home/deck 2>/dev/null || echo "deck")
+    deck_group=$(stat -c '%G' /home/deck 2>/dev/null || echo "deck")
+    
+    _log "ajustando permissões de $nvme_shadercache_target_path para ${deck_user}:${deck_group}"
+    chown "${deck_user}:${deck_group}" "$nvme_shadercache_target_path" 2>/dev/null || true
+
+    # 5. Move os shaders existentes (se a pasta existir) do microsd para o NVMe
+    if [ -d "$sdcard_shadercache_path" ]; then
+        _log "movendo shaders existentes do microsd para o nvme..."
+        # O '|| true' é vital caso a pasta esteja vazia ou dê erro
+        mv "$sdcard_shadercache_path"/* "$nvme_shadercache_target_path"/ 2>/dev/null || true
+        _log "movimentação concluída. removendo diretório original."
+        rmdir "$sdcard_shadercache_path" 2>/dev/null || true
+    else
+        _log "diretório de cache original não encontrado no microsd. pulando etapa de 'mv'."
+    fi
+
+    # 6. Cria o link simbólico
+    _log "criando link simbólico: $sdcard_shadercache_path -> $nvme_shadercache_target_path"
+    ln -s "$nvme_shadercache_target_path" "$sdcard_shadercache_path"
+    
+    _ui_info "sucesso" "otimização do cache do microsd concluída! os shaders agora serão salvos no nvme."
+    _log "otimização do microsd concluída."
+}
+
+# --- NOVA FUNÇÃO DE REVERSÃO DO MICROSD ---
+reverter_sdcard_cache() {
+    _log "iniciando reversão do cache do microsd..."
+
+    # 1. Verifica se a otimização foi aplicada (se é um link simbólico)
+    if ! [ -L "$sdcard_shadercache_path" ]; then
+        _ui_info "erro" "otimização não encontrada. o cache do microsd não parece estar usando um link simbólico."
+        _log "falha: link $sdcard_shadercache_path não encontrado."
+        return 1
+    fi
+
+    _log "removendo link simbólico: $sdcard_shadercache_path"
+    rm "$sdcard_shadercache_path"
+
+    _log "recriando diretório original no microsd: $sdcard_shadercache_path"
+    mkdir -p "$sdcard_shadercache_path"
+
+    _log "movendo shaders de volta do nvme para o microsd..."
+    mv "$nvme_shadercache_target_path"/* "$sdcard_shadercache_path"/ 2>/dev/null || true
+    _log "movimentação concluída. removendo diretório do nvme."
+    
+    rmdir "$nvme_shadercache_target_path" 2>/dev/null || true
+    
+    _ui_info "sucesso" "reversão do cache do microsd concluída. os caches voltarão a ser salvos no microsd."
+    _log "reversão do microsd concluída."
+}
+
+
 aplicar_zswap() {
     # --- Limpeza Prévia ---
     _log "garantindo aplicação limpa: executando reversão primeiro."
@@ -571,7 +656,7 @@ ZSWAP_SCRIPT
         return 1
     fi
 
-    _ui_info "sucesso" "otimizacoes aplicadas com sucesso. reinicie o sistema.";
+    _ui_info "sucesso" "otimacoes aplicadas com sucesso. reinicie o sistema.";
     _log "Otimizações aplicadas com sucesso!.";
     return 0
 }
@@ -653,6 +738,7 @@ reverter_alteracoes() {
     _log "reversão completa executada"
 }
 
+# --- FUNÇÃO MAIN ATUALIZADA ---
 main() {
     local texto_inicial="autor: $autor\n\ndoações (pix): $pix_doacao\n\nEste programa aplica um conjunto abrangente de otimizações de memória, i/o e sistema no steamos. todas as alterações podem ser revertidas."
     
@@ -661,16 +747,20 @@ main() {
     echo -e "=======================================================\n$texto_inicial\n\n-------------------------------------------------------\n"
     
     echo "opções:";
-    echo "1) Aplicar otimizações e turbinar o SteamOs";
-    echo "2) Reverter todas as alterações";
-    echo "3) Sair"
+    echo "1) Aplicar otimizações principais no SteamOs"
+    echo "2) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
+    echo "3) Reverter otimizações principais do SteamOs"
+    echo "4) Reverter otimização do cache de jogos do MicroSD"
+    echo "5) Sair"
     
-    read -rp "escolha uma opção (1-3): " escolha
+    read -rp "escolha uma opção (1-5): " escolha
     
     case "$escolha" in
         1) aplicar_zswap ;;
-        2) reverter_alteracoes ;;
-        3) _ui_info "saindo" "nenhuma alteração foi feita."; exit 0 ;;
+        2) otimizar_sdcard_cache ;;
+        3) reverter_alteracoes ;;
+        4) reverter_sdcard_cache ;;
+        5) _ui_info "saindo" "nenhuma alteração foi feita."; exit 0 ;;
         *) _ui_info "erro" "opção inválida."; exit 1 ;;
     esac
 }
