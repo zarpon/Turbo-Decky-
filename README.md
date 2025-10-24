@@ -46,10 +46,11 @@ Tudo isso é feito automaticamente — basta escolher a opção e deixar o scrip
 
 
 chmod +x InstallTD.sh
+
 Agora, execute o script com privilégios de administrador (sudo):
 
-
 sudo ./InstallTD.sh
+
 Digite sua senha de administrador quando solicitado e pressione Enter.
 
 Siga as instruções na tela.
