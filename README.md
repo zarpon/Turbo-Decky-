@@ -54,3 +54,8 @@ sudo ./InstallTD.sh
 Digite sua senha de administrador quando solicitado e pressione Enter.
 
 Siga as instruções na tela.
+
+#Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
+
+#Video com benchmark comparativo
+https://youtu.be/lf2oYmHiYD8?si=Uo1esBPQuwG6jMG9
