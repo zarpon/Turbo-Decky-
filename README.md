@@ -1,7 +1,7 @@
 # Turbo-Decky-
 Script de otimização do SteamOs 
 
-O que é o Turbo Decky?
+# O que é o Turbo Decky?
 
 O Turbo Decky é um utilitário criado para melhorar o desempenho do SteamOS (usado no Steam Deck) e deixar o sistema mais rápido, fluido e estável — especialmente em jogos.
 
@@ -11,7 +11,7 @@ Essas otimizações são seguras, reversíveis e voltadas para quem quer mais de
 
 ---
 
-O que ele faz?
+# O que ele faz?
 
 O Turbo Decky aplica uma série de melhorias internas, como:
 
@@ -32,7 +32,7 @@ Ajusta limites do sistema para evitar gargalos em jogos.
 
 Tudo isso é feito automaticamente — basta escolher a opção e deixar o script trabalhar.
 
-Como Instalar e Executar
+# Como Instalar e Executar
 
 Baixe o arquivo Source code (zip) da página de Releases;
 
