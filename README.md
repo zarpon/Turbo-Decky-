@@ -34,26 +34,16 @@ Tudo isso é feito automaticamente — basta escolher a opção e deixar o scrip
 
 # Como Instalar e Executar
 
-1 - Baixe o arquivo Source code (zip) da página de Releases;
+1 - Vá para o modo desktop no Steam Deck;
 
-2 - Descompacte o arquivo .zip (clique com o botão direito > Extrair).
+2 - Baixe o arquivo TurboDecky.desktop da página de Releases;
 
-3 - Abra a pasta que você acabou de descompactar 
+3 - Clique e execute o arquivo.
 
-4 - Clique com o botão direito em um espaço vazio dentro da pasta e escolha "Abrir Terminal Aqui" (Open Terminal Here).
+4 - Insira a Senha de super usuário e siga as instruções no menu.
 
-5 - No terminal, digite o comando abaixo para dar permissão de execução ao script:
+5 - Reinicie o Steam Deck!
 
-
-chmod +x InstallTD.sh
-
-Agora, execute o script com privilégios de administrador (sudo):
-
-sudo ./InstallTD.sh
-
-Digite sua senha de administrador quando solicitado e pressione Enter.
-
-Siga as instruções na tela.
 
 # Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
 
