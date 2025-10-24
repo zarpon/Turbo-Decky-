@@ -34,15 +34,15 @@ Tudo isso é feito automaticamente — basta escolher a opção e deixar o scrip
 
 # Como Instalar e Executar
 
-Baixe o arquivo Source code (zip) da página de Releases;
+1 - Baixe o arquivo Source code (zip) da página de Releases;
 
-Descompacte o arquivo .zip (clique com o botão direito > Extrair).
+2 - Descompacte o arquivo .zip (clique com o botão direito > Extrair).
 
-Abra a pasta que você acabou de descompactar 
+3 - Abra a pasta que você acabou de descompactar 
 
-Clique com o botão direito em um espaço vazio dentro da pasta e escolha "Abrir Terminal Aqui" (Open Terminal Here).
+4 - Clique com o botão direito em um espaço vazio dentro da pasta e escolha "Abrir Terminal Aqui" (Open Terminal Here).
 
-No terminal, digite o comando abaixo para dar permissão de execução ao script:
+5 - No terminal, digite o comando abaixo para dar permissão de execução ao script:
 
 
 chmod +x InstallTD.sh
