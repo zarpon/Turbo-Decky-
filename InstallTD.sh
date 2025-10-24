@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.12 Flash"
+versao="1.0.13 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -107,9 +107,8 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente ---
 readonly game_env_vars=(
     "radv_perftest=sam,gpl"
-    "mesa_glthread=true"
     "winefsync=1"
-    "mesa_shader_cache_max_size=15G"
+    "mesa_shader_cache_max_size=10G"
 )
 
 # --- Funções ---
