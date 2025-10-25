@@ -44,6 +44,7 @@ Tudo isso é feito automaticamente — basta escolher a opção e deixar o scrip
 
 5 - Reinicie o Steam Deck!
 
+Atenção! , é necessário reaplicar as otimizações sempre que a versão do SteamOs atualizar. 
 
 # Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
 
