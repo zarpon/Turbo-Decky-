@@ -46,6 +46,10 @@ Tudo isso é feito automaticamente — basta escolher a opção e deixar o scrip
 
 Atenção! , é necessário reaplicar as otimizações sempre que a versão do SteamOs atualizar. 
 
+# Agradecimentos
+
+Agradecemos a toda a comunidade Linux, especialmente desenvolvedores como o time do sdweak e cryoutilities que foram grande inspiração para esse projeto. 
+
 # Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
 
 # Video com benchmark comparativo
