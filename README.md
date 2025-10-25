@@ -50,7 +50,10 @@ Atenção! , é necessário reaplicar as otimizações sempre que a versão do S
 
 Agradecemos a toda a comunidade Linux, especialmente desenvolvedores como o time do sdweak e cryoutilities que foram grande inspiração para esse projeto. 
 
-# Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
+# Contribua se puder
 
-# Video com benchmark comparativo
+Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
+
+# Video com benchmark comparativo no canal do YouTube, se inscreva! 
+
 https://youtu.be/lf2oYmHiYD8?si=Uo1esBPQuwG6jMG9
