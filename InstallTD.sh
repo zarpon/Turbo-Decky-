@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.14 Flash"
+versao="1.0.15 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -14,9 +14,9 @@ readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
 # --- Constantes para otimização do MicroSD ---
-readonly sdcard_mount_point="/run/media/mmcblk0p1"
-readonly sdcard_steamapps_path="${sdcard_mount_point}/steamapps"
-readonly sdcard_shadercache_path="${sdcard_steamapps_path}/shadercache"
+# O dispositivo do microsd
+readonly sdcard_device="/dev/mmcblk0p1"
+# O diretório de destino no NVMe (SSD interno)
 readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
@@ -180,17 +180,17 @@ _write_sysctl_file() {
     shift;
     local params=("$@")
     local tmp="${file_path}.tmp"
-    
+
     if [ ${#params[@]} -eq 0 ]; then
         _log "erro: tentou escrever arquivo sysctl sem parâmetros.";
         return 1;
     fi
-    
+
     touch "$tmp"
     if [[ -f "$file_path" ]]; then
         grep -vE '^(#.*|vm\.|kernel\.|fs\.|net\.)' "$file_path" >"$tmp" 2>/dev/null || true;
     fi
-    
+
     printf "%s\n" "${params[@]}" >>"$tmp"
     mv "$tmp" "$file_path"
     _log "sysctl escrito: $file_path com ${#params[@]} parâmetros."
@@ -214,11 +214,11 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu automaticamente..."
     mkdir -p /etc/modprobe.d
-    
+
     # Aplica as configurações do amdgpu.conf
     echo "options gpu_sched sched_policy=0" > /etc/modprobe.d/amdgpu.conf
     echo "options amdgpu mes=1 moverate=128 uni_mes=1 lbpw=0 mes_kiq=1" >> /etc/modprobe.d/amdgpu.conf
-    
+
     _ui_info "gpu" "otimizações amdgpu (MES, FIFO) aplicadas automaticamente."
     _log "arquivo /etc/modprobe.d/amdgpu.conf criado/atualizado."
 }
@@ -226,7 +226,7 @@ _optimize_gpu() {
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d
-    
+
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
 w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
@@ -264,7 +264,7 @@ manage_unnecessary_services() {
 create_common_scripts_and_services() {
     _log "criando/atualizando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
-    
+
 cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
 sleep 5
@@ -272,10 +272,10 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
     [ -d "$dev_path" ] || continue
     dev_name=$(basename "$dev_path")
     queue_path="$dev_path/queue"
-    
+
     echo 0 > "$queue_path/iostats" 2>/dev/null || true
     echo 0 > "$queue_path/add_random" 2>/dev/null || true
-    
+
     case "$dev_name" in
     nvme*)
         # Tenta definir o agendador
@@ -283,24 +283,24 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
             echo "kyber" > "$queue_path/scheduler" 2>/dev/null || true
         elif [ -w "$queue_path/scheduler" ]; then
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
-            
+
             # --- Otimizações específicas do MQ-DEADLINE (não se aplicam ao Kyber) ---
             echo 6000000 > "$queue_path/iosched/write_lat_nsec" 2>/dev/null || true
             echo 1200000 > "$queue_path/iosched/read_lat_nsec" 2>/dev/null || true
         fi
-        
+
         # --- Otimizações gerais de NVMe (aplicáveis a Kyber e MQ-Deadline) ---
         echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 2 > "$queue_path/nomerges" 2>/dev/null || true
         echo 999 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
-        
+
     mmcblk*|sd*)
         # Tenta definir o agendador
         if [[ -w "$queue_path/scheduler" ]] && grep -q "bfq" "$queue_path/scheduler"; then
             echo "bfq" > "$queue_path/scheduler" 2>/dev/null || true
-            
+
             # --- Otimizações específicas do BFQ ---
             echo 1 > "$queue_path/iosched/low_latency" 2>/dev/null || true
             echo 0 > "$queue_path/iosched/slice_idle_us" 2>/dev/null || true
@@ -309,11 +309,11 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
             echo 100 > "$queue_path/iosched/fifo_expire_sync" 2>/dev/null || true
             echo 0 > "$queue_path/iosched/slice_idle" 2>/dev/null || true
             echo 100 > "$queue_path/iosched/timeout_sync" 2>/dev/null || true
-            
+
         elif [ -w "$queue_path/scheduler" ]; then
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
-        
+
         # --- Otimizações gerais de microSD/SD (aplicáveis a BFQ e MQ-Deadline) ---
         echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
@@ -376,11 +376,11 @@ MMT
         description="";
         case "$service_name" in
             thp-config) description="configuracao otimizada de thp";;
-            io-boost) description="otimizacao de i/o e agendadores de disco";;
+            io-boost) description="otimização de i/o e agendadores de disco";;
             hugepages) description="aloca huge pages para jogos";;
             ksm-config) description="desativa kernel samepage merging (ksm)";;
             kernel-tweaks) description="aplica tweaks diversos no kernel";;
-            mem-tweaks) description="otimizacao de alocacao de memoria";;
+            mem-tweaks) description="otimização de alocacao de memoria";;
         esac
 
 # --- CORREÇÃO: Removido aspas simples de UNIT ---
@@ -395,7 +395,7 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     done
-    
+
     # Cria o serviço zswap-config separadamente (ele tem seu script criado dentro do bloco principal)
 # --- CORREÇÃO: Removido aspas simples de UNIT ---
 cat <<UNIT > /etc/systemd/system/zswap-config.service
@@ -415,13 +415,29 @@ UNIT
 # --- FIM DA FUNÇÃO CORRIGIDA ---
 
 
-# --- NOVA FUNÇÃO DE OTIMIZAÇÃO DO MICROSD ---
+# --- NOVA FUNÇÃO DE OTIMIZAÇÃO DO MICROSD (com detecção automática) ---
 otimizar_sdcard_cache() {
     _log "iniciando otimização de cache do microsd..."
-    
-    # 1. Verifica se o microsd e a pasta steamapps existem
+
+    # --- Detecção dinâmica do ponto de montagem ---
+    local sdcard_mount_point
+    sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
+
+    if [[ -z "$sdcard_mount_point" ]]; then
+        _ui_info "erro" "não foi possível encontrar o ponto de montagem para $sdcard_device. o microsd está inserido?"
+        _log "falha: findmnt não encontrou o ponto de montagem para $sdcard_device."
+        return 1
+    fi
+    _log "microsd detectado em: $sdcard_mount_point"
+    # --- Fim da detecção ---
+
+    # Define os caminhos dinamicamente
+    local sdcard_steamapps_path="${sdcard_mount_point}/steamapps"
+    local sdcard_shadercache_path="${sdcard_steamapps_path}/shadercache"
+
+    # 1. Verifica se a pasta steamapps existe
     if ! [ -d "$sdcard_steamapps_path" ]; then
-        _ui_info "erro" "diretório 'steamapps' não encontrado em $sdcard_mount_point. o microsd está inserido e formatado pelo steam?"
+        _ui_info "erro" "diretório 'steamapps' não encontrado em $sdcard_mount_point. o microsd está formatado pelo steam?"
         _log "falha: $sdcard_steamapps_path não encontrado."
         return 1
     fi
@@ -436,13 +452,13 @@ otimizar_sdcard_cache() {
     # 3. Cria o diretório de destino no NVMe
     _log "criando diretório de destino no nvme: $nvme_shadercache_target_path"
     mkdir -p "$nvme_shadercache_target_path"
-    
+
     # 4. Tenta descobrir o usuário e grupo de /home/deck para definir as permissões corretas
     local deck_user
     local deck_group
     deck_user=$(stat -c '%U' /home/deck 2>/dev/null || echo "deck")
     deck_group=$(stat -c '%G' /home/deck 2>/dev/null || echo "deck")
-    
+
     _log "ajustando permissões de $nvme_shadercache_target_path para ${deck_user}:${deck_group}"
     chown "${deck_user}:${deck_group}" "$nvme_shadercache_target_path" 2>/dev/null || true
 
@@ -460,14 +476,30 @@ otimizar_sdcard_cache() {
     # 6. Cria o link simbólico
     _log "criando link simbólico: $sdcard_shadercache_path -> $nvme_shadercache_target_path"
     ln -s "$nvme_shadercache_target_path" "$sdcard_shadercache_path"
-    
+
     _ui_info "sucesso" "otimização do cache do microsd concluída! os shaders agora serão salvos no nvme."
     _log "otimização do microsd concluída."
 }
 
-# --- NOVA FUNÇÃO DE REVERSÃO DO MICROSD ---
+# --- NOVA FUNÇÃO DE REVERSÃO DO MICROSD (com detecção automática) ---
 reverter_sdcard_cache() {
     _log "iniciando reversão do cache do microsd..."
+
+    # --- Detecção dinâmica do ponto de montagem ---
+    local sdcard_mount_point
+    sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
+
+    if [[ -z "$sdcard_mount_point" ]]; then
+        _ui_info "erro" "não foi possível encontrar o ponto de montagem para $sdcard_device. o microsd está inserido?"
+        _log "falha: findmnt não encontrou o ponto de montagem para $sdcard_device."
+        return 1
+    fi
+    _log "microsd detectado em: $sdcard_mount_point"
+    # --- Fim da detecção ---
+
+    # Define os caminhos dinamicamente
+    local sdcard_steamapps_path="${sdcard_mount_point}/steamapps"
+    local sdcard_shadercache_path="${sdcard_steamapps_path}/shadercache"
 
     # 1. Verifica se a otimização foi aplicada (se é um link simbólico)
     if ! [ -L "$sdcard_shadercache_path" ]; then
@@ -485,9 +517,9 @@ reverter_sdcard_cache() {
     _log "movendo shaders de volta do nvme para o microsd..."
     mv "$nvme_shadercache_target_path"/* "$sdcard_shadercache_path"/ 2>/dev/null || true
     _log "movimentação concluída. removendo diretório do nvme."
-    
+
     rmdir "$nvme_shadercache_target_path" 2>/dev/null || true
-    
+
     _ui_info "sucesso" "reversão do cache do microsd concluída. os caches voltarão a ser salvos no microsd."
     _log "reversão do microsd concluída."
 }
@@ -509,7 +541,7 @@ aplicar_zswap() {
         _log "selinux set to permissive."
     fi
     # --- FIM SELinux ---
-    
+
     # --- GPU Otimização ---
     _optimize_gpu
     # --- FIM GPU ---
@@ -640,7 +672,7 @@ ZSWAP_SCRIPT
         _log "habilitando e iniciando todos os serviços de otimização..."
         systemctl daemon-reload || true;
         # A lista otimization_services agora contém todos os serviços necessários
-        systemctl enable --now "${otimization_services[@]}" || true; 
+        systemctl enable --now "${otimization_services[@]}" || true;
         systemctl enable --now fstrim.timer 2>/dev/null || true
         sync
 
@@ -699,7 +731,7 @@ rm -f /usr/local/bin/swap-boost.sh
 echo "removendo arquivos de configuração extra..."
 rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf
 rm -f /etc/modprobe.d/usbhid.conf /etc/modprobe.d/blacklist-zram.conf
-rm -f /etc/modprobe.d/amdgpu.conf 
+rm -f /etc/modprobe.d/amdgpu.conf
 
 echo "removendo swapfile customizado e restaurando /etc/fstab..."
 swapoff "\$swapfile_path" 2>/dev/null || true;
@@ -733,7 +765,7 @@ BASH
 reverter_alteracoes() {
     _log "iniciando reversão completa das alterações (via menu)"
     _executar_reversao # Chama a nova função de lógica
-    
+
     _ui_info "reversão" "reversão completa concluída. reinicie o sistema.";
     _log "reversão completa executada"
 }
@@ -741,24 +773,25 @@ reverter_alteracoes() {
 # --- FUNÇÃO MAIN ATUALIZADA ---
 main() {
     local texto_inicial="autor: $autor\n\ndoações (pix): $pix_doacao\n\nEste programa aplica um conjunto abrangente de otimizações de memória, i/o e sistema no steamos. todas as alterações podem ser revertidas."
-    
+
     echo -e "\n======================================================="
     echo -e " Bem-vindo(a) ao utilitário Turbo Decky (v$versao)"
     echo -e "=======================================================\n$texto_inicial\n\n-------------------------------------------------------\n"
-    
+
     echo "opções:";
-    echo "1) Aplicar otimizações principais no SteamOs"
+    echo "1) Aplicar otimizações principais do SteamOS"
     echo "2) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
     echo "3) Reverter otimizações principais do SteamOs"
-    echo "4) Reverter otimização do cache de jogos do MicroSD"
+    echo "4) Reverter otimização do cache do MicroSD"
     echo "5) Sair"
-    
+
     read -rp "escolha uma opção (1-5): " escolha
-    
+
     case "$escolha" in
         1) aplicar_zswap ;;
         2) otimizar_sdcard_cache ;;
         3) reverter_alteracoes ;;
+        4.1) reverter_sdcard_cache ;; # Correção aqui, deve ser 4
         4) reverter_sdcard_cache ;;
         5) _ui_info "saindo" "nenhuma alteração foi feita."; exit 0 ;;
         *) _ui_info "erro" "opção inválida."; exit 1 ;;
