@@ -22,7 +22,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
     "vm.swappiness=100"
-    "vm.vfs_cache_pressure=66"
+    "vm.vfs_cache_pressure=50"
    "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
     "vm.dirty_expire_centisecs=1500"
