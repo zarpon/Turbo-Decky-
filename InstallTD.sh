@@ -78,7 +78,7 @@ readonly bore_params=(
 
 # --- parâmetros de fallback para o agendador cfs ---
 readonly cfs_params=(
-    ""kernel.sched_bore=1" "kernel.sched_burst_cache_lifetime=40000000"
+    "kernel.sched_bore=1" "kernel.sched_burst_cache_lifetime=40000000"
    "kernel.sched_burst_fork_atavistic=2"
     "kernel.sched_burst_penalty_offset=26"
     "kernel.sched_burst_penalty_scale=1000"
