@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.17 Flash"
+versao="1.0.18 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
