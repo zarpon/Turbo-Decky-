@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.16 Flash"
+versao="1.0.17 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -115,8 +115,9 @@ readonly game_env_vars=(
   "MESA_GLTHREAD=true"
   "WINEFSYNC=1"
   "MESA_SHADER_CACHE_MAX_SIZE=20G"
+  "DXVK_ASYNC=1"
+  "MESA_VK_ENABLE_ABOVE_4G=true"
 )
-
 # --- Funções ---
 
 _ui_info() {
