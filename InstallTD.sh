@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.18 Flash"
+versao="1.0.19 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +21,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=40"
+    "vm.swappiness=100"
     "vm.vfs_cache_pressure=66"
    "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
@@ -78,9 +78,15 @@ readonly bore_params=(
 
 # --- parâmetros de fallback para o agendador cfs ---
 readonly cfs_params=(
-    "kernel.sched_cfs_aggressive_slice_reduction=1"
-    "kernel.sched_cfs_slice_scaling_factor=1"
-    "kernel.sched_cfs_target_latency_factor=2"
+    ""kernel.sched_bore=1" "kernel.sched_burst_cache_lifetime=40000000"
+   "kernel.sched_burst_fork_atavistic=2"
+    "kernel.sched_burst_penalty_offset=26"
+    "kernel.sched_burst_penalty_scale=1000"
+    "kernel.sched_burst_smoothness_long=0"
+    "kernel.sched_burst_smoothness_short=0"
+    "kernel.sched_burst_exclude_kthreads=1"
+    "kernel.sched_burst_parity_threshold=1"
+
 )
 
 # --- listas de serviços ---
