@@ -111,13 +111,25 @@ readonly unnecessary_services=(
 
 # --- variáveis de ambiente ---
 readonly game_env_vars=(
-  "RADV_PERFTEST=gpl"
+  # Desempenho Vulkan: Ativa Smart Access Memory (sam) e Graphics Pipeline Library (gpl)
+  "RADV_PERFTEST=sam,gpl"
+  
+  # Desempenho OpenGL: Move o processamento de GL para uma thread separada
   "MESA_GLTHREAD=true"
+  
+  # Sincronização: Garante o uso do Fsync (método moderno)
   "WINEFSYNC=1"
-  "MESA_SHADER_CACHE_MAX_SIZE=20G"
-  "DXVK_ASYNC=1"
-  "MESA_VK_ENABLE_ABOVE_4G=true"
+  
+  # Cache Moderno: Define o tamanho do cache de shader (nova sintaxe)
+  "MESA_DISK_CACHE_SIZE=20G"
+  
+  # Compatibilidade: Permite que jogos 32-bit usem mais RAM
+  "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
+  
+  # Opcional (OpenGL): Reduz stutter em troca de loads mais longos
+  "radeonsi_shader_precompile=true"
 )
+
 # --- Funções ---
 
 _ui_info() {
