@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.19 Flash"
+versao="1.0.21 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -74,19 +74,6 @@ readonly bore_params=(
     "kernel.sched_burst_smoothness_short=0"
     "kernel.sched_burst_exclude_kthreads=1"
     "kernel.sched_burst_parity_threshold=1"
-)
-
-# --- parâmetros de fallback para o agendador cfs ---
-readonly cfs_params=(
-    "kernel.sched_bore=1" "kernel.sched_burst_cache_lifetime=40000000"
-   "kernel.sched_burst_fork_atavistic=2"
-    "kernel.sched_burst_penalty_offset=26"
-    "kernel.sched_burst_penalty_scale=1000"
-    "kernel.sched_burst_smoothness_long=0"
-    "kernel.sched_burst_smoothness_short=0"
-    "kernel.sched_burst_exclude_kthreads=1"
-    "kernel.sched_burst_parity_threshold=1"
-
 )
 
 # --- listas de serviços ---
@@ -229,15 +216,19 @@ _steamos_readonly_disable_if_needed() {
     fi
 }
 
+# --- FUNÇÃO _optimize_gpu CORRIGIDA ---
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu automaticamente..."
     mkdir -p /etc/modprobe.d
 
-    # Aplica as configurações do amdgpu.conf
-    echo "options amdgpu sched_policy=0 mes=1 moverate=128 uni_mes=1 lbpw=0 mes_kiq=1" > /etc/modprobe.d/amdgpu.conf
+    # Arquivo 1: Define o agendador da GPU como FIFO (baixa latência)
+    echo "options gpu_sched sched_policy=0" > /etc/modprobe.d/99-gpu-sched.conf
+
+    # Arquivo 2: Ativa o Micro-Engine Scheduler (MES) e outros
+    echo "options amdgpu mes=1 moverate=128 uni_mes=1 lbpw=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
 
     _ui_info "gpu" "otimizações amdgpu (MES, FIFO) aplicadas automaticamente."
-    _log "arquivo /etc/modprobe.d/amdgpu.conf criado/atualizado."
+    _log "arquivos /etc/modprobe.d/ (gpu-sched e amdgpu-mes) criados/atualizados."
 }
 
 create_persistent_configs() {
@@ -277,11 +268,12 @@ manage_unnecessary_services() {
     fi
 }
 
-# --- FUNÇÃO create_common_scripts_and_services CORRIGIDA (v1.5) ---
+# --- FUNÇÃO create_common_scripts_and_services ATUALIZADA ---
 create_common_scripts_and_services() {
     _log "criando/atualizando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
 
+# --- Script io-boost.sh ATUALIZADO ---
 cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
 sleep 5
@@ -307,7 +299,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
         fi
 
         # --- Otimizações gerais de NVMe (aplicáveis a Kyber e MQ-Deadline) ---
-        echo 512 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 2 > "$queue_path/nomerges" 2>/dev/null || true
         echo 999 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
@@ -332,7 +324,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
         fi
 
         # --- Otimizações gerais de microSD/SD (aplicáveis a BFQ e MQ-Deadline) ---
-        echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
         echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
@@ -354,17 +346,45 @@ echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/n
 THP
     chmod +x /usr/local/bin/thp-config.sh
 
+# --- Script kernel-tweaks.sh ATUALIZADO (com schedutil BALANCEADO) ---
 cat <<'KTS' > /usr/local/bin/kernel-tweaks.sh
 #!/usr/bin/env bash
-echo 0 > /sys/kernel/debug/exception-trace 2>/dev/null || true
-echo 0 > /proc/sys/kernel/ftrace_enabled 2>/dev/null || true
-echo 2048 > /sys/class/rtc/rtc0/max_user_freq 2>/dev/null || true
-echo 2048 > /proc/sys/dev/hpet/max-user-freq 2>/dev/null || true
-echo NO_PLACE_LAG > /sys/kernel/debug/sched/features 2>/dev/null || true
-echo NO_RUN_TO_PARITY > /sys/kernel/debug/sched/features 2>/dev/null || true
-echo NEXT_BUDDY > /sys/kernel/debug/sched/features 2>/dev/null || true
-echo 1000000 > /sys/kernel/debug/sched/migration_cost_ns 2>/dev/null || true
-echo 4 > /sys/kernel/debug/sched/nr_migrate 2>/dev/null || true
+
+# Função helper para escrever apenas se o arquivo existir e for gravável
+write_if_exists() {
+    local file="$1"
+    local value="$2"
+    [ -w "$file" ] && echo "$value" > "$file" 2>/dev/null || true
+}
+
+# --- Tweaks Padrão ---
+write_if_exists /sys/kernel/debug/exception-trace 0
+write_if_exists /proc/sys/kernel/ftrace_enabled 0
+write_if_exists /sys/class/rtc/rtc0/max_user_freq 2048
+write_if_exists /proc/sys/dev/hpet/max-user-freq 2048
+write_if_exists /sys/kernel/debug/sched/features NO_PLACE_LAG
+write_if_exists /sys/kernel/debug/sched/features NO_RUN_TO_PARITY
+write_if_exists /sys/kernel/debug/sched/features NEXT_BUDDY
+write_if_exists /sys/kernel/debug/sched/migration_cost_ns 1000000
+write_if_exists /sys/kernel/debug/sched/nr_migrate 4
+
+# --- Otimizações Schedutil (MODO EQUILIBRADO) ---
+# Valores menos agressivos para um balanço entre performance e bateria.
+readonly UINT_MAX=4294967295 # Valor máximo de 32 bits
+
+find /sys/devices/system/cpu/ -name schedutil -type d | while IFS= read -r governor
+do
+    # Rampa de subida de 5ms (mais rápido que o padrão, mas 5x mais lento que o agressivo)
+    write_if_exists "$governor/up_rate_limit_us" 5000
+    # Rampa de descida de 20ms (permite "coasting" para economizar bateria)
+    write_if_exists "$governor/down_rate_limit_us" 20000
+    # Fallback para kernels antigos
+    write_if_exists "$governor/rate_limit_us" 5000
+
+    # Pula para a frequência alta um pouco mais cedo (85%)
+    write_if_exists "$governor/hispeed_load" 85
+    write_if_exists "$governor/hispeed_freq" "$UINT_MAX"
+done
 KTS
     chmod +x /usr/local/bin/kernel-tweaks.sh
 
@@ -400,7 +420,6 @@ MMT
             mem-tweaks) description="otimização de alocacao de memoria";;
         esac
 
-# --- CORREÇÃO: Removido aspas simples de UNIT ---
 cat <<UNIT > /etc/systemd/system/${service_name}.service
 [Unit]
 Description=${description}
@@ -414,7 +433,6 @@ UNIT
     done
 
     # Cria o serviço zswap-config separadamente (ele tem seu script criado dentro do bloco principal)
-# --- CORREÇÃO: Removido aspas simples de UNIT ---
 cat <<UNIT > /etc/systemd/system/zswap-config.service
 [Unit]
 Description=aplicar configuracoes zswap
@@ -429,10 +447,10 @@ UNIT
     systemctl daemon-reload || true
     _log "scripts e services comuns criados/atualizados e instalados."
 }
-# --- FIM DA FUNÇÃO CORRIGIDA ---
+# --- FIM DA FUNÇÃO ---
 
 
-# --- NOVA FUNÇÃO DE OTIMIZAÇÃO DO MICROSD (com detecção automática) ---
+# --- FUNÇÃO DE OTIMIZAÇÃO DO MICROSD ---
 otimizar_sdcard_cache() {
     _log "iniciando otimização de cache do microsd..."
 
@@ -498,7 +516,7 @@ otimizar_sdcard_cache() {
     _log "otimização do microsd concluída."
 }
 
-# --- NOVA FUNÇÃO DE REVERSÃO DO MICROSD (com detecção automática) ---
+# --- FUNÇÃO DE REVERSÃO DO MICROSD ---
 reverter_sdcard_cache() {
     _log "iniciando reversão do cache do microsd..."
 
@@ -541,6 +559,7 @@ reverter_sdcard_cache() {
     _log "reversão do microsd concluída."
 }
 
+# --- FUNÇÃO _executar_reversao ATUALIZADA ---
 _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "iniciando lógica de reversão (limpeza)"
@@ -579,7 +598,8 @@ rm -f /usr/local/bin/swap-boost.sh
 echo "removendo arquivos de configuração extra..."
 rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf
 rm -f /etc/modprobe.d/usbhid.conf /etc/modprobe.d/blacklist-zram.conf
-rm -f /etc/modprobe.d/amdgpu.conf
+rm -f /etc/modprobe.d/amdgpu.conf # Limpa o arquivo antigo, se existir
+rm -f /etc/modprobe.d/99-gpu-sched.conf /etc/modprobe.d/99-amdgpu-mes.conf # Limpa os novos arquivos
 
 echo "removendo swapfile customizado e restaurando /etc/fstab..."
 swapoff "\$swapfile_path" 2>/dev/null || true;
@@ -610,6 +630,7 @@ sync
 BASH
 }
 
+# --- FUNÇÃO aplicar_zswap ATUALIZADA (lógica CFS removida) ---
 aplicar_zswap() {
     # --- Limpeza Prévia ---
     _log "garantindo aplicação limpa: executando reversão primeiro."
@@ -649,15 +670,14 @@ aplicar_zswap() {
     _log "espaço em disco suficiente."
     # --- FIM Verificação ---
 
-    # --- Seleção de Sysctl (Bore/CFS) ---
+    # --- Seleção de Sysctl (BORE Apenas) ---
     local final_sysctl_params;
     final_sysctl_params=("${base_sysctl_params[@]}")
     if [[ -f "/proc/sys/kernel/sched_bore" ]]; then
         _log "bore scheduler detectado. aplicando otimizações bore.";
         final_sysctl_params+=("${bore_params[@]}")
     else
-        _log "bore scheduler não encontrado. aplicando otimizações de fallback para cfs.";
-        final_sysctl_params+=("${cfs_params[@]}")
+        _log "bore scheduler não encontrado. otimizações BORE não aplicadas.";
     fi
     # --- FIM Seleção ---
 
@@ -786,7 +806,7 @@ reverter_alteracoes() {
     _log "reversão completa executada"
 }
 
-# --- FUNÇÃO MAIN ATUALIZADA ---
+# --- FUNÇÃO MAIN ATUALIZADA (case 4.1 corrigido) ---
 main() {
     local texto_inicial="autor: $autor\n\ndoações (pix): $pix_doacao\n\nEste programa aplica um conjunto abrangente de otimizações de memória, i/o e sistema no steamos. todas as alterações podem ser revertidas."
 
@@ -807,7 +827,6 @@ main() {
         1) aplicar_zswap ;;
         2) otimizar_sdcard_cache ;;
         3) reverter_alteracoes ;;
-        4.1) reverter_sdcard_cache ;; # Correção aqui, deve ser 4
         4) reverter_sdcard_cache ;;
         5) _ui_info "saindo" "nenhuma alteração foi feita."; exit 0 ;;
         *) _ui_info "erro" "opção inválida."; exit 1 ;;
