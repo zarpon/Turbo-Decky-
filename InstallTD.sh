@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.21 Flash"
+versao="1.0.23 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +21,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=80"
     "vm.vfs_cache_pressure=50"
    "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
@@ -105,7 +105,9 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente ---
 readonly game_env_vars=(
   # Desempenho Vulkan: Ativa Smart Access Memory (sam) e Graphics Pipeline Library (gpl)
-  "RADV_PERFTEST=sam,gpl"
+  "RADV_PERFTEST=sam,gpl,aco"
+
+  "RADV_ENABLE_ACO=1"
   
   # Desempenho OpenGL: Move o processamento de GL para uma thread separada
   "MESA_GLTHREAD=true"
@@ -231,6 +233,8 @@ _optimize_gpu() {
     _log "arquivos /etc/modprobe.d/ (gpu-sched e amdgpu-mes) criados/atualizados."
 }
 
+# --- FUNÇÃO MODIFICADA ---
+# Removemos a linha "options usbhid jspoll=1..."
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d
@@ -244,9 +248,11 @@ EOF
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 EOF
 
-    echo "options usbhid jspoll=1 kbpoll=1 mousepoll=1" > /etc/modprobe.d/usbhid.conf
-    _log "configurações persistentes para mglru, thp shrinker e usb hid criadas."
+    # A linha "echo "options usbhid jspoll=1..." foi removida
+    # para economizar bateria, pois impedia a CPU de entrar em C-states.
+    _log "configurações persistentes para mglru e thp shrinker criadas."
 }
+# --- FIM DA MODIFICAÇÃO ---
 
 create_module_blacklist() {
     _log "criando blacklist para o módulo zram"
@@ -597,7 +603,8 @@ rm -f /usr/local/bin/swap-boost.sh
 
 echo "removendo arquivos de configuração extra..."
 rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf
-rm -f /etc/modprobe.d/usbhid.conf /etc/modprobe.d/blacklist-zram.conf
+rm -f /etc/modprobe.d/usbhid.conf # ESSA LINHA É MANTIDA, conforme solicitado
+rm -f /etc/modprobe.d/blacklist-zram.conf
 rm -f /etc/modprobe.d/amdgpu.conf # Limpa o arquivo antigo, se existir
 rm -f /etc/modprobe.d/99-gpu-sched.conf /etc/modprobe.d/99-amdgpu-mes.conf # Limpa os novos arquivos
 
@@ -756,7 +763,7 @@ EOF
         steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
 
         _log "criando arquivos de configuração persistentes...";
-        create_persistent_configs # Função externa, ok
+        create_persistent_configs # Função externa, ok (MODIFICADA)
 
         _log "configurando variáveis de ambiente para jogos..."
         _backup_file_once /etc/environment.d/99-game-vars.conf; # Função externa, ok
