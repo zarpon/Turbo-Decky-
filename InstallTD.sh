@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.23 Flash"
+versao="1.0.24 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,9 +21,9 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=70"
     "vm.vfs_cache_pressure=50"
-   "vm.dirty_background_bytes=209715200"
+    "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
@@ -56,18 +56,18 @@ readonly base_sysctl_params=(
     "kernel.printk_devkmsg=off"
     "kernel.timer_migration=0"
     "kernel.perf_cpu_time_max_percent=1"
- "kernel.perf_event_max_contexts_per_stack=1"
-   "kernel.perf_event_max_sample_rate=1"
+    "kernel.perf_event_max_contexts_per_stack=1"
+    "kernel.perf_event_max_sample_rate=1"
     "kernel.perf_event_max_stack=1"
     "kernel.printk_ratelimit_burst=1"
     "net.core.default_qdisc=fq_codel"
-   "net.ipv4.tcp_congestion_control=bbr"
+    "net.ipv4.tcp_congestion_control=bbr"
 )
 
 # --- parâmetros específicos do agendador bore ---
 readonly bore_params=(
     "kernel.sched_bore=1" "kernel.sched_burst_cache_lifetime=40000000"
-   "kernel.sched_burst_fork_atavistic=2"
+    "kernel.sched_burst_fork_atavistic=2"
     "kernel.sched_burst_penalty_offset=26"
     "kernel.sched_burst_penalty_scale=1000"
     "kernel.sched_burst_smoothness_long=0"
@@ -108,19 +108,19 @@ readonly game_env_vars=(
   "RADV_PERFTEST=sam,gpl,aco"
 
   "RADV_ENABLE_ACO=1"
-  
+ 
   # Desempenho OpenGL: Move o processamento de GL para uma thread separada
   "MESA_GLTHREAD=true"
-  
+ 
   # Sincronização: Garante o uso do Fsync (método moderno)
   "WINEFSYNC=1"
-  
+ 
   # Cache Moderno: Define o tamanho do cache de shader (nova sintaxe)
   "MESA_DISK_CACHE_SIZE=20G"
-  
+ 
   # Compatibilidade: Permite que jogos 32-bit usem mais RAM
   "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-  
+ 
   # Opcional (OpenGL): Reduz stutter em troca de loads mais longos
   "radeonsi_shader_precompile=true"
 )
@@ -745,10 +745,17 @@ root soft nofile 1048576
 root hard nofile 1048576
 EOF
 
+        # ==========================================================
+        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB ---
+        # ==========================================================
         _log "configurando parâmetros do grub...";
         _backup_file_once "$grub_config" # Função externa, ok
         local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1" "mitigations=off" "psi=1" "preempt=full")
-        local current_cmdline=$(grep -oP '^GRUB_CMDLINE_LINUX="\K[^"]*"' "$grub_config" || true);
+        
+        # --- LINHA CORRIGIDA 1: Leitura robusta do conteúdo atual ---
+        local current_cmdline
+        current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
+        
         local new_cmdline="$current_cmdline"
         local param key
         for param in "${kernel_params[@]}"; do
@@ -758,9 +765,17 @@ EOF
         for param in "${kernel_params[@]}"; do
             new_cmdline="$new_cmdline $param";
         done
-        new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ \$//')
-        sed -i -E "s|^GRUB_CMDLINE_LINUX=\"[^\"]*\"|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
+        
+        # (Pequena correção de bônus: removido o '\' de 's/ \$//')
+        new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//') 
+        
+        # --- LINHA CORRIGIDA 2: Substitui a LINHA INTEIRA para limpar lixo ---
+        sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
+        
         steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
+        # ==========================================================
+        # --- FIM DO BLOCO DE CORREÇÃO DO GRUB ---
+        # ==========================================================
 
         _log "criando arquivos de configuração persistentes...";
         create_persistent_configs # Função externa, ok (MODIFICADA)
