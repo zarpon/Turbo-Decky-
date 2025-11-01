@@ -1,8 +1,9 @@
+
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1- Batman with Prep Time" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.1 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -54,7 +55,6 @@ readonly base_sysctl_params=(
     "kernel.nmi_watchdog=0"
     "kernel.soft_watchdog=0"
     "kernel.watchdog=0"
-    # <<< MODIFICADO (TÉRMICO): kernel.sched_autogroup_enabled=0 REMOVIDO
     "kernel.numa_balancing=0"
     "kernel.io_delay_type=3"
     "kernel.core_pattern=/dev/null"
@@ -66,13 +66,11 @@ readonly base_sysctl_params=(
     "kernel.perf_event_max_sample_rate=1"
     "kernel.perf_event_max_stack=1"
     "kernel.printk_ratelimit_burst=1"
-    "kernel.sched_latency_ns=5000000"       # NOVO: Latência CFS (se BORE off)
-    "kernel.sched_min_granularity_ns=1000000" # NOVO: Granularidade CFS
-    "kernel.sched_wakeup_granularity_ns=1000000" # NOVO: Granularidade CFS
+    # <<< MODIFICADO (TÉRMICO): kernel.sched_latency_ns REMOVIDO
+    # <<< MODIFICADO (TÉRMICO): kernel.sched_min_granularity_ns REMOVIDO
+    # <<< MODIFICADO (TÉRMICO): kernel.sched_wakeup_granularity_ns REMOVIDO
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
-    # <<< MODIFICADO (TÉRMICO): net.core.busy_read=512 REMOVIDO
-    # <<< MODIFICADO (TÉRMICO): net.core.busy_poll=512 REMOVIDO
     "net.core.netdev_max_backlog=16384"    # NOVO: Latência de rede
 )
 
