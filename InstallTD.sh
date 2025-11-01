@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.26 flash Max" # Versão atualizada
+versao="1.0.27 Corrigido" # Versão atualizada
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -174,14 +174,18 @@ if command -v steamos-readonly &>/dev/null; then
     steamos_readonly_cmd=$(command -v steamos-readonly)
 fi
 
+# ==========================================================
+# --- FUNÇÃO _backup_file_once (CORRIGIDA) ---
+# ==========================================================
 _backup_file_once() {
     local f="$1";
     local backup_path="${f}.${backup_suffix}"
     if [[ -f "$f" && ! -f "$backup_path" ]]; then
         cp -a --preserve=timestamps "$f" "$backup_path" 2>/dev/null || cp -a "$f" "$backup_path"
         _log "backup criado: $backup_path"
-    }
+    fi # <--- CORRIGIDO (era '}')
 }
+# ==========================================================
 
 _restore_file() {
     local f="$1";
@@ -192,7 +196,7 @@ _restore_file() {
     else
         _log "backup para '$f' não encontrado."
         return 1
-    }
+    fi
 }
 
 _write_sysctl_file() {
