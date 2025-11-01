@@ -323,12 +323,12 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
         # --- Otimização de Energia do NVMe (APST) --- # NOVO
         # Permite que o NVMe entre rapidamente em estado de baixa energia (10ms)
         if [[ -w "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" ]]; then
-            echo "10" > "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" 2>/dev/null || true
+            echo "50" > "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" 2>/dev/null || true
             echo "auto" > "/sys/class/nvme/${dev_name}/power/control" 2>/dev/null || true
         fi
 
         # --- Otimizações gerais de NVMe (aplicáveis a Kyber e MQ-Deadline) ---
-        echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 256 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 2 > "$queue_path/nomerges" 2>/dev/null || true
         echo 999 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
@@ -353,7 +353,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
         fi
 
         # --- Otimizações gerais de microSD/SD (aplicáveis a BFQ e MQ-Deadline) ---
-        echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 512 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
         echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
