@@ -128,7 +128,7 @@ readonly game_env_vars=(
   "WINEFSYNC=1"
 
   # Cache Moderno: Define o tamanho do cache de shader (nova sintaxe)
-  "MESA_DISK_CACHE_SIZE=20G"
+  "MESA_SHADER_CACHE_MAX_SIZE=20G"
 
   # Compatibilidade: Permite que jogos 32-bit usem mais RAM
   "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
