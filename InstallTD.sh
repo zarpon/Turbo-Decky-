@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.31 Flash"
+versao="1.1- Batman with Prep Time" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -54,7 +54,7 @@ readonly base_sysctl_params=(
     "kernel.nmi_watchdog=0"
     "kernel.soft_watchdog=0"
     "kernel.watchdog=0"
-    "kernel.sched_autogroup_enabled=0"
+    # <<< MODIFICADO (TÉRMICO): kernel.sched_autogroup_enabled=0 REMOVIDO
     "kernel.numa_balancing=0"
     "kernel.io_delay_type=3"
     "kernel.core_pattern=/dev/null"
@@ -71,8 +71,8 @@ readonly base_sysctl_params=(
     "kernel.sched_wakeup_granularity_ns=1000000" # NOVO: Granularidade CFS
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
-    "net.core.busy_read=512"               # NOVO: Latência de rede
-    "net.core.busy_poll=512"               # NOVO: Latência de rede
+    # <<< MODIFICADO (TÉRMICO): net.core.busy_read=512 REMOVIDO
+    # <<< MODIFICADO (TÉRMICO): net.core.busy_poll=512 REMOVIDO
     "net.core.netdev_max_backlog=16384"    # NOVO: Latência de rede
 )
 
@@ -399,23 +399,9 @@ write_if_exists /sys/kernel/debug/sched/features NEXT_BUDDY
 write_if_exists /sys/kernel/debug/sched/migration_cost_ns 1000000
 write_if_exists /sys/kernel/debug/sched/nr_migrate 4
 
-# --- Otimizações Schedutil (MODO EQUILIBRADO) ---
-# Valores menos agressivos para um balanço entre performance e bateria.
-readonly UINT_MAX=4294967295 # Valor máximo de 32 bits
+# <<< MODIFICADO (TÉRMICO): Bloco de otimização Schedutil REMOVIDO
+# Isto reverte o governador da CPU ao padrão do SteamOS.
 
-find /sys/devices/system/cpu/ -name schedutil -type d | while IFS= read -r governor
-do
-    # Rampa de subida de 5ms (mais rápido que o padrão, mas 5x mais lento que o agressivo)
-    write_if_exists "$governor/up_rate_limit_us" 5000
-    # Rampa de descida de 20ms (permite "coasting" para economizar bateria)
-    write_if_exists "$governor/down_rate_limit_us" 20000
-    # Fallback para kernels antigos
-    write_if_exists "$governor/rate_limit_us" 5000
-
-    # Pula para a frequência alta um pouco mais cedo (85%)
-    write_if_exists "$governor/hispeed_load" 85
-    write_if_exists "$governor/hispeed_freq" "$UINT_MAX"
-done
 KTS
     chmod +x /usr/local/bin/kernel-tweaks.sh
 
@@ -686,7 +672,7 @@ aplicar_zswap() {
 
     # --- Criação dos Scripts/Serviços Comuns ---
     _log "criando e ativando serviços de otimização (pré-etapa)..."
-    create_common_scripts_and_services
+    create_common_scripts_and_services # <<< ESTA FUNÇÃO CONTÉM A MODIFICAÇÃO TÉRMICA 'kernel-tweaks.sh'
     # --- FIM Criação ---
 
     _log "aplicando otimizações com zswap (etapa principal)..."
@@ -704,7 +690,7 @@ aplicar_zswap() {
 
     # --- Seleção de Sysctl (BORE Apenas) ---
     local final_sysctl_params;
-    final_sysctl_params=("${base_sysctl_params[@]}")
+    final_sysctl_params=("${base_sysctl_params[@]}") # <<< ESTA VARIÁVEL CONTÉM AS MODIFICAÇÕES TÉRMICAS
     if [[ -f "/proc/sys/kernel/sched_bore" ]]; then
         _log "bore scheduler detectado. aplicando otimizações bore.";
         final_sysctl_params+=("${bore_params[@]}")
@@ -771,18 +757,19 @@ root hard nofile 1048576
 EOF
 
         # ==========================================================
-        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB (ATUALIZADO E COM MODIFICAÇÃO DE BATERIA) ---
+        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB (ATUALIZADO E COM MODIFICAÇÃO DE BATERIA/TÉRMICA) ---
         # ==========================================================
         _log "configurando parâmetros do grub...";
         _backup_file_once "$grub_config" # Função externa, ok
         local kernel_params=(
             "zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40"
             "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1"
-            "mitigations=off" "psi=1" "preempt=full"
+            "mitigations=off" "psi=1"
+            # <<< MODIFICADO (TÉRMICO): "preempt=full" removido
             # --- NOVOS TWEAKS DE ENERGIA/LATÊNCIA ---
             # <<< MODIFICADO (BATERIA): "nohz_full=all" removido
             "rcutree.enable_rcu_lazy=1"
-            "threadirqs"
+            # <<< MODIFICADO (TÉRMICO): "threadirqs" removido
             # <<< MODIFICADO (BATERIA): "workqueue.power_efficient=false" removido
         )
 
