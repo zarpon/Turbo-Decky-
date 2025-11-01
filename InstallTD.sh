@@ -41,7 +41,7 @@ readonly base_sysctl_params=(
     "vm.overcommit_memory=1"
     "vm.overcommit_ratio=100"
     "vm.zone_reclaim_mode=0"
-    "vm.mmap_rnd_bits=24"           # NOVO: Latência MMAP (ASLR reduzido)
+    "vm.mmap_rnd_bits=16"           # NOVO: Latência MMAP (ASLR reduzido)
     "vm.mmap_rnd_compat_bits=16"    # NOVO: Para binários 32-bit
     "vm.unprivileged_segfault=1"     # NOVO: Estabilidade de jogos antigos
     
