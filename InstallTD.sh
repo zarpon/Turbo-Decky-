@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.27" # Versão atualizada
+versao="1.0.29 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,15 +24,15 @@ readonly base_sysctl_params=(
     "vm.swappiness=30"
     "vm.vfs_cache_pressure=66"
     # ALTERNATIVA AO BYTES: Usando RATIO para maior compatibilidade/limpeza
-    "vm.dirty_background_ratio=10" 
-    "vm.dirty_ratio=30"            
+    "vm.dirty_background_ratio=10"
+    "vm.dirty_ratio=30"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=121634"
-    "vm.extra_free_kbytes=102400"  # NOVO: Buffer extra de 100MB
+   
     "vm.page-cluster=0"
     "vm.page_lock_unfairness=8"
-    "vm.watermark_scale_factor=90"
+    "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
     "vm.compaction_proactiveness=0"  # REFINADO: Desativa compactação proativa (Latência)
@@ -44,8 +44,7 @@ readonly base_sysctl_params=(
     "vm.mmap_rnd_bits=24"           # NOVO: Latência MMAP (ASLR reduzido)
     "vm.mmap_rnd_compat_bits=16"    # NOVO: Para binários 32-bit
     "vm.unprivileged_segfault=1"     # NOVO: Estabilidade de jogos antigos
-    "vm.oom_dump_tasks=0"            # NOVO: Acelera OOM Killer
-    "vm.nr_hugepages_mem_percentage=20" # NOVO: Reserva % para hugepages
+    
     "fs.aio-max-nr=131072"
     "fs.epoll.max_user_watches=100000"
     "fs.inotify.max_user_watches=65536"
@@ -121,19 +120,19 @@ readonly game_env_vars=(
   "RADV_PERFTEST=sam,gpl,aco"
 
   "RADV_ENABLE_ACO=1"
- 
+
   # Desempenho OpenGL: Move o processamento de GL para uma thread separada
   "MESA_GLTHREAD=true"
- 
+
   # Sincronização: Garante o uso do Fsync (método moderno)
   "WINEFSYNC=1"
- 
+
   # Cache Moderno: Define o tamanho do cache de shader (nova sintaxe)
   "MESA_DISK_CACHE_SIZE=20G"
- 
+
   # Compatibilidade: Permite que jogos 32-bit usem mais RAM
   "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
- 
+
   # Opcional (OpenGL): Reduz stutter em troca de loads mais longos
   "radeonsi_shader_precompile=true"
 )
@@ -421,7 +420,7 @@ KTS
 
 cat <<'HPS' > /usr/local/bin/hugepages.sh
 #!/usr/bin/env bash
-echo 256 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
+echo 512 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
 HPS
     chmod +x /usr/local/bin/hugepages.sh
 
@@ -755,7 +754,7 @@ aplicar_zswap() {
         mkswap "$swapfile_path" || true
         sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true; # Usar ${} para path
         echo "$swapfile_path none swap sw,pri=-5 0 0" >> /etc/fstab
-        swapon --priority -5 "$swapfile_path" || true
+        swapon --priority -100 "$swapfile_path" || true
 
         _log "aplicando tweaks de sysctl...";
         _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}"; # Função externa, ok
@@ -776,20 +775,20 @@ EOF
         _log "configurando parâmetros do grub...";
         _backup_file_once "$grub_config" # Função externa, ok
         local kernel_params=(
-            "zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" 
-            "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1" 
+            "zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40"
+            "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1"
             "mitigations=off" "psi=1" "preempt=full"
             # --- NOVOS TWEAKS DE ENERGIA/LATÊNCIA ---
-            "nohz_full=all" 
-            "rcutree.enable_rcu_lazy=1" 
+            "nohz_full=all"
+            "rcutree.enable_rcu_lazy=1"
             "threadirqs"
             "workqueue.power_efficient=false"
         )
-        
+
         # --- LINHA CORRIGIDA 1: Leitura robusta do conteúdo atual ---
         local current_cmdline
         current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
-        
+
         local new_cmdline="$current_cmdline"
         local param key
         for param in "${kernel_params[@]}"; do
@@ -799,13 +798,13 @@ EOF
         for param in "${kernel_params[@]}"; do
             new_cmdline="$new_cmdline $param";
         done
-        
+
         # (Pequena correção de bônus: removido o '\' de 's/ \$//')
-        new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//') 
-        
+        new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//')
+
         # --- LINHA CORRIGIDA 2: Substitui a LINHA INTEIRA para limpar lixo ---
         sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
-        
+
         steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
         # ==========================================================
         # --- FIM DO BLOCO DE CORREÇÃO DO GRUB ---
