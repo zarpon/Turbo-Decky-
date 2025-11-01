@@ -30,7 +30,7 @@ readonly base_sysctl_params=(
     "vm.min_free_kbytes=121634"
     "vm.page-cluster=0"
     "vm.page_lock_unfairness=8"
-    "vm.watermark_scale_factor=125"
+    "vm.watermark_scale_factor=90"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
     "vm.compaction_proactiveness=10"
@@ -227,7 +227,7 @@ _optimize_gpu() {
     echo "options gpu_sched sched_policy=0" > /etc/modprobe.d/99-gpu-sched.conf
 
     # Arquivo 2: Ativa o Micro-Engine Scheduler (MES) e outros
-    echo "options amdgpu mes=1 moverate=128 uni_mes=1 lbpw=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
+    echo "options amdgpu mes=1 moverate=256 uni_mes=1 lbpw=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
 
     _ui_info "gpu" "otimizações amdgpu (MES, FIFO) aplicadas automaticamente."
     _log "arquivos /etc/modprobe.d/ (gpu-sched e amdgpu-mes) criados/atualizados."
