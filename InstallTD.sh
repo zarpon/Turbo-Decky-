@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.30 Flash"
+versao="1.0.31 Flash"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -234,7 +234,7 @@ _steamos_readonly_disable_if_needed() {
     fi
 }
 
-# --- FUNÇÃO _optimize_gpu CORRIGIDA ---
+# --- FUNÇÃO _optimize_gpu CORRIGIDA (COM MODIFICAÇÃO DE BATERIA) ---
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu automaticamente..."
     mkdir -p /etc/modprobe.d
@@ -243,7 +243,8 @@ _optimize_gpu() {
     echo "options gpu_sched sched_policy=0" > /etc/modprobe.d/99-gpu-sched.conf
 
     # Arquivo 2: Ativa o Micro-Engine Scheduler (MES) e outros
-    echo "options amdgpu mes=1 moverate=256 uni_mes=1 lbpw=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
+    # <<< MODIFICADO (BATERIA): Alterado lbpw=0 para lbpw=1 (permite economia de energia da GPU)
+    echo "options amdgpu mes=1 moverate=128 uni_mes=1 lbpw=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
 
     _ui_info "gpu" "otimizações amdgpu (MES, FIFO) aplicadas automaticamente."
     _log "arquivos /etc/modprobe.d/ (gpu-sched e amdgpu-mes) criados/atualizados."
@@ -661,7 +662,7 @@ sync
 BASH
 }
 
-# --- FUNÇÃO aplicar_zswap ATUALIZADA (lógica CFS removida) ---
+# --- FUNÇÃO aplicar_zswap ATUALIZADA (lógica CFS removida E COM MODIFICAÇÃO DE BATERIA) ---
 aplicar_zswap() {
     # --- Limpeza Prévia ---
     _log "garantindo aplicação limpa: executando reversão primeiro."
@@ -680,7 +681,7 @@ aplicar_zswap() {
     # --- FIM SELinux ---
 
     # --- GPU Otimização ---
-    _optimize_gpu
+    _optimize_gpu # <<< ESTA FUNÇÃO CONTÉM A MODIFICAÇÃO DE BATERIA 'lbpw=1'
     # --- FIM GPU ---
 
     # --- Criação dos Scripts/Serviços Comuns ---
@@ -770,7 +771,7 @@ root hard nofile 1048576
 EOF
 
         # ==========================================================
-        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB (ATUALIZADO) ---
+        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB (ATUALIZADO E COM MODIFICAÇÃO DE BATERIA) ---
         # ==========================================================
         _log "configurando parâmetros do grub...";
         _backup_file_once "$grub_config" # Função externa, ok
@@ -779,10 +780,10 @@ EOF
             "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1"
             "mitigations=off" "psi=1" "preempt=full"
             # --- NOVOS TWEAKS DE ENERGIA/LATÊNCIA ---
-            "nohz_full=all"
+            # <<< MODIFICADO (BATERIA): "nohz_full=all" removido
             "rcutree.enable_rcu_lazy=1"
             "threadirqs"
-            "workqueue.power_efficient=false"
+            # <<< MODIFICADO (BATERIA): "workqueue.power_efficient=false" removido
         )
 
         # --- LINHA CORRIGIDA 1: Leitura robusta do conteúdo atual ---
