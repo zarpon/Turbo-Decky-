@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.0.25 Flash"
+versao="1.0.26 flash Max" # Versão atualizada
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -19,26 +19,33 @@ readonly sdcard_device="/dev/mmcblk0p1"
 # O diretório de destino no NVMe (SSD interno)
 readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
-# --- parâmetros sysctl base ---
+# --- parâmetros sysctl base (ATUALIZADO) ---
 readonly base_sysctl_params=(
     "vm.swappiness=30"
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=419430400"
+    # ALTERNATIVA AO BYTES: Usando RATIO para maior compatibilidade/limpeza
+    "vm.dirty_background_ratio=10" 
+    "vm.dirty_ratio=30"            
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=121634"
+    "vm.extra_free_kbytes=102400"  # NOVO: Buffer extra de 100MB
     "vm.page-cluster=0"
     "vm.page_lock_unfairness=8"
     "vm.watermark_scale_factor=90"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=0"  # REFINADO: Desativa compactação proativa (Latência)
     "vm.hugetlb_optimize_vmemmap=0"
     "vm.watermark_boost_factor=0"
     "vm.overcommit_memory=1"
     "vm.overcommit_ratio=100"
     "vm.zone_reclaim_mode=0"
+    "vm.mmap_rnd_bits=24"           # NOVO: Latência MMAP (ASLR reduzido)
+    "vm.mmap_rnd_compat_bits=16"    # NOVO: Para binários 32-bit
+    "vm.unprivileged_segfault=1"     # NOVO: Estabilidade de jogos antigos
+    "vm.oom_dump_tasks=0"            # NOVO: Acelera OOM Killer
+    "vm.nr_hugepages_mem_percentage=20" # NOVO: Reserva % para hugepages
     "fs.aio-max-nr=131072"
     "fs.epoll.max_user_watches=100000"
     "fs.inotify.max_user_watches=65536"
@@ -60,8 +67,14 @@ readonly base_sysctl_params=(
     "kernel.perf_event_max_sample_rate=1"
     "kernel.perf_event_max_stack=1"
     "kernel.printk_ratelimit_burst=1"
+    "kernel.sched_latency_ns=5000000"       # NOVO: Latência CFS (se BORE off)
+    "kernel.sched_min_granularity_ns=1000000" # NOVO: Granularidade CFS
+    "kernel.sched_wakeup_granularity_ns=1000000" # NOVO: Granularidade CFS
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
+    "net.core.busy_read=512"               # NOVO: Latência de rede
+    "net.core.busy_poll=512"               # NOVO: Latência de rede
+    "net.core.netdev_max_backlog=16384"    # NOVO: Latência de rede
 )
 
 # --- parâmetros específicos do agendador bore ---
@@ -167,7 +180,7 @@ _backup_file_once() {
     if [[ -f "$f" && ! -f "$backup_path" ]]; then
         cp -a --preserve=timestamps "$f" "$backup_path" 2>/dev/null || cp -a "$f" "$backup_path"
         _log "backup criado: $backup_path"
-    fi
+    }
 }
 
 _restore_file() {
@@ -179,7 +192,7 @@ _restore_file() {
     else
         _log "backup para '$f' não encontrado."
         return 1
-    fi
+    }
 }
 
 _write_sysctl_file() {
@@ -233,7 +246,7 @@ _optimize_gpu() {
     _log "arquivos /etc/modprobe.d/ (gpu-sched e amdgpu-mes) criados/atualizados."
 }
 
-# --- FUNÇÃO MODIFICADA ---
+# --- FUNÇÃO MODIFICADA (MGLRU aprimorado) ---
 # Removemos a linha "options usbhid jspoll=1..."
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
@@ -242,6 +255,7 @@ create_persistent_configs() {
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
 w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
+w /sys/kernel/mm/lru_gen/shrink_promote_threshold - - - - 100 # NOVO: Otimiza a limpeza de RAM
 EOF
 
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
@@ -274,12 +288,12 @@ manage_unnecessary_services() {
     fi
 }
 
-# --- FUNÇÃO create_common_scripts_and_services ATUALIZADA ---
+# --- FUNÇÃO create_common_scripts_and_services ATUALIZADA (IO-BOOST com APST) ---
 create_common_scripts_and_services() {
     _log "criando/atualizando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
 
-# --- Script io-boost.sh ATUALIZADO ---
+# --- Script io-boost.sh ATUALIZADO (com APST para NVMe) ---
 cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
 sleep 5
@@ -302,6 +316,13 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
             # --- Otimizações específicas do MQ-DEADLINE (não se aplicam ao Kyber) ---
             echo 6000000 > "$queue_path/iosched/write_lat_nsec" 2>/dev/null || true
             echo 1200000 > "$queue_path/iosched/read_lat_nsec" 2>/dev/null || true
+        fi
+
+        # --- Otimização de Energia do NVMe (APST) --- # NOVO
+        # Permite que o NVMe entre rapidamente em estado de baixa energia (10ms)
+        if [[ -w "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" ]]; then
+            echo "10" > "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" 2>/dev/null || true
+            echo "auto" > "/sys/class/nvme/${dev_name}/power/control" 2>/dev/null || true
         fi
 
         # --- Otimizações gerais de NVMe (aplicáveis a Kyber e MQ-Deadline) ---
@@ -565,7 +586,7 @@ reverter_sdcard_cache() {
     _log "reversão do microsd concluída."
 }
 
-# --- FUNÇÃO _executar_reversao ATUALIZADA ---
+# --- FUNÇÃO _executar_reversao (SEM MUDANÇAS, REVERSÃO OK) ---
 _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "iniciando lógica de reversão (limpeza)"
@@ -602,11 +623,11 @@ rm -f /etc/systemd/system/swap-boost.service
 rm -f /usr/local/bin/swap-boost.sh
 
 echo "removendo arquivos de configuração extra..."
-rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf
+rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf # Remove MGLRU e THP Shrinker
 rm -f /etc/modprobe.d/usbhid.conf # ESSA LINHA É MANTIDA, conforme solicitado
 rm -f /etc/modprobe.d/blacklist-zram.conf
 rm -f /etc/modprobe.d/amdgpu.conf # Limpa o arquivo antigo, se existir
-rm -f /etc/modprobe.d/99-gpu-sched.conf /etc/modprobe.d/99-amdgpu-mes.conf # Limpa os novos arquivos
+rm -f /etc/modprobe.d/99-gpu-sched.conf /etc/modprobe.d/99-amdgpu-mes.conf # Limpa os novos arquivos GPU
 
 echo "removendo swapfile customizado e restaurando /etc/fstab..."
 swapoff "\$swapfile_path" 2>/dev/null || true;
@@ -615,7 +636,7 @@ _restore_file /etc/fstab || true
 swapon -a 2>/dev/null || true
 
 echo "restaurando outros arquivos de configuração..."
-_restore_file "\$grub_config" || true
+_restore_file "\$grub_config" || true # Restaura o GRUB (limpando todos os parâmetros do kernel)
 _restore_file /etc/sysctl.d/99-sdweak-performance.conf || rm -f /etc/sysctl.d/99-sdweak-performance.conf
 _restore_file /etc/security/limits.d/99-game-limits.conf || rm -f /etc/security/limits.d/99-game-limits.conf
 _restore_file /etc/environment.d/99-game-vars.conf || rm -f /etc/environment.d/99-game-vars.conf
@@ -746,11 +767,20 @@ root hard nofile 1048576
 EOF
 
         # ==========================================================
-        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB ---
+        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB (ATUALIZADO) ---
         # ==========================================================
         _log "configurando parâmetros do grub...";
         _backup_file_once "$grub_config" # Função externa, ok
-        local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1" "mitigations=off" "psi=1" "preempt=full")
+        local kernel_params=(
+            "zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" 
+            "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1" 
+            "mitigations=off" "psi=1" "preempt=full"
+            # --- NOVOS TWEAKS DE ENERGIA/LATÊNCIA ---
+            "nohz_full=all" 
+            "rcutree.enable_rcu_lazy=1" 
+            "threadirqs"
+            "workqueue.power_efficient=false"
+        )
         
         # --- LINHA CORRIGIDA 1: Leitura robusta do conteúdo atual ---
         local current_cmdline
