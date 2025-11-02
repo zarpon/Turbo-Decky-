@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.3 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.4 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -106,7 +106,7 @@ readonly otimization_scripts=(
     "/usr/local/bin/mem-tweaks.sh"
 )
 readonly unnecessary_services=(
-    "steamos-cfs-debugfs-tunings.service"
+    
     "gpu-trace.service"
     "steamos-log-submitter.service"
     "cups.service"
@@ -569,7 +569,7 @@ reverter_sdcard_cache() {
     _log "reversão do microsd concluída."
 }
 
-# --- FUNÇÃO _executar_reversao (SEM MUDANÇAS, REVERSÃO OK) ---
+# --- FUNÇÃO _executar_reversao (MODIFICADA) ---
 _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "iniciando lógica de reversão (limpeza)"
@@ -629,6 +629,13 @@ manage_unnecessary_services "enable"
 systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
 systemctl unmask systemd-zram-setup@.service 2>/dev/null || true
 systemctl enable --now irqbalance.service 2>/dev/null || true
+
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
+echo "reativando serviço steamos cfs-debugfs..."
+systemctl unmask steamos-cfs-debugfs-tunings.service 2>/dev/null || true
+systemctl enable --now steamos-cfs-debugfs-tunings.service 2>/dev/null || true
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
+
 if command -v setenforce &>/dev/null; then
     setenforce 1 2>/dev/null || true;
 fi
