@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.1 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.2 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -22,7 +22,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base (ATUALIZADO) ---
 readonly base_sysctl_params=(
-    "vm.swappiness=30"
+    "vm.swappiness=100"
     "vm.vfs_cache_pressure=66"
     # ALTERNATIVA AO BYTES: Usando RATIO para maior compatibilidade/limpeza
     "vm.dirty_background_ratio=10"
@@ -236,15 +236,10 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu automaticamente..."
     mkdir -p /etc/modprobe.d
+    
+    echo "options amdgpu mes=0 moverate=128 uni_mes=1 lbpw=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
 
-    # Arquivo 1: Define o agendador da GPU como FIFO (baixa latência)
-    echo "options gpu_sched sched_policy=0" > /etc/modprobe.d/99-gpu-sched.conf
-
-    # Arquivo 2: Ativa o Micro-Engine Scheduler (MES) e outros
-    # <<< MODIFICADO (BATERIA): Alterado lbpw=0 para lbpw=1 (permite economia de energia da GPU)
-    echo "options amdgpu mes=1 moverate=128 uni_mes=1 lbpw=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
-
-    _ui_info "gpu" "otimizações amdgpu (MES, FIFO) aplicadas automaticamente."
+    _ui_info "gpu" "otimizações amdgpu aplicadas automaticamente."
     _log "arquivos /etc/modprobe.d/ (gpu-sched e amdgpu-mes) criados/atualizados."
 }
 
@@ -323,7 +318,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
         # --- Otimização de Energia do NVMe (APST) --- # NOVO
         # Permite que o NVMe entre rapidamente em estado de baixa energia (10ms)
         if [[ -w "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" ]]; then
-            echo "50" > "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" 2>/dev/null || true
+            echo "100" > "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" 2>/dev/null || true
             echo "auto" > "/sys/class/nvme/${dev_name}/power/control" 2>/dev/null || true
         fi
 
