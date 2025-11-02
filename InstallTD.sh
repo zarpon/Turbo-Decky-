@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.5 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.6 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -54,23 +54,15 @@ readonly base_sysctl_params=(
     "kernel.nmi_watchdog=0"
     "kernel.soft_watchdog=0"
     "kernel.watchdog=0"
-    "kernel.numa_balancing=0"
-    "kernel.io_delay_type=3"
+    
     "kernel.core_pattern=/dev/null"
     "kernel.core_pipe_limit=0"
     "kernel.printk_devkmsg=off"
     
-    "kernel.perf_cpu_time_max_percent=1"
-    "kernel.perf_event_max_contexts_per_stack=1"
-    "kernel.perf_event_max_sample_rate=1"
-    "kernel.perf_event_max_stack=1"
-    "kernel.printk_ratelimit_burst=1"
-    # <<< MODIFICADO (TÉRMICO): kernel.sched_latency_ns REMOVIDO
-    # <<< MODIFICADO (TÉRMICO): kernel.sched_min_granularity_ns REMOVIDO
-    # <<< MODIFICADO (TÉRMICO): kernel.sched_wakeup_granularity_ns REMOVIDO
+    
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
-    "net.core.netdev_max_backlog=16384"    # NOVO: Latência de rede
+    "net.core.netdev_max_backlog=16384"    
 )
 
 # --- parâmetros específicos do agendador bore ---
@@ -728,7 +720,7 @@ aplicar_zswap() {
         _log "otimizando fstab...";
         _backup_file_once /etc/fstab # Função externa, ok
         if grep -q " /home " /etc/fstab 2>/dev/null; then
-            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,barrier=0,x-systemd.growfs|g' /etc/fstab || true
+            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
         fi
 
         _log "configurando swapfile de fallback...";
@@ -742,7 +734,7 @@ aplicar_zswap() {
         chmod 600 "$swapfile_path" || true;
         mkswap "$swapfile_path" || true
         sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true; # Usar ${} para path
-        echo "$swapfile_path none swap sw,pri=-5 0 0" >> /etc/fstab
+        echo "$swapfile_path none swap sw,pri=-100 0 0" >> /etc/fstab
         swapon --priority -100 "$swapfile_path" || true
 
         _log "aplicando tweaks de sysctl...";
