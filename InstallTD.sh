@@ -1,9 +1,8 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.4 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.5 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -36,8 +35,8 @@ readonly base_sysctl_params=(
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
-    "vm.compaction_proactiveness=0"  # REFINADO: Desativa compactação proativa (Latência)
-    "vm.hugetlb_optimize_vmemmap=0"
+    "vm.compaction_proactiveness=10"
+    
     "vm.watermark_boost_factor=0"
     "vm.overcommit_memory=1"
     "vm.overcommit_ratio=100"
@@ -60,7 +59,7 @@ readonly base_sysctl_params=(
     "kernel.core_pattern=/dev/null"
     "kernel.core_pipe_limit=0"
     "kernel.printk_devkmsg=off"
-    "kernel.timer_migration=0"
+    
     "kernel.perf_cpu_time_max_percent=1"
     "kernel.perf_event_max_contexts_per_stack=1"
     "kernel.perf_event_max_sample_rate=1"
@@ -398,10 +397,13 @@ write_if_exists /sys/kernel/debug/sched/nr_migrate 4
 KTS
     chmod +x /usr/local/bin/kernel-tweaks.sh
 
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
 cat <<'HPS' > /usr/local/bin/hugepages.sh
 #!/usr/bin/env bash
-echo 512 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
+# Define 0 para não desperdiçar RAM com páginas estáticas que jogos não usam
+echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
 HPS
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
     chmod +x /usr/local/bin/hugepages.sh
 
 cat <<'KSM' > /usr/local/bin/ksm-config.sh
@@ -877,3 +879,4 @@ main() {
 }
 
 main "$@"
+
