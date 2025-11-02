@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.2 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.3 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -237,7 +237,7 @@ _optimize_gpu() {
     _log "aplicando otimizações amdgpu automaticamente..."
     mkdir -p /etc/modprobe.d
     
-    echo "options amdgpu mes=0 moverate=128 uni_mes=1 lbpw=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
+    echo "options amdgpu moverate=128 uni_mes=1 lbpw=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
 
     _ui_info "gpu" "otimizações amdgpu aplicadas automaticamente."
     _log "arquivos /etc/modprobe.d/ (gpu-sched e amdgpu-mes) criados/atualizados."
