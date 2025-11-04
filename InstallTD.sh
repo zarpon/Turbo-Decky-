@@ -311,12 +311,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n*; do
             echo 1200000 > "$queue_path/iosched/read_lat_nsec" 2>/dev/null || true
         fi
 
-        # --- Otimização de Energia do NVMe (APST) --- # NOVO
-        # Permite que o NVMe entre rapidamente em estado de baixa energia (10ms)
-        if [[ -w "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" ]]; then
-            echo "100" > "/sys/class/nvme/${dev_name}/power/autosuspend_delay_ms" 2>/dev/null || true
-            echo "auto" > "/sys/class/nvme/${dev_name}/power/control" 2>/dev/null || true
-        fi
+        
 
         # --- Otimizações gerais de NVMe (aplicáveis a Kyber e MQ-Deadline) ---
         echo 256 > "$queue_path/read_ahead_kb" 2>/dev/null || true
