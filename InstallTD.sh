@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.12 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.13 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,7 +28,7 @@ readonly base_sysctl_params=(
 "vm.dirty_ratio=30"
 "vm.dirty_expire_centisecs=1500"
 "vm.dirty_writeback_centisecs=1500"
-"vm.min_free_kbytes=121634"
+"vm.min_free_kbytes=65536"
 "vm.page-cluster=0"
 "vm.page_lock_unfairness=8"
 "vm.watermark_scale_factor=125"
@@ -39,7 +39,7 @@ readonly base_sysctl_params=(
 "vm.overcommit_memory=1"
 "vm.overcommit_ratio=100"
 "vm.zone_reclaim_mode=0"
-"vm.max_map_count = 2147483642"
+"vm.max_map_count=2147483642"
 "vm.mmap_rnd_compat_bits=16" # NOVO: Para binários 32-bit
 "vm.unprivileged_segfault=1" # NOVO: Estabilidade de jogos antigos
 "fs.aio-max-nr=131072"
@@ -296,8 +296,8 @@ fi
 # --- Otimizações gerais de NVMe (aplicáveis a Kyber e MQ-Deadline) ---
 echo 256 > "$queue_path/read_ahead_kb" 2>/dev/null || true
 echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
-echo 2 > "$queue_path/nomerges" 2>/dev/null || true
-echo 999 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
+echo 1 > "$queue_path/nomerges" 2>/dev/null || true
+echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
 ;;
 mmcblk*|sd*)
 # Tenta definir o agendador
