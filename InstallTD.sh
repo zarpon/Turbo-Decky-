@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.6 Batman com preparo!" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.10 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -29,22 +29,23 @@ readonly base_sysctl_params=(
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=121634"
-   
+
     "vm.page-cluster=0"
     "vm.page_lock_unfairness=8"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
     "vm.compaction_proactiveness=10"
-    
+
     "vm.watermark_boost_factor=0"
     "vm.overcommit_memory=1"
     "vm.overcommit_ratio=100"
     "vm.zone_reclaim_mode=0"
-    
+    "vm.max_map_count = 2147483642"
+
     "vm.mmap_rnd_compat_bits=16"    # NOVO: Para binários 32-bit
     "vm.unprivileged_segfault=1"     # NOVO: Estabilidade de jogos antigos
-    
+
     "fs.aio-max-nr=131072"
     "fs.epoll.max_user_watches=100000"
     "fs.inotify.max_user_watches=65536"
@@ -54,15 +55,15 @@ readonly base_sysctl_params=(
     "kernel.nmi_watchdog=0"
     "kernel.soft_watchdog=0"
     "kernel.watchdog=0"
-    
+
     "kernel.core_pattern=/dev/null"
     "kernel.core_pipe_limit=0"
     "kernel.printk_devkmsg=off"
-    
-    
+
+
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
-    "net.core.netdev_max_backlog=16384"    
+    "net.core.netdev_max_backlog=16384"
 )
 
 # --- parâmetros específicos do agendador bore ---
@@ -78,26 +79,27 @@ readonly bore_params=(
 )
 
 # --- listas de serviços ---
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
+# Removido "zswap-config.service" da lista (será adicionado dinamicamente)
 readonly otimization_services=(
     "thp-config.service"
     "io-boost.service"
-    "zswap-config.service"
     "hugepages.service"
     "ksm-config.service"
-    "kernel-tweaks.service"
     "mem-tweaks.service"
 )
+# Removido "/usr/local/bin/zswap-config.sh" da lista (será adicionado dinamicamente)
 readonly otimization_scripts=(
     "/usr/local/bin/thp-config.sh"
     "/usr/local/bin/io-boost.sh"
-    "/usr/local/bin/zswap-config.sh"
     "/usr/local/bin/hugepages.sh"
     "/usr/local/bin/ksm-config.sh"
-    "/usr/local/bin/kernel-tweaks.sh"
     "/usr/local/bin/mem-tweaks.sh"
 )
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
+
 readonly unnecessary_services=(
-    
+
     "gpu-trace.service"
     "steamos-log-submitter.service"
     "cups.service"
@@ -118,7 +120,7 @@ readonly game_env_vars=(
 
   # Cache Moderno: Define o tamanho do cache de shader (nova sintaxe)
   "MESA_SHADER_CACHE_MAX_SIZE=20G"
-
+  "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
   # Compatibilidade: Permite que jogos 32-bit usem mais RAM
   "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
 
@@ -227,7 +229,7 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu automaticamente..."
     mkdir -p /etc/modprobe.d
-    
+
     echo "options amdgpu moverate=128 uni_mes=1 lbpw=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-mes.conf
 
     _ui_info "gpu" "otimizações amdgpu aplicadas automaticamente."
@@ -277,6 +279,9 @@ manage_unnecessary_services() {
 }
 
 # --- FUNÇÃO create_common_scripts_and_services ATUALIZADA (IO-BOOST com APST) ---
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
+# Bloco de criação do zswap-config.service removido
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
 create_common_scripts_and_services() {
     _log "criando/atualizando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
@@ -361,41 +366,11 @@ echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/n
 THP
     chmod +x /usr/local/bin/thp-config.sh
 
-# --- Script kernel-tweaks.sh ATUALIZADO (com schedutil BALANCEADO) ---
-cat <<'KTS' > /usr/local/bin/kernel-tweaks.sh
-#!/usr/bin/env bash
-
-# Função helper para escrever apenas se o arquivo existir e for gravável
-write_if_exists() {
-    local file="$1"
-    local value="$2"
-    [ -w "$file" ] && echo "$value" > "$file" 2>/dev/null || true
-}
-
-# --- Tweaks Padrão ---
-write_if_exists /sys/kernel/debug/exception-trace 0
-write_if_exists /proc/sys/kernel/ftrace_enabled 0
-write_if_exists /sys/class/rtc/rtc0/max_user_freq 2048
-write_if_exists /proc/sys/dev/hpet/max-user-freq 2048
-write_if_exists /sys/kernel/debug/sched/features NO_PLACE_LAG
-write_if_exists /sys/kernel/debug/sched/features NO_RUN_TO_PARITY
-write_if_exists /sys/kernel/debug/sched/features NEXT_BUDDY
-write_if_exists /sys/kernel/debug/sched/migration_cost_ns 1000000
-write_if_exists /sys/kernel/debug/sched/nr_migrate 4
-
-# <<< MODIFICADO (TÉRMICO): Bloco de otimização Schedutil REMOVIDO
-# Isto reverte o governador da CPU ao padrão do SteamOS.
-
-KTS
-    chmod +x /usr/local/bin/kernel-tweaks.sh
-
-# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
 cat <<'HPS' > /usr/local/bin/hugepages.sh
 #!/usr/bin/env bash
 # Define 0 para não desperdiçar RAM com páginas estáticas que jogos não usam
 echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
 HPS
-# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
     chmod +x /usr/local/bin/hugepages.sh
 
 cat <<'KSM' > /usr/local/bin/ksm-config.sh
@@ -412,15 +387,14 @@ echo 1 > /sys/module/multi_queue/parameters/multi_queue_reclaim 2>/dev/null || t
 MMT
     chmod +x /usr/local/bin/mem-tweaks.sh
 
-    # Cria os serviços (sem o selinux-config)
-    for service_name in thp-config io-boost hugepages ksm-config kernel-tweaks mem-tweaks; do
+    # Cria os serviços
+    for service_name in thp-config io-boost hugepages ksm-config mem-tweaks; do
         description="";
         case "$service_name" in
             thp-config) description="configuracao otimizada de thp";;
             io-boost) description="otimização de i/o e agendadores de disco";;
             hugepages) description="aloca huge pages para jogos";;
             ksm-config) description="desativa kernel samepage merging (ksm)";;
-            kernel-tweaks) description="aplica tweaks diversos no kernel";;
             mem-tweaks) description="otimização de alocacao de memoria";;
         esac
 
@@ -436,17 +410,9 @@ WantedBy=multi-user.target
 UNIT
     done
 
-    # Cria o serviço zswap-config separadamente (ele tem seu script criado dentro do bloco principal)
-cat <<UNIT > /etc/systemd/system/zswap-config.service
-[Unit]
-Description=aplicar configuracoes zswap
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/zswap-config.sh
-RemainAfterExit=true
-[Install]
-WantedBy=multi-user.target
-UNIT
+    # <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
+    # Bloco de criação do zswap-config.service foi REMOVIDO daqui
+    # <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
 
     systemctl daemon-reload || true
     _log "scripts e services comuns criados/atualizados e instalados."
@@ -564,6 +530,9 @@ reverter_sdcard_cache() {
 }
 
 # --- FUNÇÃO _executar_reversao (MODIFICADA) ---
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
+# Adicionada lógica de remoção para zram-config e zswap-config
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
 _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "iniciando lógica de reversão (limpeza)"
@@ -581,17 +550,26 @@ eval "\$otimization_scripts_str"
 set -e
 
 echo "parando e desativando serviços customizados..."
-# Adiciona zswap-config.service à lista de parada/desativação da reversão
-systemctl stop "\${otimization_services[@]}" zswap-config.service 2>/dev/null || true
-systemctl disable "\${otimization_services[@]}" zswap-config.service 2>/dev/null || true
+# Adiciona zswap-config, zram-config e kernel-tweaks (legado) para limpeza total
+systemctl stop "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service 2>/dev/null || true
+systemctl disable "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service 2>/dev/null || true
 
 echo "removendo arquivos de serviço e scripts..."
-for svc_file in "\${otimization_services[@]}" zswap-config.service; do # Adiciona zswap-config.service
+for svc_file in "\${otimization_services[@]}"; do
     rm -f "/etc/systemd/system/\$svc_file";
 done
+# Remove explicitamente os serviços de swap e legados
+rm -f /etc/systemd/system/zswap-config.service
+rm -f /etc/systemd/system/zram-config.service
+rm -f /etc/systemd/system/kernel-tweaks.service
+
 for script_file in "\${otimization_scripts[@]}"; do
     rm -f "\$script_file";
 done
+# Remove explicitamente os scripts de swap e legados
+rm -f /usr/local/bin/zswap-config.sh
+rm -f /usr/local/bin/zram-config.sh
+rm -f /usr/local/bin/kernel-tweaks.sh
 
 echo "garantindo a remoção do swap-boost.service legado (se existir)..."
 systemctl stop swap-boost.service 2>/dev/null || true
@@ -600,11 +578,11 @@ rm -f /etc/systemd/system/swap-boost.service
 rm -f /usr/local/bin/swap-boost.sh
 
 echo "removendo arquivos de configuração extra..."
-rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf # Remove MGLRU e THP Shrinker
-rm -f /etc/modprobe.d/usbhid.conf # ESSA LINHA É MANTIDA, conforme solicitado
+rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf
+rm -f /etc/modprobe.d/usbhid.conf
 rm -f /etc/modprobe.d/blacklist-zram.conf
-rm -f /etc/modprobe.d/amdgpu.conf # Limpa o arquivo antigo, se existir
-rm -f /etc/modprobe.d/99-gpu-sched.conf /etc/modprobe.d/99-amdgpu-mes.conf # Limpa os novos arquivos GPU
+rm -f /etc/modprobe.d/amdgpu.conf
+rm -f /etc/modprobe.d/99-gpu-sched.conf /etc/modprobe.d/99-amdgpu-mes.conf
 
 echo "removendo swapfile customizado e restaurando /etc/fstab..."
 swapoff "\$swapfile_path" 2>/dev/null || true;
@@ -624,11 +602,9 @@ systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
 systemctl unmask systemd-zram-setup@.service 2>/dev/null || true
 systemctl enable --now irqbalance.service 2>/dev/null || true
 
-# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
 echo "reativando serviço steamos cfs-debugfs..."
 systemctl unmask steamos-cfs-debugfs-tunings.service 2>/dev/null || true
 systemctl enable --now steamos-cfs-debugfs-tunings.service 2>/dev/null || true
-# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
 
 if command -v setenforce &>/dev/null; then
     setenforce 1 2>/dev/null || true;
@@ -642,12 +618,15 @@ sync
 BASH
 }
 
-# --- FUNÇÃO aplicar_zswap ATUALIZADA (lógica CFS removida E COM MODIFICAÇÃO DE BATERIA) ---
+# --- FUNÇÃO aplicar_zswap (MODIFICADA) ---
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
+# Adicionada criação do script/serviço zswap dinamicamente
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
 aplicar_zswap() {
     # --- Limpeza Prévia ---
     _log "garantindo aplicação limpa: executando reversão primeiro."
     _executar_reversao
-    _log "reversão (limpeza) concluída. prosseguindo com a aplicação."
+    _log "reversão (limpeza) concluída. prosseguindo com a aplicação (zswap)."
     # --- FIM Limpeza ---
 
     _steamos_readonly_disable_if_needed;
@@ -661,12 +640,12 @@ aplicar_zswap() {
     # --- FIM SELinux ---
 
     # --- GPU Otimização ---
-    _optimize_gpu # <<< ESTA FUNÇÃO CONTÉM A MODIFICAÇÃO DE BATERIA 'lbpw=1'
+    _optimize_gpu
     # --- FIM GPU ---
 
     # --- Criação dos Scripts/Serviços Comuns ---
     _log "criando e ativando serviços de otimização (pré-etapa)..."
-    create_common_scripts_and_services # <<< ESTA FUNÇÃO CONTÉM A MODIFICAÇÃO TÉRMICA 'kernel-tweaks.sh'
+    create_common_scripts_and_services
     # --- FIM Criação ---
 
     _log "aplicando otimizações com zswap (etapa principal)..."
@@ -684,7 +663,7 @@ aplicar_zswap() {
 
     # --- Seleção de Sysctl (BORE Apenas) ---
     local final_sysctl_params;
-    final_sysctl_params=("${base_sysctl_params[@]}") # <<< ESTA VARIÁVEL CONTÉM AS MODIFICAÇÕES TÉRMICAS
+    final_sysctl_params=("${base_sysctl_params[@]}")
     if [[ -f "/proc/sys/kernel/sched_bore" ]]; then
         _log "bore scheduler detectado. aplicando otimizações bore.";
         final_sysctl_params+=("${bore_params[@]}")
@@ -694,9 +673,9 @@ aplicar_zswap() {
     # --- FIM Seleção ---
 
     # --- Bloco Principal de Execução (Sem _ui_progress_exec) ---
-    _log "iniciando bloco principal de aplicação..."
-    ( # Inicia um subshell apenas para o set -e e variáveis locais, mas sem o mktemp/bash
-        set -e # Habilita saída em erro dentro deste bloco
+    _log "iniciando bloco principal de aplicação (zswap)..."
+    (
+        set -e
 
         _log "🧹 Limpando configurações de ZRAM customizadas conflitantes..."
         systemctl stop zram-config.service 2>/dev/null || true
@@ -751,26 +730,19 @@ root hard nofile 1048576
 EOF
 
         # ==========================================================
-        # --- INÍCIO DO BLOCO DE CORREÇÃO DO GRUB (ATUALIZADO E COM MODIFICAÇÃO DE BATERIA/TÉRMICA) ---
+        # --- BLOCO GRUB (COM PARÂMETROS ZSWAP) ---
         # ==========================================================
-        _log "configurando parâmetros do grub...";
+        _log "configurando parâmetros do grub (com zswap)...";
         _backup_file_once "$grub_config" # Função externa, ok
         local kernel_params=(
             "zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40"
             "zswap.zpool=zsmalloc" "zswap.non_same_filled_pages_enabled=1"
             "mitigations=off" "psi=1"
-            # <<< MODIFICADO (TÉRMICO): "preempt=full" removido
-            # --- NOVOS TWEAKS DE ENERGIA/LATÊNCIA ---
-            # <<< MODIFICADO (BATERIA): "nohz_full=all" removido
             "rcutree.enable_rcu_lazy=1"
-            # <<< MODIFICADO (TÉRMICO): "threadirqs" removido
-            # <<< MODIFICADO (BATERIA): "workqueue.power_efficient=false" removido
         )
 
-        # --- LINHA CORRIGIDA 1: Leitura robusta do conteúdo atual ---
         local current_cmdline
         current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
-
         local new_cmdline="$current_cmdline"
         local param key
         for param in "${kernel_params[@]}"; do
@@ -780,20 +752,15 @@ EOF
         for param in "${kernel_params[@]}"; do
             new_cmdline="$new_cmdline $param";
         done
-
-        # (Pequena correção de bônus: removido o '\' de 's/ \$//')
         new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//')
-
-        # --- LINHA CORRIGIDA 2: Substitui a LINHA INTEIRA para limpar lixo ---
         sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
-
         steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
         # ==========================================================
-        # --- FIM DO BLOCO DE CORREÇÃO DO GRUB ---
+        # --- FIM DO BLOCO GRUB ---
         # ==========================================================
 
         _log "criando arquivos de configuração persistentes...";
-        create_persistent_configs # Função externa, ok (MODIFICADA)
+        create_persistent_configs # Função externa, ok
 
         _log "configurando variáveis de ambiente para jogos..."
         _backup_file_once /etc/environment.d/99-game-vars.conf; # Função externa, ok
@@ -809,31 +776,222 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
 ZSWAP_SCRIPT
         chmod +x /usr/local/bin/zswap-config.sh
-        # O serviço zswap-config.service já foi criado na função create_common_scripts_and_services
 
-        _log "habilitando e iniciando todos os serviços de otimização..."
+        _log "criando serviço zswap-config..."
+cat <<UNIT > /etc/systemd/system/zswap-config.service
+[Unit]
+Description=aplicar configuracoes zswap
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zswap-config.sh
+RemainAfterExit=true
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+        _log "habilitando e iniciando todos os serviços de otimização (zswap)..."
         systemctl daemon-reload || true;
-        # A lista otimization_services agora contém todos os serviços necessários
-        systemctl enable --now "${otimization_services[@]}" || true;
+        systemctl enable --now "${otimization_services[@]}" zswap-config.service || true;
         systemctl enable --now fstrim.timer 2>/dev/null || true
         sync
 
-        _log "bloco principal de aplicação concluído com sucesso."
+        _log "bloco principal de aplicação (zswap) concluído com sucesso."
 
     ) # Fecha o subshell
     local block_rc=$? # Captura o código de saída do subshell
 
     if [ $block_rc -ne 0 ]; then
-        _ui_info "erro" "falha durante a aplicação das otimizações. verifique o log: $logfile"
-        _log "erro: bloco principal falhou com código $block_rc."
-        # Poderia adicionar uma tentativa de reversão aqui se desejado
+        _ui_info "erro" "falha durante a aplicação das otimizações (zswap). verifique o log: $logfile"
+        _log "erro: bloco principal (zswap) falhou com código $block_rc."
         return 1
     fi
 
-    _ui_info "sucesso" "otimacoes aplicadas com sucesso. reinicie o sistema.";
-    _log "Otimizações aplicadas com sucesso!.";
+    _ui_info "sucesso" "otimacoes (zswap) aplicadas com sucesso. reinicie o sistema.";
+    _log "Otimizações (ZSwap) aplicadas com sucesso!.";
     return 0
 }
+
+# --- NOVA FUNÇÃO aplicar_zram ---
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA (BLOCO ZRAM CORRIGIDO) >>>
+aplicar_zram() {
+    # --- Limpeza Prévia ---
+    _log "garantindo aplicação limpa: executando reversão primeiro."
+    _executar_reversao
+    _log "reversão (limpeza) concluída. prosseguindo com a aplicação (zram)."
+    # --- FIM Limpeza ---
+
+    _steamos_readonly_disable_if_needed;
+
+    # --- Desativa SELinux ---
+    _log "desativando selinux (se existir)..."
+    if command -v setenforce &>/dev/null; then
+        setenforce 0 2>/dev/null || true
+        _log "selinux set to permissive."
+    fi
+    # --- FIM SELinux ---
+
+    # --- GPU Otimização ---
+    _optimize_gpu
+    # --- FIM GPU ---
+
+    # --- Criação dos Scripts/Serviços Comuns ---
+    _log "criando e ativando serviços de otimização (pré-etapa)..."
+    create_common_scripts_and_services
+    # --- FIM Criação ---
+
+    _log "aplicando otimizações com zram (etapa principal)..."
+
+    # --- Verificação de Espaço (REMOVIDA) ---
+
+    # --- Seleção de Sysctl (BORE Apenas) ---
+    local final_sysctl_params;
+    final_sysctl_params=("${base_sysctl_params[@]}")
+    if [[ -f "/proc/sys/kernel/sched_bore" ]]; then
+        _log "bore scheduler detectado. aplicando otimizações bore.";
+        final_sysctl_params+=("${bore_params[@]}")
+    else
+        _log "bore scheduler não encontrado. otimizações BORE não aplicadas.";
+    fi
+    # --- FIM Seleção ---
+
+    # --- Bloco Principal de Execução (ZRAM) ---
+    _log "iniciando bloco principal de aplicação (zram)..."
+    (
+        set -e
+
+        _log "🧹 Limpando configurações de ZRAM customizadas conflitantes..."
+        systemctl stop zram-config.service 2>/dev/null || true
+        systemctl disable zram-config.service 2>/dev/null || true
+        rm -f /etc/systemd/system/zram-config.service 2>/dev/null || true
+        rm -f /usr/local/bin/zram-setup.sh 2>/dev/null || true
+        systemctl daemon-reload
+
+        _log "desativando zram padrão e irqbalance..."
+        swapoff /dev/zram0 2>/dev/null || true
+        # NÃO desabilita o módulo zram
+        # REMOVE a blacklist do zram, caso exista
+        rm -f /etc/modprobe.d/blacklist-zram.conf
+        systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
+        systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
+        systemctl mask systemd-zram-setup@.service 2>/dev/null || true
+        systemctl disable --now irqbalance.service 2>/dev/null || true
+
+        _log "desativando serviços desnecessários...";
+        manage_unnecessary_services "disable" # Função externa, ok
+
+        _log "otimizando fstab...";
+        _backup_file_once /etc/fstab # Função externa, ok
+        if grep -q " /home " /etc/fstab 2>/dev/null; then
+            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
+        fi
+
+        # --- Bloco do swapfile REMOVIDO ---
+
+        _log "aplicando tweaks de sysctl...";
+        _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}"; # Função externa, ok
+        sysctl --system || true
+
+        _log "ajustando limites (ulimit)...";
+        _backup_file_once /etc/security/limits.d/99-game-limits.conf # Função externa, ok
+        cat <<'EOF' > /etc/security/limits.d/99-game-limits.conf
+* soft nofile 1048576
+* hard nofile 1048576
+root soft nofile 1048576
+root hard nofile 1048576
+EOF
+
+        # ==========================================================
+        # --- BLOCO GRUB (SEM PARÂMETROS ZSWAP) ---
+        # ==========================================================
+        _log "configurando parâmetros do grub (sem zswap)...";
+        _backup_file_once "$grub_config" # Função externa, ok
+        local kernel_params=(
+            "mitigations=off" "psi=1"
+            "rcutree.enable_rcu_lazy=1"
+        )
+
+        local current_cmdline
+        current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
+        local new_cmdline="$current_cmdline"
+        local param key
+        for param in "${kernel_params[@]}"; do
+            key="${param%%=*}";
+            # Remove o zswap também, para limpeza
+            new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g" | sed -E "s/ ?zswap\.[^ =]+(=[^ ]*)?//g");
+        done
+        for param in "${kernel_params[@]}"; do
+            new_cmdline="$new_cmdline $param";
+        done
+        new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//')
+        sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
+        steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
+        # ==========================================================
+        # --- FIM DO BLOCO GRUB ---
+        # ==========================================================
+
+        _log "criando arquivos de configuração persistentes...";
+        create_persistent_configs # Função externa, ok
+
+        _log "configurando variáveis de ambiente para jogos..."
+        _backup_file_once /etc/environment.d/99-game-vars.conf; # Função externa, ok
+        printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
+
+        _log "criando script zram-config (24G, lz4, zsmalloc)..."
+        # --- SCRIPT ZRAM-CONFIG.SH CORRIGIDO ---
+        cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
+#!/usr/bin/env bash
+modprobe zram num_devices=1 2>/dev/null || true
+
+# --- CORREÇÃO ---
+# Define o algoritmo de compressão e o zpool ANTES de definir o tamanho.
+# Escrevemos diretamente no dispositivo zram0 para garantir.
+echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
+
+# Agora, ativamos o dispositivo com o tamanho
+echo 24G > /sys/block/zram0/disksize 2>/dev/null || true
+
+# O resto continua o mesmo
+mkswap /dev/zram0 2>/dev/null || true
+swapon /dev/zram0 -p 1000 2>/dev/null || true
+ZRAM_SCRIPT
+        # --- FIM DA CORREÇÃO ---
+        chmod +x /usr/local/bin/zram-config.sh
+
+        _log "criando serviço zram-config..."
+cat <<UNIT > /etc/systemd/system/zram-config.service
+[Unit]
+Description=configuracao otimizada de zram (24g, lz4)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zram-config.sh
+RemainAfterExit=true
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+        _log "habilitando e iniciando todos os serviços de otimização (zram)..."
+        systemctl daemon-reload || true;
+        systemctl enable --now "${otimization_services[@]}" zram-config.service || true;
+        systemctl enable --now fstrim.timer 2>/dev/null || true
+        sync
+
+        _log "bloco principal de aplicação (zram) concluído com sucesso."
+
+    ) # Fecha o subshell
+    local block_rc=$? # Captura o código de saída do subshell
+
+    if [ $block_rc -ne 0 ]; then
+        _ui_info "erro" "falha durante a aplicação das otimizações (zram). verifique o log: $logfile"
+        _log "erro: bloco principal (zram) falhou com código $block_rc."
+        return 1
+    fi
+
+    _ui_info "sucesso" "otimacoes (zram) aplicadas com sucesso. reinicie o sistema.";
+    _log "Otimizações (ZRAM) aplicadas com sucesso!.";
+    return 0
+}
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
 
 reverter_alteracoes() {
     _log "iniciando reversão completa das alterações (via menu)"
@@ -843,7 +1001,8 @@ reverter_alteracoes() {
     _log "reversão completa executada"
 }
 
-# --- FUNÇÃO MAIN ATUALIZADA (case 4.1 corrigido) ---
+# --- FUNÇÃO MAIN ATUALIZADA (com novas opções) ---
+# <<< INÍCIO DA MODIFICAÇÃO SOLICITADA >>>
 main() {
     local texto_inicial="autor: $autor\n\ndoações (pix): $pix_doacao\n\nEste programa aplica um conjunto abrangente de otimizações de memória, i/o e sistema no steamos. todas as alterações podem ser revertidas."
 
@@ -851,24 +1010,31 @@ main() {
     echo -e " Bem-vindo(a) ao utilitário Turbo Decky (v$versao)"
     echo -e "=======================================================\n$texto_inicial\n\n-------------------------------------------------------\n"
 
-    echo "opções:";
-    echo "1) Aplicar otimizações principais do SteamOS"
-    echo "2) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
-    echo "3) Reverter otimizações principais do SteamOs"
-    echo "4) Reverter otimização do cache do MicroSD"
-    echo "5) Sair"
+    echo "opções de otimização principal:"
+    echo "1) Aplicar Otimizações (Padrão com ZSwap + Swapfile)"
+    echo "2) Aplicar Otimizações (Alternativa com ZRAM)"
+    echo ""
+    echo "opções de microsd:"
+    echo "3) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
+    echo ""
+    echo "reversão:"
+    echo "4) Reverter otimizações principais do SteamOs"
+    echo "5) Reverter otimização do cache do MicroSD"
+    echo ""
+    echo "6) Sair"
 
-    read -rp "escolha uma opção (1-5): " escolha
+    read -rp "escolha uma opção: " escolha
 
     case "$escolha" in
         1) aplicar_zswap ;;
-        2) otimizar_sdcard_cache ;;
-        3) reverter_alteracoes ;;
-        4) reverter_sdcard_cache ;;
-        5) _ui_info "saindo" "nenhuma alteração foi feita."; exit 0 ;;
+        2) aplicar_zram ;;
+        3) otimizar_sdcard_cache ;;
+        4) reverter_alteracoes ;;
+        5) reverter_sdcard_cache ;;
+        6) _ui_info "saindo" "nenhuma alteração foi feita."; exit 0 ;;
         *) _ui_info "erro" "opção inválida."; exit 1 ;;
     esac
 }
+# <<< FIM DA MODIFICAÇÃO SOLICITADA >>>
 
 main "$@"
-
