@@ -2,14 +2,15 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.19 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.20 Dupla Dinamica"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-readonly zswap_swapfile_size_gb="8"
+readonly zswap_swapfile_size_gb="6"
+readonly zram_swapfile_size_gb="4" # <<< ADICIONADO (PARA O FALLBACK DO ZRAM)
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -497,6 +498,7 @@ _log "reversão do microsd concluída."
 }
 
 # --- FUNÇÃO _executar_reversao (MODIFICADA) ---
+# Nenhuma mudança necessária aqui. A lógica genérica de remoção do swapfile já existe.
 _executar_reversao() {
 _steamos_readonly_disable_if_needed;
 _log "iniciando lógica de reversão (limpeza)"
@@ -795,6 +797,20 @@ _configure_irqbalance
 # <<< FIM DA MODIFICAÇÃO (IRQBALANCE) >>>
 
 _log "aplicando otimizações com zram (etapa principal)..."
+
+# <<< INÍCIO DA MODIFICAÇÃO (VERIFICAÇÃO DE ESPAÇO) >>>
+# --- Verificação de Espaço ---
+local free_space_gb;
+free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
+if (( free_space_gb < zram_swapfile_size_gb )); then
+    _ui_info "erro crítico" "espaço em disco insuficiente para criar o swapfile de 4GB.";
+    _log "execução (zram) abortada por falta de espaço.";
+    exit 1;
+fi
+_log "espaço em disco suficiente para o swapfile."
+# --- FIM Verificação ---
+# <<< FIM DA MODIFICAÇÃO >>>
+
 # --- Seleção de Sysctl (BORE Apenas) ---
 local final_sysctl_params;
 final_sysctl_params=("${base_sysctl_params[@]}")
@@ -833,6 +849,24 @@ _backup_file_once /etc/fstab # Função externa, ok
 if grep -q " /home " /etc/fstab 2>/dev/null; then
 sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
 fi
+
+# <<< INÍCIO DA MODIFICAÇÃO (SWAPFILE DE FALLBACK) >>>
+_log "configurando swapfile de fallback (4GB, pri=-2)...";
+swapoff "$swapfile_path" 2>/dev/null || true;
+rm -f "$swapfile_path" || true
+if command -v fallocate &>/dev/null; then
+    fallocate -l "${zram_swapfile_size_gb}G" "$swapfile_path" 2>/dev/null || dd if=/dev/zero of="$swapfile_path" bs=1G count="$zram_swapfile_size_gb" status=progress
+else
+    dd if=/dev/zero of="$swapfile_path" bs=1G count="$zram_swapfile_size_gb" status=progress
+fi
+chmod 600 "$swapfile_path" || true;
+mkswap "$swapfile_path" || true
+sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true;
+echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab
+swapon --priority -2 "$swapfile_path" || true
+_log "swapfile de fallback para zram criado."
+# <<< FIM DA MODIFICAÇÃO >>>
+
 _log "aplicando tweaks de sysctl...";
 _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}"; # Função externa, ok
 sysctl --system || true
@@ -882,7 +916,11 @@ create_persistent_configs # Função externa, ok
 _log "configurando variáveis de ambiente para jogos..."
 _backup_file_once /etc/environment.d/99-game-vars.conf; # Função externa, ok
 printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
-_log "criando script zram-config (16G, lz4hc)..."
+
+# <<< INÍCIO DA CORREÇÃO (LOG) >>>
+_log "criando script zram-config (6G, lz4)..."
+# <<< FIM DA CORREÇÃO (LOG) >>>
+
 # --- SCRIPT ZRAM-CONFIG.SH CORRIGIDO ---
 cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
@@ -903,7 +941,9 @@ chmod +x /usr/local/bin/zram-config.sh
 _log "criando serviço zram-config..."
 cat <<UNIT > /etc/systemd/system/zram-config.service
 [Unit]
-Description=configuracao otimizada de zram (16g, lz4hc)
+# <<< INÍCIO DA CORREÇÃO (DESCRIÇÃO) >>>
+Description=configuracao otimizada de zram (6g, lz4)
+# <<< FIM DA CORREÇÃO (DESCRIÇÃO) >>>
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/zram-config.sh
