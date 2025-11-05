@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.17 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.18 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -209,6 +209,30 @@ _ui_info "gpu" "otimizações amdgpu (com MES completo) aplicadas."
 _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf (com uni_mes e mes_kiq) criado."
 }
 # --- FIM DA MODIFICAÇÃO ---
+
+# --- NOVA FUNÇÃO _configure_irqbalance ---
+_configure_irqbalance() {
+_log "configurando irqbalance..."
+mkdir -p /etc/default
+_backup_file_once "/etc/default/irqbalance"
+            
+# Escreve a nova configuração
+cat << EOF > /etc/default/irqbalance
+# Configurado pelo Turbo Decky
+# Bane as CPUs 0 e 1 (máscara 0x03) de lidar com IRQs,
+# reservando-as para os threads principais do jogo.
+IRQBALANCE_BANNED_CPUS=0x03
+EOF
+            
+_log "configuração /etc/default/irqbalance criada."
+            
+# Habilita e reinicia o serviço para aplicar a config
+systemctl unmask irqbalance.service 2>/dev/null || true
+systemctl enable irqbalance.service 2>/dev/null || true
+systemctl restart irqbalance.service 2>/dev/null || true
+_log "irqbalance ativado e configurado."
+}
+# --- FIM DA NOVA FUNÇÃO ---
 
 # --- FUNÇÃO create_persistent_configs ---
 create_persistent_configs() {
@@ -472,7 +496,7 @@ _ui_info "sucesso" "reversão do cache do microsd concluída. os caches voltarã
 _log "reversão do microsd concluída."
 }
 
-# --- FUNÇÃO _executar_reversao ---
+# --- FUNÇÃO _executar_reversao (MODIFICADA) ---
 _executar_reversao() {
 _steamos_readonly_disable_if_needed;
 _log "iniciando lógica de reversão (limpeza)"
@@ -528,11 +552,24 @@ _restore_file "\$grub_config" || true # Restaura o GRUB (limpando todos os parâ
 _restore_file /etc/sysctl.d/99-sdweak-performance.conf || rm -f /etc/sysctl.d/99-sdweak-performance.conf
 _restore_file /etc/security/limits.d/99-game-limits.conf || rm -f /etc/security/limits.d/99-game-limits.conf
 _restore_file /etc/environment.d/99-game-vars.conf || rm -f /etc/environment.d/99-game-vars.conf
+# <<< INÍCIO DA MODIFICAÇÃO (IRQBALANCE) >>>
+echo "restaurando configuração padrão do irqbalance..."
+_restore_file /etc/default/irqbalance || rm -f /etc/default/irqbalance
+# <<< FIM DA MODIFICAÇÃO (IRQBALANCE) >>>
+
 echo "reativando serviços padrão do sistema..."
 manage_unnecessary_services "enable"
 systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
 systemctl unmask systemd-zram-setup@.service 2>/dev/null || true
-systemctl enable --now irqbalance.service 2>/dev/null || true
+
+# <<< INÍCIO DA MODIFICAÇÃO (IRQBALANCE) >>>
+# Garante que ele seja reativado e recarregue a config padrão (restaurada)
+echo "reativando irqbalance com config padrão..."
+systemctl unmask irqbalance.service 2>/dev/null || true
+systemctl enable irqbalance.service 2>/dev/null || true
+systemctl restart irqbalance.service 2>/dev/null || true
+# <<< FIM DA MODIFICAÇÃO (IRQBALANCE) >>>
+
 echo "reativando serviço steamos cfs-debugfs..."
 systemctl unmask steamos-cfs-debugfs-tunings.service 2>/dev/null || true
 systemctl enable --now steamos-cfs-debugfs-tunings.service 2>/dev/null || true
@@ -549,7 +586,7 @@ sync
 BASH
 }
 
-# --- FUNÇÃO aplicar_zswap ---
+# --- FUNÇÃO aplicar_zswap (MODIFICADA) ---
 aplicar_zswap() {
 # --- Limpeza Prévia ---
 _log "garantindo aplicação limpa: executando reversão primeiro."
@@ -571,6 +608,11 @@ _optimize_gpu
 _log "criando e ativando serviços de otimização (pré-etapa)..."
 create_common_scripts_and_services
 # --- FIM Criação ---
+
+# <<< INÍCIO DA MODIFICAÇÃO (IRQBALANCE) >>>
+_configure_irqbalance
+# <<< FIM DA MODIFICAÇÃO (IRQBALANCE) >>>
+
 _log "aplicando otimizações com zswap (etapa principal)..."
 # --- Verificação de Espaço ---
 local free_space_gb;
@@ -602,14 +644,17 @@ systemctl disable zram-config.service 2>/dev/null || true
 rm -f /etc/systemd/system/zram-config.service 2>/dev/null || true
 rm -f /usr/local/bin/zram-setup.sh 2>/dev/null || true
 systemctl daemon-reload
-_log "desativando zram padrão e irqbalance..."
+_log "desativando zram padrão..."
 swapoff /dev/zram0 2>/dev/null || true
 rmmod zram 2>/dev/null || true
 create_module_blacklist # Função externa, ok
 systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
 systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
 systemctl mask systemd-zram-setup@.service 2>/dev/null || true
-systemctl disable --now irqbalance.service 2>/dev/null || true
+# <<< INÍCIO DA MODIFICAÇÃO (IRQBALANCE) >>>
+# A linha 'systemctl disable --now irqbalance.service' foi REMOVIDA daqui
+# <<< FIM DA MODIFICAÇÃO (IRQBALANCE) >>>
+
 _log "desativando serviços desnecessários...";
 manage_unnecessary_services "disable" # Função externa, ok
 _log "otimizando fstab...";
@@ -722,7 +767,7 @@ _log "Otimizações (ZSwap) aplicadas com sucesso!.";
 return 0
 }
 
-# --- NOVA FUNÇÃO aplicar_zram ---
+# --- NOVA FUNÇÃO aplicar_zram (MODIFICADA) ---
 aplicar_zram() {
 # --- Limpeza Prévia ---
 _log "garantindo aplicação limpa: executando reversão primeiro."
@@ -744,6 +789,11 @@ _optimize_gpu
 _log "criando e ativando serviços de otimização (pré-etapa)..."
 create_common_scripts_and_services
 # --- FIM Criação ---
+
+# <<< INÍCIO DA MODIFICAÇÃO (IRQBALANCE) >>>
+_configure_irqbalance
+# <<< FIM DA MODIFICAÇÃO (IRQBALANCE) >>>
+
 _log "aplicando otimizações com zram (etapa principal)..."
 # --- Seleção de Sysctl (BORE Apenas) ---
 local final_sysctl_params;
@@ -765,14 +815,17 @@ systemctl disable zram-config.service 2>/dev/null || true
 rm -f /etc/systemd/system/zram-config.service 2>/dev/null || true
 rm -f /usr/local/bin/zram-setup.sh 2>/dev/null || true
 systemctl daemon-reload
-_log "desativando zram padrão e irqbalance..."
+_log "desativando zram padrão..."
 swapoff /dev/zram0 2>/dev/null || true
 # REMOVE a blacklist do zram, caso exista
 rm -f /etc/modprobe.d/blacklist-zram.conf
 systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
 systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
 systemctl mask systemd-zram-setup@.service 2>/dev/null || true
-systemctl disable --now irqbalance.service 2>/dev/null || true
+# <<< INÍCIO DA MODIFICAÇÃO (IRQBALANCE) >>>
+# A linha 'systemctl disable --now irqbalance.service' foi REMOVIDA daqui
+# <<< FIM DA MODIFICAÇÃO (IRQBALANCE) >>>
+
 _log "desativando serviços desnecessários...";
 manage_unnecessary_services "disable" # Função externa, ok
 _log "otimizando fstab...";
@@ -829,7 +882,7 @@ create_persistent_configs # Função externa, ok
 _log "configurando variáveis de ambiente para jogos..."
 _backup_file_once /etc/environment.d/99-game-vars.conf; # Função externa, ok
 printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
-_log "criando script zram-config (24G, lz4, zsmalloc)..."
+_log "criando script zram-config (16G, lz4hc)..."
 # --- SCRIPT ZRAM-CONFIG.SH CORRIGIDO ---
 cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
@@ -850,7 +903,7 @@ chmod +x /usr/local/bin/zram-config.sh
 _log "criando serviço zram-config..."
 cat <<UNIT > /etc/systemd/system/zram-config.service
 [Unit]
-Description=configuracao otimizada de zram (24g, lz4)
+Description=configuracao otimizada de zram (16g, lz4hc)
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/zram-config.sh
