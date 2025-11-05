@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.18 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
+versao="1.1.0.19 Dupla Dinamica" # <<< MODIFICADO (VERSÃO)
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -693,7 +693,7 @@ _log "configurando parâmetros do grub (com zswap)...";
 _backup_file_once "$grub_config" # Função externa, ok
 local kernel_params=(
 "zswap.enabled=1"
-"zswap.compressor=lz4hc"
+"zswap.compressor=zstd"
 "zswap.max_pool_percent=25"
 "zswap.zpool=zsmalloc"
 "zswap.non_same_filled_pages_enabled=1"
@@ -732,7 +732,7 @@ _log "criando script zswap-config (etapa final)..."
 cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lz4hc > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
@@ -890,13 +890,13 @@ modprobe zram num_devices=1 2>/dev/null || true
 # --- CORREÇÃO ---
 # Define o algoritmo de compressão e o zpool ANTES de definir o tamanho.
 # Escrevemos diretamente no dispositivo zram0 para garantir.
-echo lz4hc > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
 echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
 # Agora, ativamos o dispositivo com o tamanho
-echo 16G > /sys/block/zram0/disksize 2>/dev/null || true
+echo 6G > /sys/block/zram0/disksize 2>/dev/null || true
 # O resto continua o mesmo
 mkswap /dev/zram0 2>/dev/null || true
-swapon /dev/zram0 -p 1000 2>/dev/null || true
+swapon /dev/zram0 -p 3000 2>/dev/null || true
 ZRAM_SCRIPT
 # --- FIM DA CORREÇÃO ---
 chmod +x /usr/local/bin/zram-config.sh
