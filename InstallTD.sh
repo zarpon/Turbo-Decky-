@@ -9,8 +9,8 @@ pix_doacao="jorgezarpon@msn.com"
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-readonly zswap_swapfile_size_gb="6"
-readonly zram_swapfile_size_gb="4" # <<< ADICIONADO (PARA O FALLBACK DO ZRAM)
+readonly zswap_swapfile_size_gb="4"
+readonly zram_swapfile_size_gb="2" # <<< ADICIONADO (PARA O FALLBACK DO ZRAM)
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
