@@ -931,7 +931,7 @@ modprobe zram num_devices=1 2>/dev/null || true
 echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
 echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
 # Agora, ativamos o dispositivo com o tamanho
-echo 6G > /sys/block/zram0/disksize 2>/dev/null || true
+echo 4G > /sys/block/zram0/disksize 2>/dev/null || true
 # O resto continua o mesmo
 mkswap /dev/zram0 2>/dev/null || true
 swapon /dev/zram0 -p 3000 2>/dev/null || true
