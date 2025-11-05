@@ -9,7 +9,7 @@ pix_doacao="jorgezarpon@msn.com"
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-readonly zswap_swapfile_size_gb="13"
+readonly zswap_swapfile_size_gb="8"
 readonly zram_swapfile_size_gb="2" # <<< ADICIONADO (PARA O FALLBACK DO ZRAM)
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
@@ -696,7 +696,7 @@ _backup_file_once "$grub_config" # Função externa, ok
 local kernel_params=(
 "zswap.enabled=1"
 "zswap.compressor=zstd"
-"zswap.max_pool_percent=30"
+"zswap.max_pool_percent=25"
 "zswap.zpool=zsmalloc"
 "zswap.non_same_filled_pages_enabled=1"
 "mitigations=off"
@@ -735,7 +735,7 @@ cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
 ZSWAP_SCRIPT
