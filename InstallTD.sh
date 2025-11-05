@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.20 Dupla Dinamica"
+versao="1.1.0.21 Dupla Dinamica"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
