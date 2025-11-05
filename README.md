@@ -38,6 +38,8 @@ Tudo isso é feito automaticamente — basta escolher a opção e deixar o scrip
 
 2 - Baixe o arquivo TurboDecky.desktop da página de Releases;
 
+https://github.com/zarpon/Turbo-Decky-/releases/download/Latest/TurboDecky.desktop
+
 3 - Clique e execute o arquivo.
 
 4 - Insira a Senha de super usuário e siga as instruções no menu.
