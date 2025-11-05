@@ -204,7 +204,7 @@ _log "aplicando otimizações amdgpu (com MES completo)..."
 mkdir -p /etc/modprobe.d
 # <<< CORREÇÃO (SOLICITAÇÃO DO USUÁRIO) >>>
 # Reintroduzindo os parâmetros MES completos conforme solicitado
-echo "options amdgpu sched_policy=0 mes=1 moverate=128 lbpw=0 uni_mes=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
+echo "options amdgpu mes=1 moverate=128 lbpw=0 uni_mes=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
 _ui_info "gpu" "otimizações amdgpu (com MES completo) aplicadas."
 _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf (com uni_mes e mes_kiq) criado."
 }
