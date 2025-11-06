@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.28 Dupla Dinamica"
+versao="1.1.0.29 Dupla Dinamica"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -99,7 +99,7 @@ readonly game_env_vars=(
     "MESA_SHADER_CACHE_MAX_SIZE=20G"
     "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-    
+    "mesa_glthread=true"
 )
 
 # --- Funções ---
