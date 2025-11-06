@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2"
-autor="Jorge Luis (Otimizado por Assistente IA)"
+versao="1.2 Kriptonians"
+autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
