@@ -296,7 +296,7 @@ IOB
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
 echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
-echo 0 > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
+echo "never" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
