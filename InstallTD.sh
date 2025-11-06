@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.27 Dupla Dinamica"
+versao="1.1.0.28 Dupla Dinamica"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -32,7 +32,7 @@ readonly base_sysctl_params=(
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=0"
     "vm.watermark_boost_factor=0"
     "vm.overcommit_memory=1"
     "vm.overcommit_ratio=100"
@@ -95,12 +95,11 @@ readonly unnecessary_services=(
 readonly game_env_vars=(
     "RADV_PERFTEST=sam,gpl,aco"
     "RADV_ENABLE_ACO=1"
-    "MESA_GLTHREAD=true"
     "WINEFSYNC=1"
     "MESA_SHADER_CACHE_MAX_SIZE=20G"
     "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-    "radeonsi_shader_precompile=true"
+    
 )
 
 # --- Funções ---
@@ -191,7 +190,7 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu (com MES completo)..."
     mkdir -p /etc/modprobe.d
-    echo "options amdgpu mes=1 lbpw=0 uni_mes=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
+    echo "options amdgpu moverate=128 mes=1 lbpw=0 uni_mes=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
     _ui_info "gpu" "otimizações amdgpu (com MES completo) aplicadas."
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
