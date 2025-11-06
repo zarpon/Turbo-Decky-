@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.29 Dupla Dinamica"
-autor="Jorge Luis"
+versao="1.2"
+autor="Jorge Luis (Otimizado por Assistente IA)"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
@@ -19,16 +19,20 @@ readonly sdcard_device="/dev/mmcblk0p1"
 readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
+# Mantido swappiness em 60 para equilíbrio, e os ajustes de CPU/IO anti-stutter.
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=419430400"
+    "vm.dirty_background_ratio=5"
+    "vm.dirty_ratio=10"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
-    
+    "kernel.numa_balancing=0"
+    "kernel.sched_autogroup_enabled=0"
+    "kernel.sched_min_granularity_ns=600000"
+    "kernel.sched_latency_ns=4000000"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
@@ -76,14 +80,14 @@ readonly otimization_services=(
     "io-boost.service"
     "hugepages.service"
     "ksm-config.service"
-    "mem-tweaks.service"
+    "kernel-tweaks.service"
 )
 readonly otimization_scripts=(
     "/usr/local/bin/thp-config.sh"
     "/usr/local/bin/io-boost.sh"
     "/usr/local/bin/hugepages.sh"
     "/usr/local/bin/ksm-config.sh"
-    "/usr/local/bin/mem-tweaks.sh"
+    "/usr/local/bin/kernel-tweaks.sh"
 )
 readonly unnecessary_services=(
     "gpu-trace.service"
@@ -100,6 +104,7 @@ readonly game_env_vars=(
     "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "mesa_glthread=true"
+    "DXVK_ASYNC=1"
 )
 
 # --- Funções ---
@@ -216,7 +221,6 @@ create_persistent_configs() {
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
 w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
-
 EOF
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
@@ -265,34 +269,24 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
             echo "100" > "${nvme_power_path}/autosuspend_delay_ms" 2>/dev/null || true
             echo "auto" > "${nvme_power_path}/control" 2>/dev/null || true
         fi
-        if [[ -w "$queue_path/scheduler" ]] && grep -q "kyber" "$queue_path/scheduler"; then
-            echo "kyber" > "$queue_path/scheduler" 2>/dev/null || true
-        elif [ -w "$queue_path/scheduler" ]; then
-            echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
-            echo 6000000 > "$queue_path/iosched/write_lat_nsec" 2>/dev/null || true
-            echo 1200000 > "$queue_path/iosched/read_lat_nsec" 2>/dev/null || true
+        if [[ -w "$queue_path/scheduler" ]]; then
+             echo "none" > "$queue_path/scheduler" 2>/dev/null || echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
         echo 256 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 1 > "$queue_path/nomerges" 2>/dev/null || true
-        echo 500 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
+        echo 0 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
     mmcblk*|sd*)
         if [[ -w "$queue_path/scheduler" ]] && grep -q "bfq" "$queue_path/scheduler"; then
             echo "bfq" > "$queue_path/scheduler" 2>/dev/null || true
             echo 1 > "$queue_path/iosched/low_latency" 2>/dev/null || true
             echo 0 > "$queue_path/iosched/slice_idle_us" 2>/dev/null || true
-            echo 1 > "$queue_path/iosched/back_seek_penalty" 2>/dev/null || true
-            echo 200 > "$queue_path/iosched/fifo_expire_async" 2>/dev/null || true
-            echo 100 > "$queue_path/iosched/fifo_expire_sync" 2>/dev/null || true
-            echo 0 > "$queue_path/iosched/slice_idle" 2>/dev/null || true
-            echo 100 > "$queue_path/iosched/timeout_sync" 2>/dev/null || true
         elif [ -w "$queue_path/scheduler" ]; then
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
         echo 512 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
-        echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
     esac
 done
@@ -302,13 +296,12 @@ IOB
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
 echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
-echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
+echo "madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-echo 5000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
-echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+echo 10000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
 THP
     chmod +x /usr/local/bin/thp-config.sh
 
@@ -324,21 +317,24 @@ echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
 KSM
     chmod +x /usr/local/bin/ksm-config.sh
 
-    cat <<'MMT' > /usr/local/bin/mem-tweaks.sh
+    cat <<'KRT' > /usr/local/bin/kernel-tweaks.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/multi_queue/parameters/multi_queue_alloc 2>/dev/null || true
 echo 1 > /sys/module/multi_queue/parameters/multi_queue_reclaim 2>/dev/null || true
-MMT
-    chmod +x /usr/local/bin/mem-tweaks.sh
+if [ -w /sys/module/rcu/parameters/rcu_normal_after_boot ]; then
+    echo 0 > /sys/module/rcu/parameters/rcu_normal_after_boot 2>/dev/null || true
+fi
+KRT
+    chmod +x /usr/local/bin/kernel-tweaks.sh
 
-    for service_name in thp-config io-boost hugepages ksm-config mem-tweaks; do
+    for service_name in thp-config io-boost hugepages ksm-config kernel-tweaks; do
         description="";
         case "$service_name" in
-        thp-config) description="configuracao otimizada de thp";;
+        thp-config) description="configuracao otimizada de thp (madvise)";;
         io-boost) description="otimização de i/o e agendadores de disco";;
-        hugepages) description="aloca huge pages para jogos";;
+        hugepages) description="desativa pre-alocacao de huge pages";;
         ksm-config) description="desativa kernel samepage merging (ksm)";;
-        mem-tweaks) description="otimização de alocacao de memoria";;
+        kernel-tweaks) description="otimizacoes variadas de kernel (rcu, mq)";;
         esac
         cat <<UNIT > /etc/systemd/system/${service_name}.service
 [Unit]
@@ -356,7 +352,7 @@ UNIT
 }
 
 otimizar_sdcard_cache() {
-    _log "iniciando otimização de cache do microsd..."
+    _log "iniciando otimização de cache do microsd (via rsync)..."
     local sdcard_mount_point
     sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
     if [[ -z "$sdcard_mount_point" ]]; then
@@ -386,9 +382,14 @@ otimizar_sdcard_cache() {
     _log "ajustando permissões de $nvme_shadercache_target_path"
     chown "${deck_user}:${deck_group}" "$nvme_shadercache_target_path" 2>/dev/null || true
     if [ -d "$sdcard_shadercache_path" ]; then
-        _log "movendo shaders existentes do microsd para o nvme..."
-        mv "$sdcard_shadercache_path"/* "$nvme_shadercache_target_path"/ 2>/dev/null || true
-        rmdir "$sdcard_shadercache_path" 2>/dev/null || true
+        _log "movendo shaders existentes do microsd para o nvme (usando rsync)..."
+        if command -v rsync &>/dev/null; then
+             rsync -a --remove-source-files "$sdcard_shadercache_path"/ "$nvme_shadercache_target_path"/ 2>/dev/null || true
+             find "$sdcard_shadercache_path" -type d -empty -delete 2>/dev/null || true
+        else
+             mv "$sdcard_shadercache_path"/* "$nvme_shadercache_target_path"/ 2>/dev/null || true
+             rmdir "$sdcard_shadercache_path" 2>/dev/null || true
+        fi
     fi
     _log "criando link simbólico: $sdcard_shadercache_path -> $nvme_shadercache_target_path"
     ln -s "$nvme_shadercache_target_path" "$sdcard_shadercache_path"
@@ -417,9 +418,14 @@ reverter_sdcard_cache() {
     rm "$sdcard_shadercache_path"
     _log "recriando diretório original no microsd: $sdcard_shadercache_path"
     mkdir -p "$sdcard_shadercache_path"
-    _log "movendo shaders de volta do nvme para o microsd..."
-    mv "$nvme_shadercache_target_path"/* "$sdcard_shadercache_path"/ 2>/dev/null || true
-    rmdir "$nvme_shadercache_target_path" 2>/dev/null || true
+    _log "movendo shaders de volta do nvme para o microsd (rsync)..."
+    if command -v rsync &>/dev/null; then
+         rsync -a --remove-source-files "$nvme_shadercache_target_path"/ "$sdcard_shadercache_path"/ 2>/dev/null || true
+         find "$nvme_shadercache_target_path" -type d -empty -delete 2>/dev/null || true
+    else
+         mv "$nvme_shadercache_target_path"/* "$sdcard_shadercache_path"/ 2>/dev/null || true
+         rmdir "$nvme_shadercache_target_path" 2>/dev/null || true
+    fi
     _ui_info "sucesso" "reversão do cache do microsd concluída."
     _log "reversão do microsd concluída."
 }
@@ -438,13 +444,13 @@ eval "\$unnecessary_services_str";
 eval "\$otimization_scripts_str"
 set -e
 echo "parando e desativando serviços customizados..."
-systemctl stop "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service 2>/dev/null || true
-systemctl disable "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service 2>/dev/null || true
+systemctl stop "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service mem-tweaks.service 2>/dev/null || true
+systemctl disable "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service mem-tweaks.service 2>/dev/null || true
 echo "removendo arquivos de serviço e scripts..."
 for svc_file in "\${otimization_services[@]}"; do rm -f "/etc/systemd/system/\$svc_file"; done
-rm -f /etc/systemd/system/zswap-config.service /etc/systemd/system/zram-config.service /etc/systemd/system/kernel-tweaks.service
+rm -f /etc/systemd/system/zswap-config.service /etc/systemd/system/zram-config.service /etc/systemd/system/kernel-tweaks.service /etc/systemd/system/mem-tweaks.service
 for script_file in "\${otimization_scripts[@]}"; do rm -f "\$script_file"; done
-rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh /usr/local/bin/kernel-tweaks.sh
+rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh /usr/local/bin/kernel-tweaks.sh /usr/local/bin/mem-tweaks.sh
 systemctl stop swap-boost.service 2>/dev/null || true
 systemctl disable swap-boost.service 2>/dev/null || true
 rm -f /etc/systemd/system/swap-boost.service /usr/local/bin/swap-boost.sh
@@ -552,7 +558,7 @@ EOF
 * soft memlock 2147484
 EOF
     _backup_file_once "$grub_config"
-    # <<< ADICIONADO: zswap.shrinker_enabled=1 >>>
+    # Compressor revertido para lz4
     local kernel_params=(
         "zswap.enabled=1"
         "zswap.compressor=lz4"
@@ -575,7 +581,7 @@ EOF
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
-    # <<< ADICIONADO: shrinker_enabled no script >>>
+    # Compressor runtime revertido para lz4
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
@@ -588,7 +594,7 @@ ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
     cat <<UNIT > /etc/systemd/system/zswap-config.service
 [Unit]
-Description=aplicar configuracoes zswap
+Description=aplicar configuracoes zswap (lz4)
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/zswap-config.sh
@@ -602,7 +608,7 @@ UNIT
     sync
     )
     if [ $? -ne 0 ]; then _ui_info "erro" "falha na aplicação (zswap). log: $logfile"; return 1; fi
-    _ui_info "sucesso" "otimacoes (zswap) aplicadas com sucesso. reinicie o sistema."; return 0
+    _ui_info "sucesso" "otimacoes (zswap lz4) aplicadas com sucesso. reinicie o sistema."; return 0
 }
 
 aplicar_zram() {
@@ -684,6 +690,7 @@ EOF
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
 modprobe zram num_devices=1 2>/dev/null || true
+# Garantindo lz4 para zram
 echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
 echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
 echo 12G > /sys/block/zram0/disksize 2>/dev/null || true
@@ -707,7 +714,7 @@ UNIT
     sync
     )
     if [ $? -ne 0 ]; then _ui_info "erro" "falha na aplicação (zram). log: $logfile"; return 1; fi
-    _ui_info "sucesso" "otimacoes (zram) aplicadas com sucesso. reinicie o sistema."; return 0
+    _ui_info "sucesso" "otimacoes (zram lz4) aplicadas com sucesso. reinicie o sistema."; return 0
 }
 
 reverter_alteracoes() {
