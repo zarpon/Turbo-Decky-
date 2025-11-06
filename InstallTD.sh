@@ -29,6 +29,7 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
+    "kernel.sched_tunable_scaling=0"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
     "kernel.sched_min_granularity_ns=600000"
