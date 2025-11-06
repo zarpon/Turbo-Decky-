@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.25 Dupla Dinamica"
+versao="1.1.0.26 Dupla Dinamica"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -22,8 +22,8 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 readonly base_sysctl_params=(
     "vm.swappiness=100"
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_ratio=10"
-    "vm.dirty_ratio=30"
+    "vm.dirty_background_bytes=209715200"
+    "vm.dirty_bytes=419430400"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
