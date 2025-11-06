@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.1.0.26 Dupla Dinamica"
+versao="1.1.0.27 Dupla Dinamica"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -191,7 +191,7 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu (com MES completo)..."
     mkdir -p /etc/modprobe.d
-    echo "options amdgpu mes=1 moverate=128 lbpw=0 uni_mes=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
+    echo "options amdgpu mes=1 lbpw=0 uni_mes=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
     _ui_info "gpu" "otimizações amdgpu (com MES completo) aplicadas."
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
