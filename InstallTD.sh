@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2 Kriptonians"
+versao="1.2.1Kriptonians"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
