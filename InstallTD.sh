@@ -28,11 +28,11 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
-    "vm.page_lock_unfairness=8"
+    
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
-    "vm.compaction_proactiveness=0"
+    "vm.compaction_proactiveness=10"
     "vm.watermark_boost_factor=0"
     "vm.overcommit_memory=1"
     "vm.overcommit_ratio=100"
@@ -216,7 +216,7 @@ create_persistent_configs() {
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
 w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
-w /sys/kernel/mm/lru_gen/shrink_promote_threshold - - - - 100
+
 EOF
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
