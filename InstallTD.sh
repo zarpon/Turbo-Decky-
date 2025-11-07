@@ -22,7 +22,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # --- parâmetros sysctl base ---
 
 readonly base_sysctl_params=(
-    "vm.swappiness=40"
+    "vm.swappiness=100"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=33554432"
     "vm.dirty_bytes=67108864"
@@ -30,6 +30,7 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
+    "vm.page_lock_unfairness=500"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
    "kernel.sched_tunable_scaling=0" 
