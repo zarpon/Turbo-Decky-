@@ -1,3 +1,4 @@
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -29,10 +30,9 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
-    "kernel.sched_tunable_scaling=0"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
-    "kernel.sched_min_granularity_ns=600000"
+   "kernel.sched_tunable_scaling=0" "kernel.sched_min_granularity_ns=600000"
     "kernel.sched_latency_ns=4000000"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
@@ -98,14 +98,13 @@ readonly unnecessary_services=(
 
 # --- variáveis de ambiente ---
 readonly game_env_vars=(
-    "RADV_PERFTEST=sam,gpl,aco"
-    "RADV_ENABLE_ACO=1"
+    "RADV_PERFTEST=aco"
     "WINEFSYNC=1"
     "MESA_SHADER_CACHE_MAX_SIZE=20G"
     "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "mesa_glthread=true"
-    "DXVK_ASYNC=1"
+   
 )
 
 # --- Funções ---
@@ -559,13 +558,12 @@ EOF
 * soft memlock 2147484
 EOF
     _backup_file_once "$grub_config"
-    # Compressor revertido para lz4
+    # Compressor revertido para zstd
     local kernel_params=(
         "zswap.enabled=1"
-        "zswap.compressor=lz4"
+        "zswap.compressor=zstd"
         "zswap.max_pool_percent=30"
         "zswap.zpool=zsmalloc"
-        "zswap.non_same_filled_pages_enabled=1"
         "zswap.shrinker_enabled=1"
         "mitigations=off"
         "psi=1"
@@ -586,10 +584,9 @@ EOF
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
-echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
