@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.1 Kriptoniano"
+versao="1.2.2 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,15 +24,16 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 readonly base_sysctl_params=(
     "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_ratio=5"
-    "vm.dirty_ratio=10"
+    "vm.dirty_background_bytes=33554432"
+    "vm.dirty_bytes=67108864"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
-   "kernel.sched_tunable_scaling=0" "kernel.sched_min_granularity_ns=600000"
+   "kernel.sched_tunable_scaling=0" 
+   "kernel.sched_min_granularity_ns=600000"
     "kernel.sched_latency_ns=4000000"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
@@ -295,13 +296,10 @@ IOB
 
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
-echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "never" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
-echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
-echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-echo 10000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
-echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 THP
     chmod +x /usr/local/bin/thp-config.sh
 
@@ -541,8 +539,8 @@ aplicar_zswap() {
     fi
     chmod 600 "$swapfile_path" || true; mkswap "$swapfile_path" || true
     sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true;
-    echo "$swapfile_path none swap sw,pri=-100 0 0" >> /etc/fstab
-    swapon --priority -100 "$swapfile_path" || true
+    echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab
+    swapon --priority -2 "$swapfile_path" || true
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}";
     sysctl --system || true
     _backup_file_once /etc/security/limits.d/99-game-limits.conf
