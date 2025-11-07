@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.4 Kriptoniano"
+versao="1.2.5 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -23,18 +23,21 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 readonly base_sysctl_params=(
     "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_ratio=4"
-    "vm.dirty_ratio=8"
+    "vm.dirty_background_ratio=5"
+    "vm.dirty_ratio=10"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
     "vm.page_lock_unfairness=1"
     "kernel.numa_balancing=0"
-    "kernel.sched_autogroup_enabled=0"
-    "kernel.sched_tunable_scaling=0" 
+    
+"kernel.sched_autogroup_enabled=0"
+   
+ "kernel.sched_tunable_scaling=0" 
     "kernel.sched_min_granularity_ns=600000"
-    "kernel.sched_latency_ns=4000000"
+    
+"kernel.sched_latency_ns=4000000"
 
     # <<< ADIÇÕES CONFORME SOLICITADO >>>
     "vm.compaction_proactiveness=30"
@@ -44,14 +47,17 @@ readonly base_sysctl_params=(
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
-    "vm.compaction_proactiveness=10"
+    
     "vm.watermark_boost_factor=0"
     "vm.overcommit_memory=1"
     "vm.overcommit_ratio=100"
     "vm.zone_reclaim_mode=0"
     "vm.max_map_count=2147483642"
+
     "vm.mmap_rnd_compat_bits=16"
-    "vm.unprivileged_segfault=1"
+
+    "vm.unprivileged_userfaultfd=1"
+
     "fs.aio-max-nr=131072"
     "fs.epoll.max_user_watches=100000"
     "fs.inotify.max_user_watches=65536"
@@ -109,6 +115,7 @@ readonly game_env_vars=(
     "WINEFSYNC=1"
     "MESA_SHADER_CACHE_MAX_SIZE=20G"
     "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
+
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "mesa_glthread=true"
 )
@@ -275,9 +282,9 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
             echo "100" > "${nvme_power_path}/autosuspend_delay_ms" 2>/dev/null || true
             echo "auto" > "${nvme_power_path}/control" 2>/dev/null || true
         fi
-        if [[ -w "$queue_path/scheduler" ]]; then
-             echo "none" > "$queue_path/scheduler" 2>/dev/null || echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
-        fi
+        if ! echo "none" > "$queue_path/scheduler" 2>/dev/null; then
+    echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
+fi
         echo 256 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 1 > "$queue_path/nomerges" 2>/dev/null || true
