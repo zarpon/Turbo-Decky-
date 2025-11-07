@@ -20,7 +20,7 @@ readonly sdcard_device="/dev/mmcblk0p1"
 readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
-# Mantido swappiness em 60 para equilíbrio, e os ajustes de CPU/IO anti-stutter.
+
 readonly base_sysctl_params=(
     "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
