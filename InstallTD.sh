@@ -1,9 +1,8 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.2 Kriptoniano"
+versao="1.2.4 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -20,22 +19,28 @@ readonly sdcard_device="/dev/mmcblk0p1"
 readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
-
+# Ajustados com os novos valores de compactação
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_bytes=33554432"
-    "vm.dirty_bytes=67108864"
+    "vm.dirty_background_ratio=4"
+    "vm.dirty_ratio=8"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
-    "vm.page_lock_unfairness=500"
+    "vm.page_lock_unfairness=1"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
-   "kernel.sched_tunable_scaling=0" 
-   "kernel.sched_min_granularity_ns=600000"
+    "kernel.sched_tunable_scaling=0" 
+    "kernel.sched_min_granularity_ns=600000"
     "kernel.sched_latency_ns=4000000"
+
+    # <<< ADIÇÕES CONFORME SOLICITADO >>>
+    "vm.compaction_proactiveness=30"
+    "vm.extfrag_threshold=380"
+    # <<< FIM DAS ADIÇÕES >>>
+
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
@@ -106,7 +111,6 @@ readonly game_env_vars=(
     "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "mesa_glthread=true"
-   
 )
 
 # --- Funções ---
@@ -295,12 +299,20 @@ done
 IOB
     chmod +x /usr/local/bin/io-boost.sh
 
+    # <<< SCRIPT THP-CONFIG ATUALIZADO PARA "ALWAYS (LAZY)" >>>
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
-echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+# 1. Mudar para 'always'
+echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+# 2. ESSENCIAL: 'never' para evitar stall de alocação
 echo "never" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
-echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
+# 3. Permitir que o 'khugepaged' (gari) trabalhe em segundo plano
+echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
+# 4. Parâmetros para torná-lo "preguiçoso" e não causar stutter
+echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
+echo 10000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
 THP
     chmod +x /usr/local/bin/thp-config.sh
 
@@ -329,7 +341,8 @@ KRT
     for service_name in thp-config io-boost hugepages ksm-config kernel-tweaks; do
         description="";
         case "$service_name" in
-        thp-config) description="configuracao otimizada de thp (madvise)";;
+        # Atualizando descrição do THP
+        thp-config) description="configuracao otimizada de thp (always-lazy)";;
         io-boost) description="otimização de i/o e agendadores de disco";;
         hugepages) description="desativa pre-alocacao de huge pages";;
         ksm-config) description="desativa kernel samepage merging (ksm)";;
@@ -557,7 +570,7 @@ EOF
 * soft memlock 2147484
 EOF
     _backup_file_once "$grub_config"
-    # Compressor revertido para zstd
+    # Mantendo zstd conforme v1.2.2
     local kernel_params=(
         "zswap.enabled=1"
         "zswap.compressor=zstd"
@@ -579,7 +592,7 @@ EOF
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
-    # Compressor runtime revertido para lz4
+    # Mantendo zstd conforme v1.2.2
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
@@ -591,7 +604,7 @@ ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
     cat <<UNIT > /etc/systemd/system/zswap-config.service
 [Unit]
-Description=aplicar configuracoes zswap (lz4)
+Description=aplicar configuracoes zswap (zstd)
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/zswap-config.sh
@@ -605,7 +618,7 @@ UNIT
     sync
     )
     if [ $? -ne 0 ]; then _ui_info "erro" "falha na aplicação (zswap). log: $logfile"; return 1; fi
-    _ui_info "sucesso" "otimacoes (zswap lz4) aplicadas com sucesso. reinicie o sistema."; return 0
+    _ui_info "sucesso" "otimacoes (zswap zstd) aplicadas com sucesso. reinicie o sistema."; return 0
 }
 
 aplicar_zram() {
@@ -687,7 +700,6 @@ EOF
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
 modprobe zram num_devices=1 2>/dev/null || true
-# Garantindo lz4 para zram
 echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
 echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
 echo 12G > /sys/block/zram0/disksize 2>/dev/null || true
@@ -734,7 +746,7 @@ main() {
     echo "3) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
     echo ""
     echo "reversão:"
-    echo "4) Reverter otimizações principais do SteamOs"
+    echo "4.1) Reverter otimizações principais do SteamOs"
     echo "5) Reverter otimização do cache do MicroSD"
     echo ""
     echo "6) Sair"
