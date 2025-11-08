@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5 Kriptoniano"
+versao="1.2.5.-rev02 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -33,9 +33,12 @@ readonly base_sysctl_params=(
     "kernel.numa_balancing=0"
     
 "kernel.sched_autogroup_enabled=0"
+
    
- "kernel.sched_tunable_scaling=0" 
+"kernel.sched_tunable_scaling=0" 
+
     "kernel.sched_min_granularity_ns=600000"
+
     
 "kernel.sched_latency_ns=4000000"
 
@@ -306,7 +309,7 @@ done
 IOB
     chmod +x /usr/local/bin/io-boost.sh
 
-    # <<< SCRIPT THP-CONFIG ATUALIZADO PARA "ALWAYS (LAZY)" >>>
+    # <<< SCRIPT THP-CONFIG ATUALIZADO PARA "ALWAYS (LAZY)" COM MAX_PTES_SWAP 128 >>>
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
 # 1. Mudar para 'always'
@@ -320,6 +323,8 @@ echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || tr
 echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
 echo 10000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
 echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+# 5. ADIÇÃO SOLICITADA: Limite o número de páginas pequenas lidas do swap para colapso
+echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 THP
     chmod +x /usr/local/bin/thp-config.sh
 
@@ -770,3 +775,4 @@ main() {
 }
 
 main "$@"
+
