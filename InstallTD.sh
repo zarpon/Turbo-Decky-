@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5.-rev03 Kriptoniano"
+versao="1.2.5.-rev04 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -19,41 +19,46 @@ readonly sdcard_device="/dev/mmcblk0p1"
 readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
-# Ajustados com os novos valores de compactação
+
 readonly base_sysctl_params=(
-    "vm.swappiness=40"
+    "vm.swappiness=100"
+
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_ratio=5"
-    "vm.dirty_ratio=10"
+
+    "vm.dirty_background_ratio=10"
+ 
+    "vm.dirty_ratio=20"   
+         
     "vm.dirty_expire_centisecs=1500"
+
     "vm.dirty_writeback_centisecs=1500"
+
     "vm.min_free_kbytes=65536"
+
     "vm.page-cluster=0"
+
     "vm.page_lock_unfairness=1"
-    "kernel.numa_balancing=0"
-    
-"kernel.sched_autogroup_enabled=0"
 
+    "kernel.numa_balancing=0" 
+
+    "kernel.sched_autogroup_enabled=0"
    
-"kernel.sched_tunable_scaling=0" 
-
-    "kernel.sched_min_granularity_ns=600000"
-
-    
-"kernel.sched_latency_ns=4000000"
-
-    # <<< ADIÇÕES CONFORME SOLICITADO >>>
-    "vm.compaction_proactiveness=30"
-    "vm.extfrag_threshold=380"
-    # <<< FIM DAS ADIÇÕES >>>
-
+    "kernel.sched_tunable_scaling=0" 
+       
+    "vm.compaction_proactiveness=30" 
+   
+    "vm.extfrag_threshold=380" 
+  
     "vm.watermark_scale_factor=125"
+
     "vm.stat_interval=15"
+
     "vm.compact_unevictable_allowed=0"
-    
+  
     "vm.watermark_boost_factor=0"
-    
+   
     "vm.zone_reclaim_mode=0"
+
     "vm.max_map_count=2147483642"
 
     "vm.mmap_rnd_compat_bits=16"
@@ -61,19 +66,33 @@ readonly base_sysctl_params=(
     "vm.unprivileged_userfaultfd=1"
 
     "fs.aio-max-nr=131072"
+
     "fs.epoll.max_user_watches=100000"
+
     "fs.inotify.max_user_watches=65536"
+
     "fs.pipe-max-size=2097152"
+
     "fs.pipe-user-pages-soft=65536"
+
     "fs.file-max=1000000"
+
     "kernel.nmi_watchdog=0"
+
     "kernel.soft_watchdog=0"
+
     "kernel.watchdog=0"
+
     "kernel.core_pattern=/dev/null"
+
     "kernel.core_pipe_limit=0"
+
     "kernel.printk_devkmsg=off"
+
     "net.core.default_qdisc=fq_codel"
-    "net.ipv4.tcp_congestion_control=bbr"
+
+   "net.ipv4.tcp_congestion_control=bbr"
+
     "net.core.netdev_max_backlog=16384"
 )
 
@@ -672,7 +691,7 @@ aplicar_zram() {
         sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
     fi
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
-    if command -v fallocate &>/dev/null; then
+    if command -v falllocate &>/dev/null; then
         fallocate -l "${zram_swapfile_size_gb}G" "$swapfile_path" 2>/dev/null || dd if=/dev/zero of="$swapfile_path" bs=1G count="$zram_swapfile_size_gb" status=progress
     else
         dd if=/dev/zero of="$swapfile_path" bs=1G count="$zram_swapfile_size_gb" status=progress
