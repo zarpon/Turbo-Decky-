@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5.-rev02 Kriptoniano"
+versao="1.2.5.-rev03 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -52,8 +52,7 @@ readonly base_sysctl_params=(
     "vm.compact_unevictable_allowed=0"
     
     "vm.watermark_boost_factor=0"
-    "vm.overcommit_memory=1"
-    "vm.overcommit_ratio=100"
+    
     "vm.zone_reclaim_mode=0"
     "vm.max_map_count=2147483642"
 
