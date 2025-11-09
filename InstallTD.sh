@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5.-rev04 Kriptoniano"
+versao="1.2.5.-rev05 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -486,6 +486,7 @@ eval "\$unnecessary_services_str";
 eval "\$otimization_scripts_str"
 set -e
 echo "parando e desativando serviços customizados..."
+# Adicionar zram1 na parada
 systemctl stop "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service mem-tweaks.service 2>/dev/null || true
 systemctl disable "\${otimization_services[@]}" zswap-config.service zram-config.service kernel-tweaks.service mem-tweaks.service 2>/dev/null || true
 echo "removendo arquivos de serviço e scripts..."
@@ -662,17 +663,19 @@ aplicar_zram() {
     _log "criando e ativando serviços de otimização (pré-etapa)..."
     create_common_scripts_and_services
     _configure_irqbalance
-    _log "aplicando otimizações com zram (etapa principal)..."
+    _log "aplicando otimizações com ZRAM em camadas (etapa principal)..."
     local free_space_gb;
     free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
+    # Requer que o espaço seja suficiente apenas para o swapfile de disco de backup, se mantido.
+    # O ZRAM é virtual, mas manter a verificação mínima por segurança.
     if (( free_space_gb < zram_swapfile_size_gb )); then
-        _ui_info "erro crítico" "espaço insuficiente para swapfile de 2GB."; _log "execução abortada."; exit 1;
+        _ui_info "aviso" "espaço em disco baixo, mas suficiente para ZRAM virtual. Prosseguindo."
     fi
     local final_sysctl_params=("${base_sysctl_params[@]}")
     if [[ -f "/proc/sys/kernel/sched_bore" ]]; then
         _log "bore scheduler detectado."; final_sysctl_params+=("${bore_params[@]}")
     fi
-    _log "iniciando bloco principal de aplicação (zram)..."
+    _log "iniciando bloco principal de aplicação (Dual ZRAM)..."
     (
     set -e
     systemctl stop zram-config.service 2>/dev/null || true
@@ -680,8 +683,11 @@ aplicar_zram() {
     rm -f /etc/systemd/system/zram-config.service 2>/dev/null || true
     rm -f /usr/local/bin/zram-setup.sh 2>/dev/null || true
     systemctl daemon-reload
+    # Parar e descarregar ZRAM existente
     swapoff /dev/zram0 2>/dev/null || true
-    rm -f /etc/modprobe.d/blacklist-zram.conf
+    swapoff /dev/zram1 2>/dev/null || true # Adicionado zram1
+    rmmod zram 2>/dev/null || true
+    rm -f /etc/modprobe.d/blacklist-zram.conf # Removendo blacklist para permitir ZRAM
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@.service 2>/dev/null || true
@@ -690,15 +696,19 @@ aplicar_zram() {
     if grep -q " /home " /etc/fstab 2>/dev/null; then
         sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
     fi
+    # Manter ou remover o swapfile de disco conforme a preferência. 
+    # Mantenho o código que cria um pequeno swapfile de disco de baixa prioridade (-2) como um "último recurso".
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
-    if command -v falllocate &>/dev/null; then
+    if command -v fallocate &>/dev/null; then
+        # Mantendo o tamanho pequeno (2G) para o swapfile de backup em disco
         fallocate -l "${zram_swapfile_size_gb}G" "$swapfile_path" 2>/dev/null || dd if=/dev/zero of="$swapfile_path" bs=1G count="$zram_swapfile_size_gb" status=progress
     else
         dd if=/dev/zero of="$swapfile_path" bs=1G count="$zram_swapfile_size_gb" status=progress
     fi
     chmod 600 "$swapfile_path" || true; mkswap "$swapfile_path" || true
     sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true;
-    echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab
+    # Swapfile de disco com prioridade muito baixa para ser o último a ser usado
+    echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab 
     swapon --priority -2 "$swapfile_path" || true
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}";
     sysctl --system || true
@@ -727,19 +737,39 @@ EOF
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
+    
+    # NOVO SCRIPT PARA DUAL ZRAM
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
-modprobe zram num_devices=1 2>/dev/null || true
+# 1. Carregar módulo ZRAM com 2 dispositivos
+# O num_devices deve ser 2 para criar /dev/zram0 e /dev/zram1
+modprobe zram num_devices=2 2>/dev/null || true
+
+# --- ZRAM 0: Rápido (Prioridade 3000) ---
+# Tamanho: 4GB, Compressor: lz4, Pool: zsmalloc
 echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
 echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-echo 12G > /sys/block/zram0/disksize 2>/dev/null || true
+echo 4G > /sys/block/zram0/disksize 2>/dev/null || true
 mkswap /dev/zram0 2>/dev/null || true
 swapon /dev/zram0 -p 3000 2>/dev/null || true
+echo "ZRAM0 (4G, lz4, prio 3000) configurado."
+
+# --- ZRAM 1: Mais Compressão (Prioridade 10) ---
+# Tamanho: 8GB, Compressor: zstd, Pool: zsmalloc
+echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
+echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
+echo 8G > /sys/block/zram1/disksize 2>/dev/null || true
+mkswap /dev/zram1 2>/dev/null || true
+swapon /dev/zram1 -p 10 2>/dev/null || true
+echo "ZRAM1 (8G, zstd, prio 10) configurado."
+
 ZRAM_SCRIPT
     chmod +x /usr/local/bin/zram-config.sh
     cat <<UNIT > /etc/systemd/system/zram-config.service
 [Unit]
-Description=configuracao otimizada de zram (12g, lz4)
+Description=configuracao otimizada de ZRAM em Camadas (Dual ZRAM)
+After=local-fs.target
+Requires=local-fs.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/zram-config.sh
@@ -752,8 +782,8 @@ UNIT
     systemctl enable --now fstrim.timer 2>/dev/null || true
     sync
     )
-    if [ $? -ne 0 ]; then _ui_info "erro" "falha na aplicação (zram). log: $logfile"; return 1; fi
-    _ui_info "sucesso" "otimacoes (zram lz4) aplicadas com sucesso. reinicie o sistema."; return 0
+    if [ $? -ne 0 ]; then _ui_info "erro" "falha na aplicação (Dual ZRAM). log: $logfile"; return 1; fi
+    _ui_info "sucesso" "otimacoes (Dual ZRAM) aplicadas com sucesso. reinicie o sistema."; return 0
 }
 
 reverter_alteracoes() {
@@ -770,7 +800,7 @@ main() {
     echo -e "=======================================================\n$texto_inicial\n\n-------------------------------------------------------\n"
     echo "opções de otimização principal:"
     echo "1) Aplicar Otimizações (Padrão com ZSwap + Swapfile)"
-    echo "2) Aplicar Otimizações (Alternativa com ZRAM)"
+    echo "2) Aplicar Otimizações (Alternativa com ZRAM em Camadas)"
     echo ""
     echo "opções de microsd:"
     echo "3) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
