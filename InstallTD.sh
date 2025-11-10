@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.6.rev01.- Kriptoniano"
+versao="1.2.6.rev02.- Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +21,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # --- parâmetros sysctl base ---
 
 readonly base_sysctl_params=(
-    "vm.swappiness=80"
+    "vm.swappiness=40"
 
     "vm.vfs_cache_pressure=66"
 
@@ -232,7 +232,7 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu (com MES completo)..."
     mkdir -p /etc/modprobe.d
-    echo "options amdgpu moverate=128 mes=1 lbpw=0 uni_mes=1 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
+    echo "options amdgpu moverate=128 mes=1 lbpw=0 uni_mes=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
     _ui_info "gpu" "otimizações amdgpu (com MES completo) aplicadas."
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
