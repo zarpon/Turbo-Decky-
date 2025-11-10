@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5.-rev07 Kriptoniano"
+versao="1.2.6.- Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +21,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # --- parâmetros sysctl base ---
 
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=80"
 
     "vm.vfs_cache_pressure=66"
 
