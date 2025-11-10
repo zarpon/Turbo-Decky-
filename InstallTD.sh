@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.6.- Kriptoniano"
+versao="1.2.6.rev01.- Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -64,6 +64,9 @@ readonly base_sysctl_params=(
     "vm.mmap_rnd_compat_bits=16"
 
     "vm.unprivileged_userfaultfd=1"
+    
+    # NOVO TWEAK ANTI-STUTTER: Desativa otimização de HugePages que pode causar latência.
+    "vm.hugetlb_optimize_vmemmap=0" 
 
     "fs.aio-max-nr=131072"
 
