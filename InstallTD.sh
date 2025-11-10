@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5.-rev06 Kriptoniano"
+versao="1.2.5.-rev07 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -25,13 +25,13 @@ readonly base_sysctl_params=(
 
     "vm.vfs_cache_pressure=66"
 
-    "vm.dirty_background_ratio=10"
+    "vm.dirty_background_ratio=6"
 
-    "vm.dirty_ratio=20"
+    "vm.dirty_ratio=12"
 
-    "vm.dirty_expire_centisecs=1500"
+    "vm.dirty_expire_centisecs=500"
 
-    "vm.dirty_writeback_centisecs=1500"
+    "vm.dirty_writeback_centisecs=500"
 
     "vm.min_free_kbytes=65536"
 
