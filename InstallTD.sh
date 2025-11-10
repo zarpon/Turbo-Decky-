@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.6.rev02.- Kriptoniano"
+versao="1.2.6.rev03.- Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -67,6 +67,9 @@ readonly base_sysctl_params=(
     
     # NOVO TWEAK ANTI-STUTTER: Desativa otimização de HugePages que pode causar latência.
     "vm.hugetlb_optimize_vmemmap=0" 
+    
+    # NOVO TWEAK ANTI-STUTTER DE MEMÓRIA: Mantém um buffer de 128MB para evitar stalls do kcompactd.
+    "vm.extra_free_kbytes=131072" 
 
     "fs.aio-max-nr=131072"
 
@@ -264,6 +267,20 @@ w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 EOF
     _log "configurações persistentes para mglru e thp shrinker criadas."
 }
+
+# --- NOVO TWEAK PARA FIX DE STUTTER DE EMULAÇÃO (1024HZ) ---
+create_timer_configs() {
+    _log "configurando timers de alta frequência (1024Hz) para baixa latência emuladores"
+    mkdir -p /etc/tmpfiles.d
+    cat << EOF > /etc/tmpfiles.d/custom-timers.conf
+# Configurado pelo Turbo Decky - Balanço: 1024Hz
+# Aumenta a frequência máxima de timers para emuladores
+w /sys/class/rtc/rtc0/max_user_freq - - - - 1024
+w /sys/dev/hpet/max-user-freq - - - - 1024
+EOF
+    _log "configurações persistentes de timers criadas."
+}
+# --- FIM DO NOVO TWEAK DE TIMER ---
 
 create_module_blacklist() {
     _log "criando blacklist para o módulo zram"
@@ -502,6 +519,8 @@ systemctl disable swap-boost.service 2>/dev/null || true
 rm -f /etc/systemd/system/swap-boost.service /usr/local/bin/swap-boost.sh
 echo "removendo arquivos de configuração extra..."
 rm -f /etc/tmpfiles.d/mglru.conf /etc/tmpfiles.d/thp_shrinker.conf
+# NOVO: Remover custom-timers.conf
+rm -f /etc/tmpfiles.d/custom-timers.conf
 rm -f /etc/modprobe.d/usbhid.conf /etc/modprobe.d/blacklist-zram.conf /etc/modprobe.d/amdgpu.conf
 rm -f /etc/modprobe.d/99-gpu-sched.conf /etc/modprobe.d/99-amdgpu-mes.conf /etc/modprobe.d/99-amdgpu-tuning.conf
 rm -f /etc/security/limits.d/memlock.conf
@@ -623,6 +642,7 @@ EOF
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
+    create_timer_configs # <-- CHAMADA DA NOVA FUNÇÃO AQUI
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
@@ -737,6 +757,7 @@ EOF
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
+    create_timer_configs # <-- CHAMADA DA NOVA FUNÇÃO AQUI
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
@@ -834,3 +855,4 @@ main() {
 }
 
 main "$@"
+
