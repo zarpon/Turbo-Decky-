@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.6.rev04- Kriptoniano" # Versão atualizada
+# Versão atualizada, corrigindo o erro de sintaxe '}' em 'if'
+versao="1.2.6.rev05- Kriptoniano" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -184,7 +185,7 @@ _backup_file_once() {
     if [[ -f "$f" && ! -f "$backup_path" ]]; then
         cp -a --preserve=timestamps "$f" "$backup_path" 2>/dev/null || cp -a "$f" "$backup_path"
         _log "backup criado: $backup_path"
-    }
+    fi # CORRIGIDO: Era '}' e foi trocado para 'fi'
 }
 
 _restore_file() {
@@ -196,7 +197,7 @@ _restore_file() {
     else
         _log "backup para '$f' não encontrado."
         return 1
-    }
+    fi # CORRIGIDO: Era '}' e foi trocado para 'fi'
 }
 
 _write_sysctl_file() {
@@ -268,7 +269,7 @@ EOF
     _log "configurações persistentes para mglru e thp shrinker criadas."
 }
 
-# --- NOVO TWEAK PARA FIX DE STUTTER DE EMULAÇÃO (1024HZ) ---
+# --- TWEAK PARA FIX DE STUTTER DE EMULAÇÃO (1024HZ) ---
 create_timer_configs() {
     _log "configurando timers de alta frequência (1024Hz) para baixa latência emuladores"
     mkdir -p /etc/tmpfiles.d
@@ -280,7 +281,6 @@ w /sys/dev/hpet/max-user-freq - - - - 1024
 EOF
     _log "configurações persistentes de timers criadas."
 }
-# --- FIM DO NOVO TWEAK DE TIMER ---
 
 create_module_blacklist() {
     _log "criando blacklist para o módulo zram"
@@ -347,7 +347,7 @@ done
 IOB
     chmod +x /usr/local/bin/io-boost.sh
 
-    # <<< SCRIPT THP-CONFIG ATUALIZADO PARA "ALWAYS (LAZY)" COM MAX_PTES_SWAP 128 >>>
+    # SCRIPT THP-CONFIG ATUALIZADO PARA "ALWAYS (LAZY)" COM MAX_PTES_SWAP 128
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
 # 1. Mudar para 'always'
@@ -361,7 +361,7 @@ echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || tr
 echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
 echo 10000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
 echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-# 5. ADIÇÃO SOLICITADA: Limite o número de páginas pequenas lidas do swap para colapso
+# 5. Limite o número de páginas pequenas lidas do swap para colapso
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 THP
     chmod +x /usr/local/bin/thp-config.sh
@@ -530,7 +530,6 @@ rm -f "\$swapfile_path" || true
 _restore_file /etc/fstab || true
 swapon -a 2>/dev/null || true
 echo "restaurando outros arquivos de configuração..."
-_restore_file "\$grub_config" || true
 _restore_file /etc/sysctl.d/99-sdweak-performance.conf || rm -f /etc/sysctl.d/99-sdweak-performance.conf
 _restore_file /etc/security/limits.d/99-game-limits.conf || rm -f /etc/security/limits.d/99-game-limits.conf
 _restore_file /etc/environment.d/99-game-vars.conf || rm -f /etc/environment.d/99-game-vars.conf
@@ -610,7 +609,7 @@ aplicar_zswap() {
     swapon --priority -2 "$swapfile_path" || true
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}";
     sysctl --system || true
-    # <<<<<<<<< INÍCIO DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>
+    # <<<<<<<<< CORREÇÃO PARA FORÇAR APLICAÇÃO DO EXTRA_FREE_KBYTES >>>>>>>>>>>
     sysctl -w vm.extra_free_kbytes=131072 2>/dev/null || true
     # <<<<<<<<< FIM DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>>>
     _backup_file_once /etc/security/limits.d/99-game-limits.conf
@@ -737,7 +736,7 @@ aplicar_zram() {
     swapon --priority -2 "$swapfile_path" || true
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}";
     sysctl --system || true
-    # <<<<<<<<< INÍCIO DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>
+    # <<<<<<<<< CORREÇÃO PARA FORÇAR APLICAÇÃO DO EXTRA_FREE_KBYTES >>>>>>>>>>>
     sysctl -w vm.extra_free_kbytes=131072 2>/dev/null || true
     # <<<<<<<<< FIM DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>>>
     _backup_file_once /etc/security/limits.d/99-game-limits.conf
@@ -843,7 +842,7 @@ main() {
     echo "3) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
     echo ""
     echo "reversão:"
-    echo "4.1) Reverter otimizações principais do SteamOs"
+    echo "4) Reverter otimizações principais do SteamOs"
     echo "5) Reverter otimização do cache do MicroSD"
     echo ""
     echo "6) Sair"
