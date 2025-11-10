@@ -1,9 +1,8 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5.-rev06 Kriptoniano (Dual ZRAM)"
+versao="1.2.5.-rev06 Kriptoniano"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,9 +26,9 @@ readonly base_sysctl_params=(
     "vm.vfs_cache_pressure=66"
 
     "vm.dirty_background_ratio=10"
- 
-    "vm.dirty_ratio=20"   
-         
+
+    "vm.dirty_ratio=20"
+
     "vm.dirty_expire_centisecs=1500"
 
     "vm.dirty_writeback_centisecs=1500"
@@ -40,24 +39,24 @@ readonly base_sysctl_params=(
 
     "vm.page_lock_unfairness=1"
 
-    "kernel.numa_balancing=0" 
+    "kernel.numa_balancing=0"
 
     "kernel.sched_autogroup_enabled=0"
-   
-    "kernel.sched_tunable_scaling=0" 
-       
-    "vm.compaction_proactiveness=30" 
-   
-    "vm.extfrag_threshold=380" 
-  
+
+    "kernel.sched_tunable_scaling=0"
+
+    "vm.compaction_proactiveness=30"
+
+    "vm.extfrag_threshold=380"
+
     "vm.watermark_scale_factor=125"
 
     "vm.stat_interval=15"
 
     "vm.compact_unevictable_allowed=0"
-  
+
     "vm.watermark_boost_factor=0"
-   
+
     "vm.zone_reclaim_mode=0"
 
     "vm.max_map_count=2147483642"
@@ -697,7 +696,7 @@ aplicar_zram() {
     if grep -q " /home " /etc/fstab 2>/dev/null; then
         sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
     fi
-    # Manter ou remover o swapfile de disco conforme a preferência. 
+    # Manter ou remover o swapfile de disco conforme a preferência.
     # Mantenho o código que cria um pequeno swapfile de disco de baixa prioridade (-2) como um "último recurso".
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
     if command -v fallocate &>/dev/null; then
@@ -709,7 +708,7 @@ aplicar_zram() {
     chmod 600 "$swapfile_path" || true; mkswap "$swapfile_path" || true
     sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true;
     # Swapfile de disco com prioridade muito baixa para ser o último a ser usado
-    echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab 
+    echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab
     swapon --priority -2 "$swapfile_path" || true
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}";
     sysctl --system || true
@@ -730,7 +729,7 @@ EOF
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
     for param in "${kernel_params[@]}"; do local key="${param%%=*}"; new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g" | sed -E "s/ ?zswap\.[^ =]+(=[^ ]*)?//g"); done
-    for param in "${kernel_params[@]"; do new_cmdline="$new_cmdline $param"; done
+    for param in "${kernel_params[@]}"; do new_cmdline="$new_cmdline $param"; done
     new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//')
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
@@ -738,7 +737,7 @@ EOF
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
-    
+
     # NOVO SCRIPT PARA DUAL ZRAM COM CORREÇÃO DE RMMOD
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
