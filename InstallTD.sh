@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.6.rev03.- Kriptoniano"
+versao="1.2.6.rev04- Kriptoniano" # Versão atualizada
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -65,10 +65,10 @@ readonly base_sysctl_params=(
 
     "vm.unprivileged_userfaultfd=1"
     
-    # NOVO TWEAK ANTI-STUTTER: Desativa otimização de HugePages que pode causar latência.
+    # TWEAK ANTI-STUTTER: Desativa otimização de HugePages que pode causar latência.
     "vm.hugetlb_optimize_vmemmap=0" 
     
-    # NOVO TWEAK ANTI-STUTTER DE MEMÓRIA: Mantém um buffer de 128MB para evitar stalls do kcompactd.
+    # TWEAK ANTI-STUTTER DE MEMÓRIA: Mantém um buffer de 128MB para evitar stalls do kcompactd.
     "vm.extra_free_kbytes=131072" 
 
     "fs.aio-max-nr=131072"
@@ -184,7 +184,7 @@ _backup_file_once() {
     if [[ -f "$f" && ! -f "$backup_path" ]]; then
         cp -a --preserve=timestamps "$f" "$backup_path" 2>/dev/null || cp -a "$f" "$backup_path"
         _log "backup criado: $backup_path"
-    fi
+    }
 }
 
 _restore_file() {
@@ -196,7 +196,7 @@ _restore_file() {
     else
         _log "backup para '$f' não encontrado."
         return 1
-    fi
+    }
 }
 
 _write_sysctl_file() {
@@ -610,6 +610,9 @@ aplicar_zswap() {
     swapon --priority -2 "$swapfile_path" || true
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}";
     sysctl --system || true
+    # <<<<<<<<< INÍCIO DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>
+    sysctl -w vm.extra_free_kbytes=131072 2>/dev/null || true
+    # <<<<<<<<< FIM DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>>>
     _backup_file_once /etc/security/limits.d/99-game-limits.conf
     cat <<'EOF' > /etc/security/limits.d/99-game-limits.conf
 * soft nofile 1048576
@@ -642,7 +645,7 @@ EOF
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
-    create_timer_configs # <-- CHAMADA DA NOVA FUNÇÃO AQUI
+    create_timer_configs # <-- CHAMADA DA FUNÇÃO DE TIMER
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
@@ -719,7 +722,6 @@ aplicar_zram() {
     if grep -q " /home " /etc/fstab 2>/dev/null; then
         sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
     fi
-    # Manter ou remover o swapfile de disco conforme a preferência.
     # Mantenho o código que cria um pequeno swapfile de disco de baixa prioridade (-2) como um "último recurso".
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
     if command -v fallocate &>/dev/null; then
@@ -735,6 +737,9 @@ aplicar_zram() {
     swapon --priority -2 "$swapfile_path" || true
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${final_sysctl_params[@]}";
     sysctl --system || true
+    # <<<<<<<<< INÍCIO DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>
+    sysctl -w vm.extra_free_kbytes=131072 2>/dev/null || true
+    # <<<<<<<<< FIM DA CORREÇÃO DE APLICAÇÃO >>>>>>>>>>>>>
     _backup_file_once /etc/security/limits.d/99-game-limits.conf
     cat <<'EOF' > /etc/security/limits.d/99-game-limits.conf
 * soft nofile 1048576
@@ -757,7 +762,7 @@ EOF
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
-    create_timer_configs # <-- CHAMADA DA NOVA FUNÇÃO AQUI
+    create_timer_configs # <-- CHAMADA DA FUNÇÃO DE TIMER
     create_persistent_configs
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
