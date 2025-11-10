@@ -1,8 +1,9 @@
+
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- versão e autor do script ---
-versao="1.2.5.-rev05 Kriptoniano"
+versao="1.2.5.-rev06 Kriptoniano (Dual ZRAM)"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -729,7 +730,7 @@ EOF
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
     for param in "${kernel_params[@]}"; do local key="${param%%=*}"; new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g" | sed -E "s/ ?zswap\.[^ =]+(=[^ ]*)?//g"); done
-    for param in "${kernel_params[@]}"; do new_cmdline="$new_cmdline $param"; done
+    for param in "${kernel_params[@]"; do new_cmdline="$new_cmdline $param"; done
     new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//')
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
@@ -738,30 +739,38 @@ EOF
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
     
-    # NOVO SCRIPT PARA DUAL ZRAM
+    # NOVO SCRIPT PARA DUAL ZRAM COM CORREÇÃO DE RMMOD
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
-# 1. Carregar módulo ZRAM com 2 dispositivos
-# O num_devices deve ser 2 para criar /dev/zram0 e /dev/zram1
+# CORREÇÃO: Força o descarregamento do módulo para que o 'num_devices=2' seja aplicado no próximo carregamento.
+swapoff /dev/zram0 2>/dev/null || true
+swapoff /dev/zram1 2>/dev/null || true
+rmmod zram 2>/dev/null || true
+
+# 1. Carregar módulo ZRAM com 2 dispositivos (necessita do rmmod acima para funcionar)
 modprobe zram num_devices=2 2>/dev/null || true
 
 # --- ZRAM 0: Rápido (Prioridade 3000) ---
 # Tamanho: 4GB, Compressor: lz4, Pool: zsmalloc
-echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
-echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-echo 4G > /sys/block/zram0/disksize 2>/dev/null || true
-mkswap /dev/zram0 2>/dev/null || true
-swapon /dev/zram0 -p 3000 2>/dev/null || true
-echo "ZRAM0 (4G, lz4, prio 3000) configurado."
+if [ -b /dev/zram0 ]; then
+    echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+    echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
+    echo 4G > /sys/block/zram0/disksize 2>/dev/null || true
+    mkswap /dev/zram0 2>/dev/null || true
+    swapon /dev/zram0 -p 3000 2>/dev/null || true
+    echo "ZRAM0 (4G, lz4, prio 3000) configurado."
+fi
 
 # --- ZRAM 1: Mais Compressão (Prioridade 10) ---
 # Tamanho: 8GB, Compressor: zstd, Pool: zsmalloc
-echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
-echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
-echo 8G > /sys/block/zram1/disksize 2>/dev/null || true
-mkswap /dev/zram1 2>/dev/null || true
-swapon /dev/zram1 -p 10 2>/dev/null || true
-echo "ZRAM1 (8G, zstd, prio 10) configurado."
+if [ -b /dev/zram1 ]; then
+    echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
+    echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
+    echo 8G > /sys/block/zram1/disksize 2>/dev/null || true
+    mkswap /dev/zram1 2>/dev/null || true
+    swapon /dev/zram1 -p 10 2>/dev/null || true
+    echo "ZRAM1 (8G, zstd, prio 10) configurado."
+fi
 
 ZRAM_SCRIPT
     chmod +x /usr/local/bin/zram-config.sh
@@ -823,4 +832,3 @@ main() {
 }
 
 main "$@"
-
