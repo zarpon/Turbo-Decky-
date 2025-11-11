@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 # Versão atualizada, corrigindo o erro de sintaxe '}' em 'if'
-versao="1.2.6.rev05- Kriptoniano" 
+versao="1.2.6.rev06- Kriptoniano" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -46,9 +46,8 @@ readonly base_sysctl_params=(
 
     "kernel.sched_tunable_scaling=0"
 
-    "vm.compaction_proactiveness=30"
+    "vm.compaction_proactiveness=8"
 
-    "vm.extfrag_threshold=380"
 
     "vm.watermark_scale_factor=125"
 
@@ -352,15 +351,14 @@ IOB
 #!/usr/bin/env bash
 # 1. Mudar para 'always'
 echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
-# 2. ESSENCIAL: 'never' para evitar stall de alocação
-echo "never" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
+echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 # 3. Permitir que o 'khugepaged' (gari) trabalhe em segundo plano
 echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 # 4. Parâmetros para torná-lo "preguiçoso" e não causar stutter
 echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-echo 10000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
-echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+echo 5000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
 # 5. Limite o número de páginas pequenas lidas do swap para colapso
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 THP
