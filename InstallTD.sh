@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 # Versão atualizada, corrigindo o erro de sintaxe '}' em 'if'
-versao="1.2.6.rev07- Kriptoniano" 
+versao="1.2.7 - Kriptoniano" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -22,14 +22,16 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # --- parâmetros sysctl base ---
 
 readonly base_sysctl_params=(
-    "vm.swappiness=40"
+    "vm.swappiness=100"
 
-    "vm.vfs_cache_pressure=66"
+    "vm.vfs_cache_pressure=50"
 
-    "vm.dirty_background_ratio=6"
+         "vm.dirty_background_bytes=209715200"
 
-    "vm.dirty_ratio=12"
 
+"vm.dirty_bytes=419430400"
+
+    
     "vm.dirty_expire_centisecs=1500"
 
     "vm.dirty_writeback_centisecs=500"
@@ -38,15 +40,15 @@ readonly base_sysctl_params=(
 
     "vm.page-cluster=0"
 
-    "vm.page_lock_unfairness=1"
+    "vm.compaction_proactiveness=10"
+
+    "vm.page_lock_unfairness=8"
 
     "kernel.numa_balancing=0"
 
     "kernel.sched_autogroup_enabled=0"
 
     "kernel.sched_tunable_scaling=0"
-
-    "vm.compaction_proactiveness=8"
 
 
     "vm.watermark_scale_factor=125"
@@ -305,6 +307,9 @@ create_common_scripts_and_services() {
     _log "criando/atualizando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
 
+    # MODIFICADO: Gerenciamento de energia do NVMe removido.
+    # MODIFICADO: Lógica do agendador NVMe melhorada (none > kyber > mq-deadline).
+    # MODIFICADO: NVMe read_ahead_kb aumentado para 512KB.
     cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
 sleep 5
@@ -316,16 +321,20 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
     echo 0 > "$queue_path/add_random" 2>/dev/null || true
     case "$dev_name" in
     nvme*)
-        nvme_parent_name=$(echo "$dev_name" | sed -E 's/n[0-9]+$//' | sed -E 's/p[0-9]+$//')
-        nvme_power_path="/sys/class/nvme/${nvme_parent_name}/power"
-        if [[ -w "${nvme_power_path}/autosuspend_delay_ms" ]]; then
-            echo "100" > "${nvme_power_path}/autosuspend_delay_ms" 2>/dev/null || true
-            echo "auto" > "${nvme_power_path}/control" 2>/dev/null || true
+        # Bloco de gerenciamento de energia (autosuspend_delay_ms, control) REMOVIDO.
+        
+        # Otimização do Agendador (Scheduler): Tenta 'none', 'kyber', depois 'mq-deadline'.
+        if echo "none" > "$queue_path/scheduler" 2>/dev/null; then
+            : # 'none' foi aplicado com sucesso
+        elif echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then
+            : # 'kyber' (baixa latência) foi aplicado
+        else
+            echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
-        if ! echo "none" > "$queue_path/scheduler" 2>/dev/null; then
-    echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
-fi
-        echo 256 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        
+        # Otimização de Read-Ahead: Aumentado para 512KB (melhor para loading de jogos)
+        echo 512 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 1 > "$queue_path/nomerges" 2>/dev/null || true
         echo 0 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
@@ -833,8 +842,8 @@ main() {
     echo -e " Bem-vindo(a) ao utilitário Turbo Decky (v$versao)"
     echo -e "=======================================================\n$texto_inicial\n\n-------------------------------------------------------\n"
     echo "opções de otimização principal:"
-    echo "1) Aplicar Otimizações (Padrão com ZSwap + Swapfile)"
-    echo "2) Aplicar Otimizações (Alternativa com ZRAM em Camadas)"
+    echo "1) Aplicar Otimizações Recomendadas (ZSwap + Swapfile)"
+    echo "2) Aplicar Otimizações para deck com pouco espaço livre. ZRAM em Camadas"
     echo ""
     echo "opções de microsd:"
     echo "3) Otimizar cache de jogos do MicroSD (Mover shaders para o NVMe)"
