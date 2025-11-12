@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 # Versão atualizada, corrigindo o erro de sintaxe '}' em 'if'
-versao="1.2.7 - Kriptoniano" 
+versao="1.2.7.1- Kriptoniano" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -34,7 +34,7 @@ readonly base_sysctl_params=(
     
     "vm.dirty_expire_centisecs=1500"
 
-    "vm.dirty_writeback_centisecs=500"
+    "vm.dirty_writeback_centisecs=1000"
 
     "vm.min_free_kbytes=65536"
 
