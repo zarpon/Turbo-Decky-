@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 # Versão atualizada, corrigindo o erro de sintaxe '}' em 'if'
-versao="1.2.7.2- Kriptoniano" 
+versao="1.2.8- Kriptoniano" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,7 +24,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 readonly base_sysctl_params=(
     "vm.swappiness=100"
 
-    "vm.vfs_cache_pressure=50"
+    "vm.vfs_cache_pressure=66"
 
          "vm.dirty_background_bytes=209715200"
 
@@ -332,8 +332,8 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
         
-        # Otimização de Read-Ahead: Aumentado para 512KB (melhor para loading de jogos)
-        echo 512 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        # Otimização de Read-Ahead: Aumentado para 1024KB (melhor para loading de jogos)
+        echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 0 > "$queue_path/nomerges" 2>/dev/null || true
@@ -347,7 +347,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         elif [ -w "$queue_path/scheduler" ]; then
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
-        echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
         ;;
     esac
