@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 # Versão atualizada, corrigindo o erro de sintaxe '}' em 'if'
-versao="1.2.8- Kriptoniano" 
+versao="1.2.8.rev01- Kriptoniano" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -36,7 +36,7 @@ readonly base_sysctl_params=(
 
     "vm.dirty_writeback_centisecs=1000"
 
-    "vm.min_free_kbytes=65536"
+    "vm.min_free_kbytes=262144" # AJUSTADO: 256MB = 262144 KB
 
     "vm.page-cluster=0"
 
@@ -323,11 +323,11 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
     nvme*)
         # Bloco de gerenciamento de energia (autosuspend_delay_ms, control) REMOVIDO.
         
-        # Otimização do Agendador (Scheduler): Tenta 'none', 'kyber', depois 'mq-deadline'.
-        if echo "none" > "$queue_path/scheduler" 2>/dev/null; then
-            : # 'none' foi aplicado com sucesso
-        elif echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then
-            : # 'kyber' (baixa latência) foi aplicado
+        # Otimização do Agendador (Scheduler): Tenta 'kyber', 'none', depois 'mq-deadline'.
+        if echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then
+            : # 'kyber' foi aplicado com sucesso
+        elif echo "none" > "$queue_path/scheduler" 2>/dev/null; then
+            : # 'none' (baixa latência) foi aplicado
         else
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
