@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão atualizada, corrigindo o erro de sintaxe '}' em 'if'
-versao="1.2.8.rev01- Kriptoniano" 
+# Versão atualizada com otimização de multi-streams para ZRAM
+versao="1.3 - JUSTICE LEAGUE" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -26,11 +26,9 @@ readonly base_sysctl_params=(
 
     "vm.vfs_cache_pressure=66"
 
-         "vm.dirty_background_bytes=209715200"
+    "vm.dirty_background_bytes=209715200"
 
-
-"vm.dirty_bytes=419430400"
-
+    "vm.dirty_bytes=419430400"
     
     "vm.dirty_expire_centisecs=1500"
 
@@ -49,7 +47,6 @@ readonly base_sysctl_params=(
     "kernel.sched_autogroup_enabled=0"
 
     "kernel.sched_tunable_scaling=0"
-
 
     "vm.watermark_scale_factor=125"
 
@@ -186,7 +183,7 @@ _backup_file_once() {
     if [[ -f "$f" && ! -f "$backup_path" ]]; then
         cp -a --preserve=timestamps "$f" "$backup_path" 2>/dev/null || cp -a "$f" "$backup_path"
         _log "backup criado: $backup_path"
-    fi # CORRIGIDO: Era '}' e foi trocado para 'fi'
+    fi
 }
 
 _restore_file() {
@@ -198,7 +195,7 @@ _restore_file() {
     else
         _log "backup para '$f' não encontrado."
         return 1
-    fi # CORRIGIDO: Era '}' e foi trocado para 'fi'
+    fi
 }
 
 _write_sysctl_file() {
@@ -773,9 +770,12 @@ EOF
     _backup_file_once /etc/environment.d/99-game-vars.conf;
     printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/99-game-vars.conf
 
-    # NOVO SCRIPT PARA DUAL ZRAM COM CORREÇÃO DE RMMOD
+    # NOVO SCRIPT PARA DUAL ZRAM COM CORREÇÃO DE RMMOD E STREAMS
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
+# Captura numero de nucleos para definir streams
+CPU_CORES=$(nproc)
+
 # CORREÇÃO: Força o descarregamento do módulo para que o 'num_devices=2' seja aplicado no próximo carregamento.
 swapoff /dev/zram0 2>/dev/null || true
 swapoff /dev/zram1 2>/dev/null || true
@@ -787,23 +787,29 @@ modprobe zram num_devices=2 2>/dev/null || true
 # --- ZRAM 0: Rápido (Prioridade 3000) ---
 # Tamanho: 4GB, Compressor: lz4, Pool: zsmalloc
 if [ -b /dev/zram0 ]; then
+    # Define streams igual aos nucleos da CPU para paralelismo
+    echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
+    
     echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
     echo 4G > /sys/block/zram0/disksize 2>/dev/null || true
     mkswap /dev/zram0 2>/dev/null || true
     swapon /dev/zram0 -p 3000 2>/dev/null || true
-    echo "ZRAM0 (4G, lz4, prio 3000) configurado."
+    echo "ZRAM0 (4G, lz4, prio 3000, $CPU_CORES streams) configurado."
 fi
 
 # --- ZRAM 1: Mais Compressão (Prioridade 10) ---
 # Tamanho: 8GB, Compressor: zstd, Pool: zsmalloc
 if [ -b /dev/zram1 ]; then
+    # Define streams igual aos nucleos da CPU para paralelismo
+    echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
+    
     echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
     echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
     echo 8G > /sys/block/zram1/disksize 2>/dev/null || true
     mkswap /dev/zram1 2>/dev/null || true
     swapon /dev/zram1 -p 10 2>/dev/null || true
-    echo "ZRAM1 (8G, zstd, prio 10) configurado."
+    echo "ZRAM1 (8G, zstd, prio 10, $CPU_CORES streams) configurado."
 fi
 
 ZRAM_SCRIPT
