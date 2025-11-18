@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão atualizada com otimização de multi-streams para ZRAM
-versao="1.3 - JUSTICE LEAGUE" 
+# Versão atualizada com Split Lock Disable e Multi-streams ZRAM
+versao="1.3.rev01 - JUSTICE LEAGUE" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -22,7 +22,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # --- parâmetros sysctl base ---
 
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=80"
 
     "vm.vfs_cache_pressure=66"
 
@@ -94,7 +94,8 @@ readonly base_sysctl_params=(
 
     "kernel.printk_devkmsg=off"
 
-    "net.core.default_qdisc=fq_codel"
+    # AJUSTADO: 'fq' é o scheduler de pacotes correto para usar com BBR
+    "net.core.default_qdisc=fq"
 
    "net.ipv4.tcp_congestion_control=bbr"
 
@@ -639,6 +640,7 @@ EOF
         "mitigations=off"
         "psi=1"
         "rcutree.enable_rcu_lazy=1"
+        "split_lock_detect=off"
     )
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -756,7 +758,7 @@ EOF
 * soft memlock 2147484
 EOF
     _backup_file_once "$grub_config"
-    local kernel_params=("mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1")
+    local kernel_params=("mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "split_lock_detect=off")
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
     for param in "${kernel_params[@]}"; do local key="${param%%=*}"; new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g" | sed -E "s/ ?zswap\.[^ =]+(=[^ ]*)?//g"); done
