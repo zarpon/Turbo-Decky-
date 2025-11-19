@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 # Versão atualizada com Split Lock Disable e Multi-streams ZRAM
-versao="1.3.rev01 - JUSTICE LEAGUE" 
+versao="1.3.rev02 - JUSTICE LEAGUE" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -307,7 +307,7 @@ create_common_scripts_and_services() {
 
     # MODIFICADO: Gerenciamento de energia do NVMe removido.
     # MODIFICADO: Lógica do agendador NVMe melhorada (none > kyber > mq-deadline).
-    # MODIFICADO: NVMe read_ahead_kb aumentado para 512KB.
+    # MODIFICADO: NVme read_ahead_kb aumentado para 512KB.
     cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
 sleep 5
@@ -785,6 +785,10 @@ rmmod zram 2>/dev/null || true
 
 # 1. Carregar módulo ZRAM com 2 dispositivos (necessita do rmmod acima para funcionar)
 modprobe zram num_devices=2 2>/dev/null || true
+
+# 2. Configurações de latência do kernel para ZRAM (page idle tracking e page fault)
+echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
+sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 
 # --- ZRAM 0: Rápido (Prioridade 3000) ---
 # Tamanho: 4GB, Compressor: lz4, Pool: zsmalloc
