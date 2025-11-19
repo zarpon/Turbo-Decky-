@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 # Versão atualizada com Split Lock Disable e Multi-streams ZRAM
-versao="1.3.rev02 - JUSTICE LEAGUE" 
+versao="1.3.rev03 - JUSTICE LEAGUE" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -662,6 +662,8 @@ echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
+echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
+sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
     cat <<UNIT > /etc/systemd/system/zswap-config.service
