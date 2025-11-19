@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão atualizada com Split Lock Disable e Multi-streams ZRAM
-versao="1.3.rev03 - JUSTICE LEAGUE" 
+# Versão atualizada com Correção de Ordem de Streams ZRAM (Fix zramctl output)
+versao="1.3.rev04 - JUSTICE LEAGUE" 
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -795,31 +795,44 @@ sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 # --- ZRAM 0: Rápido (Prioridade 3000) ---
 # Tamanho: 4GB, Compressor: lz4, Pool: zsmalloc
 if [ -b /dev/zram0 ]; then
-    # Define streams igual aos nucleos da CPU para paralelismo
+    # 1. Reseta o dispositivo (CRUCIAL)
+    echo 1 > /sys/block/zram0/reset 2>/dev/null || true
+    
+    # 2. Define streams PRIMEIRO
     echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
     
+    # 3. Define algoritmo
     echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+    
+    # 4. Outros parametros
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
     echo 4G > /sys/block/zram0/disksize 2>/dev/null || true
+    
+    # 5. Inicializa swap
     mkswap /dev/zram0 2>/dev/null || true
     swapon /dev/zram0 -p 3000 2>/dev/null || true
-    echo "ZRAM0 (4G, lz4, prio 3000, $CPU_CORES streams) configurado."
 fi
 
 # --- ZRAM 1: Mais Compressão (Prioridade 10) ---
 # Tamanho: 8GB, Compressor: zstd, Pool: zsmalloc
 if [ -b /dev/zram1 ]; then
-    # Define streams igual aos nucleos da CPU para paralelismo
+    # 1. Reseta o dispositivo (CRUCIAL)
+    echo 1 > /sys/block/zram1/reset 2>/dev/null || true
+    
+    # 2. Define streams PRIMEIRO
     echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
     
+    # 3. Define algoritmo
     echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
+    
+    # 4. Outros parametros
     echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
     echo 8G > /sys/block/zram1/disksize 2>/dev/null || true
+    
+    # 5. Inicializa swap
     mkswap /dev/zram1 2>/dev/null || true
     swapon /dev/zram1 -p 10 2>/dev/null || true
-    echo "ZRAM1 (8G, zstd, prio 10, $CPU_CORES streams) configurado."
 fi
-
 ZRAM_SCRIPT
     chmod +x /usr/local/bin/zram-config.sh
     cat <<UNIT > /etc/systemd/system/zram-config.service
