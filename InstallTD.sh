@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.3.rev14 - JUSTICE LEAGUE (Persistence & Application Audit)
-versao="1.3.rev14 - JUSTICE LEAGUE"
+# Versão: 1.3.rev15 - JUSTICE LEAGUE (Persistence & Application Audit)
+versao="1.3.rev15 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -149,7 +149,7 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu..."
     mkdir -p /etc/modprobe.d
-    echo "options amdgpu moverate=128 mes=1 lbpw=0 uni_mes=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
+    echo "options amdgpu moverate=64 mes=1 lbpw=0 uni_mes=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
 
@@ -157,7 +157,7 @@ _configure_irqbalance() {
     _log "configurando irqbalance..."
     mkdir -p /etc/default
     _backup_file_once "/etc/default/irqbalance"
-    echo "IRQBALANCE_BANNED_CPUS=0x03" > /etc/default/irqbalance
+    echo "IRQBALANCE_BANNED_CPUS=0x01" > /etc/default/irqbalance
     systemctl unmask irqbalance.service 2>/dev/null || true
     systemctl enable irqbalance.service 2>/dev/null || true
     systemctl restart irqbalance.service 2>/dev/null || true
@@ -517,7 +517,7 @@ done
 modprobe zram num_devices=2 2>/dev/null || true
 if command -v udevadm &>/dev/null; then udevadm settle; else sleep 3; fi
 
-# 3. ZRAM0 (LZ4 / 4G)
+# 3. ZRAM0 (LZ4 / 2G)
 if [ -d "/sys/block/zram0" ]; then
     # ORDEM CRÍTICA KERNEL 6.1+: Reset -> ALGO -> STREAMS -> SIZE
     echo 1 > /sys/block/zram0/reset 2>/dev/null || true
@@ -530,12 +530,12 @@ if [ -d "/sys/block/zram0" ]; then
     echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
 
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-    echo 4G > /sys/block/zram0/disksize 2>/dev/null || true
+    echo 2G > /sys/block/zram0/disksize 2>/dev/null || true
     mkswap /dev/zram0 2>/dev/null || true
     swapon /dev/zram0 -p 3000 2>/dev/null || true
 fi
 
-# 4. ZRAM1 (ZSTD / 8G)
+# 4. ZRAM1 (ZSTD / 6G)
 if [ -d "/sys/block/zram1" ]; then
     echo 1 > /sys/block/zram1/reset 2>/dev/null || true
     if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
@@ -547,7 +547,7 @@ if [ -d "/sys/block/zram1" ]; then
     echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
 
     echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
-    echo 8G > /sys/block/zram1/disksize 2>/dev/null || true
+    echo 6G > /sys/block/zram1/disksize 2>/dev/null || true
     mkswap /dev/zram1 2>/dev/null || true
     swapon /dev/zram1 -p 10 2>/dev/null || true
 fi
@@ -591,7 +591,7 @@ reverter_alteracoes() {
 main() {
     echo -e "\n=== Turbo Decky $versao ==="
     echo "1) ZSwap + Swapfile (Recomendado)"
-    echo "2) Dual ZRAM (Máxima Performance)"
+    echo "2) Dual ZRAM (Alternativa para pouco espaço livre)"
     echo "3) Otimizar MicroSD"
     echo "4) Reverter Tudo"
     echo "5) Reverter MicroSD"
