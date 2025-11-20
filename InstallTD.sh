@@ -164,13 +164,10 @@ _configure_ulimits() {
 * hard nofile 1048576
 root soft nofile 1048576
 root hard nofile 1048576
-* soft nofile 1048576
-* hard nofile 1048576
-session required pam_limits.so
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
-
+    
 _configure_irqbalance() {
     _log "configurando irqbalance..."
     mkdir -p /etc/default
