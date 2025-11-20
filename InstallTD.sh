@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.3.rev11 - JUSTICE LEAGUE (Kernel 6.1 Order Fix)
-versao="1.3.rev11 - JUSTICE LEAGUE"
+# Versão: 1.3.rev12 - JUSTICE LEAGUE (Kernel 6.1 Order Fix)
+versao="1.3.rev12 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +21,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=80"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
@@ -29,7 +29,7 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1000"
     "vm.min_free_kbytes=262144"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=15"
     "vm.page_lock_unfairness=8"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
@@ -43,7 +43,7 @@ readonly base_sysctl_params=(
     "vm.mmap_rnd_compat_bits=16"
     "vm.unprivileged_userfaultfd=1"
     "vm.hugetlb_optimize_vmemmap=0"
-    "vm.extra_free_kbytes=131072"
+    
     "fs.aio-max-nr=131072"
     "fs.epoll.max_user_watches=100000"
     "fs.inotify.max_user_watches=65536"
@@ -97,12 +97,12 @@ readonly unnecessary_services=(
 
 # --- variáveis de ambiente ---
 readonly game_env_vars=(
-    "RADV_PERFTEST=aco"
+    
     "WINEFSYNC=1"
-    "MESA_SHADER_CACHE_MAX_SIZE=20G"
-    "MESA_SHADER_CACHE_DIR=/home/deck/.cache/"
+    "MESA_SHADER_CACHE_MAX_SIZE=10G"
+    
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-    "mesa_glthread=true"
+    
 )
 
 # --- Funções ---
