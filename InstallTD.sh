@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.3.rev15 - JUSTICE LEAGUE (Persistence & Application Audit)
-versao="1.3.rev15 - JUSTICE LEAGUE"
+# Versão: 1.3.rev16 - JUSTICE LEAGUE (Persistence & Application Audit)
+versao="1.3.rev16 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,7 +27,7 @@ readonly base_sysctl_params=(
     "vm.dirty_bytes=419430400"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1000"
-    "vm.min_free_kbytes=262144"
+    "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=15"
     "vm.page_lock_unfairness=8"
@@ -37,7 +37,7 @@ readonly base_sysctl_params=(
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
-    "vm.watermark_boost_factor=0"
+    "vm.watermark_boost_factor=100"
     "vm.zone_reclaim_mode=0"
     "vm.max_map_count=2147483642"
     "vm.mmap_rnd_compat_bits=16"
@@ -245,7 +245,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         fi
 
         echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
-        echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
+        echo 1 > "$queue_path/rq_affinity" 2>/dev/null || true
         echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         
         # Loop para aplicar parâmetros em qualquer variação de caminho do kernel (Legacy/Modern)
