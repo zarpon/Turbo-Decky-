@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.3.rev13 - JUSTICE LEAGUE (Kernel 6.1 Order Fix)
-versao="1.3.rev13 - JUSTICE LEAGUE"
+# Versão: 1.3.rev14 - JUSTICE LEAGUE (Persistence & Application Audit)
+versao="1.3.rev14 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -61,20 +61,7 @@ readonly base_sysctl_params=(
     "net.core.netdev_max_backlog=16384"
 )
 
-# --- parâmetros específicos do agendador bore ---
-readonly bore_params=(
-    "kernel.sched_bore=1"
-    "kernel.sched_burst_cache_lifetime=40000000"
-    "kernel.sched_burst_fork_atavistic=2"
-    "kernel.sched_burst_penalty_offset=26"
-    "kernel.sched_burst_penalty_scale=1000"
-    "kernel.sched_burst_smoothness_long=0"
-    "kernel.sched_burst_smoothness_short=0"
-    "kernel.sched_burst_exclude_kthreads=1"
-    "kernel.sched_burst_parity_threshold=1"
-)
-
-# --- listas de serviços ---
+# --- listas de serviços para ativar/monitorar ---
 readonly otimization_services=(
     "thp-config.service"
     "io-boost.service"
@@ -82,40 +69,22 @@ readonly otimization_services=(
     "ksm-config.service"
     "kernel-tweaks.service"
 )
-readonly otimization_scripts=(
-    "/usr/local/bin/thp-config.sh"
-    "/usr/local/bin/io-boost.sh"
-    "/usr/local/bin/hugepages.sh"
-    "/usr/local/bin/ksm-config.sh"
-    "/usr/local/bin/kernel-tweaks.sh"
-)
+
 readonly unnecessary_services=(
     "gpu-trace.service"
     "steamos-log-submitter.service"
     "cups.service"
 )
 
-# --- variáveis de ambiente ---
+# --- variáveis de ambiente (Configuração de Jogos) ---
 readonly game_env_vars=(
-    
     "WINEFSYNC=1"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
-    
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-    
 )
 
-# --- Funções ---
+# --- Funções Utilitárias ---
 _ui_info() { echo -e "\n[info] $1: $2"; }
-_ui_progress_exec() {
-    local title="$1"; local info="$2"; local tmp
-    tmp=$(mktemp) || { echo "erro: mktemp falhou"; return 1; }
-    cat >"$tmp"
-    echo -e "\n--- executando: $title ---\n$info\n--------------------------"
-    bash "$tmp"; local rc=$?; rm -f "$tmp"
-    echo "--- concluÍdo: $title ---"
-    return $rc
-}
 _log() {
     mkdir -p "$(dirname "$logfile")" 2>/dev/null || true
     touch "$logfile" 2>/dev/null || true
@@ -159,6 +128,7 @@ _write_sysctl_file() {
     fi
     printf "%s\n" "${params[@]}" >>"$tmp"
     mv "$tmp" "$file_path"
+    sync # Força escrita no disco
     _log "sysctl escrito: $file_path"
 }
 
@@ -197,14 +167,16 @@ _configure_irqbalance() {
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d
+    # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
 w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
 EOF
+    # THP Shrinker
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 EOF
-    _log "configurações mglru criadas."
+    _log "configurações mglru e thp_shrinker criadas."
 }
 
 create_timer_configs() {
@@ -214,12 +186,6 @@ create_timer_configs() {
 w /sys/class/rtc/rtc0/max_user_freq - - - - 1024
 w /sys/dev/hpet/max-user-freq - - - - 1024
 EOF
-}
-
-create_module_blacklist() {
-    _log "criando blacklist zram"
-    mkdir -p /etc/modprobe.d
-    echo "blacklist zram" > /etc/modprobe.d/blacklist-zram.conf
 }
 
 manage_unnecessary_services() {
@@ -236,17 +202,31 @@ create_common_scripts_and_services() {
     _log "criando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
 
+    # --- 1. APLICAÇÃO DE VARIÁVEIS DE AMBIENTE ---
+    # Garante que o arquivo existe e tem conteúdo
+    if [ ${#game_env_vars[@]} -gt 0 ]; then
+        printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/turbodecky-game.conf
+        chmod 644 /etc/environment.d/turbodecky-game.conf
+        _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
+    fi
+
+    # --- 2. SCRIPT IO-BOOST (Otimizado para MicroSD/NVMe/ZRAM) ---
     cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
+# Script IO-BOOST - Revisao Persistente
 sleep 5
 for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/zram*; do
     [ -d "$dev_path" ] || continue
     dev_name=$(basename "$dev_path")
     queue_path="$dev_path/queue"
+    
+    # Configurações Gerais
     echo 0 > "$queue_path/iostats" 2>/dev/null || true
     echo 0 > "$queue_path/add_random" 2>/dev/null || true
+
     case "$dev_name" in
     nvme*)
+        # NVMe Tuning
         if echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :;
         elif echo "none" > "$queue_path/scheduler" 2>/dev/null; then :;
         else echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true; fi
@@ -255,19 +235,39 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         echo 0 > "$queue_path/nomerges" 2>/dev/null || true
         echo 0 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
+    
     mmcblk*|sd*)
+        # MicroSD Tuning (Latência e Scheduler)
         if grep -q "bfq" "$queue_path/scheduler" 2>/dev/null; then
             echo "bfq" > "$queue_path/scheduler" 2>/dev/null || true
         else
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
+
         echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
+        echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
+        
+        # Loop para aplicar parâmetros em qualquer variação de caminho do kernel (Legacy/Modern)
+        for sched_path in "$queue_path/iosched" "$queue_path/mq-deadline" "$queue_path/bfq"; do
+            if [ -d "$sched_path" ]; then
+                # Common Deadline/Async params
+                echo 1 > "$sched_path/back_seek_penalty" 2>/dev/null || true
+                echo 200 > "$sched_path/fifo_expire_async" 2>/dev/null || true
+                echo 100 > "$sched_path/fifo_expire_sync" 2>/dev/null || true
+                echo 100 > "$sched_path/timeout_sync" 2>/dev/null || true
+                # BFQ params
+                echo 0 > "$sched_path/slice_idle" 2>/dev/null || true
+                echo 0 > "$sched_path/slice_idle_us" 2>/dev/null || true
+            fi
+        done
         ;;
     esac
 done
 IOB
     chmod +x /usr/local/bin/io-boost.sh
 
+    # --- 3. SCRIPT THP ---
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
 echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
@@ -280,18 +280,21 @@ echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/n
 THP
     chmod +x /usr/local/bin/thp-config.sh
 
+    # --- 4. SCRIPT HUGEPAGES ---
     cat <<'HPS' > /usr/local/bin/hugepages.sh
 #!/usr/bin/env bash
 echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
 HPS
     chmod +x /usr/local/bin/hugepages.sh
 
+    # --- 5. SCRIPT KSM ---
     cat <<'KSM' > /usr/local/bin/ksm-config.sh
 #!/usr/bin/env bash
 echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
 KSM
     chmod +x /usr/local/bin/ksm-config.sh
 
+    # --- 6. SCRIPT KERNEL TWEAKS ---
     cat <<'KRT' > /usr/local/bin/kernel-tweaks.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/multi_queue/parameters/multi_queue_alloc 2>/dev/null || true
@@ -302,10 +305,12 @@ fi
 KRT
     chmod +x /usr/local/bin/kernel-tweaks.sh
 
+    # --- 7. CRIAÇÃO DOS SERVICES SYSTEMD ---
     for service_name in thp-config io-boost hugepages ksm-config kernel-tweaks; do
         cat <<UNIT > /etc/systemd/system/${service_name}.service
 [Unit]
-Description=TurboDecky ${service_name}
+Description=TurboDecky ${service_name} persistence
+After=local-fs.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/${service_name}.sh
@@ -365,10 +370,24 @@ _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "executando reversão geral"
 
+    # --- REMOÇÃO LIMPA DE ARQUIVOS DE AMBIENTE ---
+    # Remove tanto o padrão novo quanto o legado específico "99-game-vars.conf"
+    rm -f /etc/environment.d/turbodecky*.conf /etc/environment.d/99-game-vars.conf
+
+    # --- PARADA E REMOÇÃO DE SERVIÇOS ---
     systemctl stop "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
     systemctl disable "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
-    rm -f /etc/systemd/system/zswap-config.service /etc/systemd/system/zram-config.service
+    
+    # Remove arquivos de unidade
+    for svc in "${otimization_services[@]}" zswap-config.service zram-config.service; do
+        rm -f "/etc/systemd/system/$svc"
+    done
+    
+    # Remove scripts binários
     rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh
+    for script in "${otimization_scripts[@]}"; do
+        rm -f "$script"
+    done
 
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
     _restore_file /etc/fstab || true
@@ -387,7 +406,7 @@ _executar_reversao() {
 }
 
 aplicar_zswap() {
-    _log "Aplicando ZSWAP"
+    _log "Aplicando ZSWAP (Persistente)"
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
@@ -433,7 +452,8 @@ ZSWAP_SCRIPT
 
     cat <<UNIT > /etc/systemd/system/zswap-config.service
 [Unit]
-Description=Configuracao ZSWAP
+Description=Configuracao ZSWAP Persistent
+After=local-fs.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/zswap-config.sh
@@ -442,12 +462,17 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
+    # Ativação explícita de persistência para todos os serviços
     systemctl enable --now "${otimization_services[@]}" zswap-config.service || true
-    _ui_info "sucesso" "ZSWAP aplicado. Reinicie."
+    
+    # Força releitura de regras udev (para aplicar I/O rules imediatamente sem reboot)
+    if command -v udevadm &>/dev/null; then udevadm trigger; fi
+    
+    _ui_info "sucesso" "ZSWAP aplicado. Reinicie para efeito total (GRUB e EnvVars)."
 }
 
 aplicar_zram() {
-    _log "Aplicando ZRAM (Manual Reorder Fix)"
+    _log "Aplicando ZRAM (Persistente - Manual Reorder Fix)"
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
@@ -539,7 +564,7 @@ ZRAM_SCRIPT
     chmod +x /usr/local/bin/zram-config.sh
     cat <<UNIT > /etc/systemd/system/zram-config.service
 [Unit]
-Description=ZRAM Dual Layer Setup (Ordered Fix)
+Description=ZRAM Dual Layer Setup Persistent
 After=local-fs.target
 [Service]
 Type=oneshot
@@ -549,8 +574,13 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
+    # Ativação explícita de persistência para todos os serviços
     systemctl enable --now "${otimization_services[@]}" zram-config.service || true
-    _ui_info "sucesso" "ZRAM Dual Layer aplicado. Reinicie o sistema."
+    
+    # Força releitura de regras udev
+    if command -v udevadm &>/dev/null; then udevadm trigger; fi
+
+    _ui_info "sucesso" "ZRAM Dual Layer aplicado. Reinicie o sistema para efeito total."
 }
 
 reverter_alteracoes() {
@@ -579,3 +609,4 @@ main() {
 }
 
 main "$@"
+
