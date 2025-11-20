@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.4 - JUSTICE LEAGUE (Limits & Radeonsi Precompile)
-versao="1.4 - JUSTICE LEAGUE"
+# Versão: 1.4 rev01- JUSTICE LEAGUE (Limits & Radeonsi Precompile)
+versao="1.4 rev01 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -44,9 +44,9 @@ readonly base_sysctl_params=(
     "vm.unprivileged_userfaultfd=1"
     "vm.hugetlb_optimize_vmemmap=0"
     
-    "fs.aio-max-nr=131072"
+    "fs.aio-max-nr=1048576"
     "fs.epoll.max_user_watches=100000"
-    "fs.inotify.max_user_watches=65536"
+    "fs.inotify.max_user_watches=524288"
     "fs.pipe-max-size=2097152"
     "fs.pipe-user-pages-soft=65536"
     "fs.file-max=1000000"
@@ -164,6 +164,9 @@ _configure_ulimits() {
 * hard nofile 1048576
 root soft nofile 1048576
 root hard nofile 1048576
+* soft nofile 1048576
+* hard nofile 1048576
+session required pam_limits.so
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
