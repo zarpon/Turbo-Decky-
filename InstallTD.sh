@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.3.rev16 - JUSTICE LEAGUE (Persistence & Application Audit)
-versao="1.3.rev16 - JUSTICE LEAGUE"
+# Versão: 1.3.rev17 - JUSTICE LEAGUE (Persistence & Application Audit)
+versao="1.3.rev17 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -37,7 +37,7 @@ readonly base_sysctl_params=(
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
-    "vm.watermark_boost_factor=100"
+    "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
     "vm.max_map_count=2147483642"
     "vm.mmap_rnd_compat_bits=16"
@@ -149,7 +149,7 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu..."
     mkdir -p /etc/modprobe.d
-    echo "options amdgpu moverate=64 mes=1 lbpw=0 uni_mes=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
+    echo "options amdgpu moverate=128 mes=1 lbpw=0 uni_mes=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
 
