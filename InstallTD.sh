@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.3.rev17 - JUSTICE LEAGUE (Persistence & Application Audit)
-versao="1.3.rev17 - JUSTICE LEAGUE"
+# Versão: 1.4 - JUSTICE LEAGUE (Limits & Radeonsi Precompile)
+versao="1.4 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -81,6 +81,8 @@ readonly game_env_vars=(
     "WINEFSYNC=1"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
+    # Adicionado RADEONSI_SHADER_PRECOMPILE=true para reduzir stuttering
+    "RADEONSI_SHADER_PRECOMPILE=true" 
 )
 
 # --- Funções Utilitárias ---
@@ -153,6 +155,19 @@ _optimize_gpu() {
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
 
+# --- NOVA FUNÇÃO: CONFIGURA ULIMITS ---
+_configure_ulimits() {
+    _log "aplicando limite de arquivo aberto (ulimit) alto (1048576)"
+    mkdir -p /etc/security/limits.d
+    cat <<'EOF' > /etc/security/limits.d/99-game-limits.conf
+* soft nofile 1048576
+* hard nofile 1048576
+root soft nofile 1048576
+root hard nofile 1048576
+EOF
+    _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
+}
+
 _configure_irqbalance() {
     _log "configurando irqbalance..."
     mkdir -p /etc/default
@@ -203,7 +218,7 @@ create_common_scripts_and_services() {
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
 
     # --- 1. APLICAÇÃO DE VARIÁVEIS DE AMBIENTE ---
-    # Garante que o arquivo existe e tem conteúdo
+    # Garante que o arquivo existe e tem conteúdo. Inclui RADEONSI_SHADER_PRECOMPILE=true
     if [ ${#game_env_vars[@]} -gt 0 ]; then
         printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/turbodecky-game.conf
         chmod 644 /etc/environment.d/turbodecky-game.conf
@@ -370,9 +385,12 @@ _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "executando reversão geral"
 
-    # --- REMOÇÃO LIMPA DE ARQUIVOS DE AMBIENTE ---
+    # --- REMOÇÃO LIMPA DE ARQUIVOS DE AMBIENTE (Inclui RADEONSI_SHADER_PRECOMPILE) ---
     # Remove tanto o padrão novo quanto o legado específico "99-game-vars.conf"
     rm -f /etc/environment.d/turbodecky*.conf /etc/environment.d/99-game-vars.conf
+
+    # --- REMOÇÃO DO LIMITE DE ARQUIVO ABERTO (ULIMIT) ---
+    rm -f /etc/security/limits.d/99-game-limits.conf
 
     # --- PARADA E REMOÇÃO DE SERVIÇOS ---
     systemctl stop "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
@@ -385,8 +403,9 @@ _executar_reversao() {
     
     # Remove scripts binários
     rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh
-    for script in "${otimization_scripts[@]}"; do
-        rm -f "$script"
+    # Reutilizando a lista otimization_services para remover scripts
+    for script_svc in "${otimization_services[@]}"; do
+        rm -f "/usr/local/bin/${script_svc%%.service}.sh"
     done
 
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
@@ -410,6 +429,7 @@ aplicar_zswap() {
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
+    _configure_ulimits # Aplica o ulimit
     create_common_scripts_and_services
     _configure_irqbalance
     local free_space_gb; free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
@@ -476,6 +496,7 @@ aplicar_zram() {
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
+    _configure_ulimits # Aplica o ulimit
     create_common_scripts_and_services
     _configure_irqbalance
 
@@ -609,4 +630,3 @@ main() {
 }
 
 main "$@"
-
