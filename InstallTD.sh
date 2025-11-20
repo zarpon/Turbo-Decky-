@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.4 rev01- JUSTICE LEAGUE (Limits & Radeonsi Precompile)
-versao="1.4 rev01 - JUSTICE LEAGUE"
+# Versão: 1.4 rev02- JUSTICE LEAGUE (Limits & Radeonsi Precompile)
+versao="1.4 rev02 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -78,6 +78,7 @@ readonly unnecessary_services=(
 
 # --- variáveis de ambiente (Configuração de Jogos) ---
 readonly game_env_vars=(
+    "RADV_PERFTEST=gpl,aco,sam" 
     "WINEFSYNC=1"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
