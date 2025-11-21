@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.4 rev03- JUSTICE LEAGUE (Limits & Radeonsi Precompile)
-versao="1.4 rev03 - JUSTICE LEAGUE"
+# Versão: 1.4 rev04- JUSTICE LEAGUE (Limits & Radeonsi Precompile)
+versao="1.4 rev04 - JUSTICE LEAGUE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +21,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=150"
+    "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
