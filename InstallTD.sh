@@ -1,9 +1,10 @@
+
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- versão e autor do script ---
-# Versão: 1.4 rev04- JUSTICE LEAGUE (Limits & Radeonsi Precompile)
-versao="1.4 rev04 - JUSTICE LEAGUE"
+
+versao="1.5 rev03 - AVENGERS ASSEMBLE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +22,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=40"
+    "vm.swappiness=70"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
@@ -82,7 +83,6 @@ readonly game_env_vars=(
     "WINEFSYNC=1"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-    # Adicionado RADEONSI_SHADER_PRECOMPILE=true para reduzir stuttering
     "RADEONSI_SHADER_PRECOMPILE=true" 
 )
 
@@ -131,7 +131,7 @@ _write_sysctl_file() {
     fi
     printf "%s\n" "${params[@]}" >>"$tmp"
     mv "$tmp" "$file_path"
-    sync # Força escrita no disco
+    sync
     _log "sysctl escrito: $file_path"
 }
 
@@ -156,7 +156,6 @@ _optimize_gpu() {
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
 
-# --- NOVA FUNÇÃO: CONFIGURA ULIMITS ---
 _configure_ulimits() {
     _log "aplicando limite de arquivo aberto (ulimit) alto (1048576)"
     mkdir -p /etc/security/limits.d
@@ -214,35 +213,113 @@ manage_unnecessary_services() {
     fi
 }
 
+# --- FUNÇÃO: REGRAS DE ENERGIA (HÍBRIDO AC/BATERIA COM ANTI-STUTTER) ---
+create_power_rules() {
+    _log "configurando regras dinâmicas de energia (AC/Bateria)..."
+    
+    # 1. Script de Monitoramento Inteligente
+    cat <<'EOF' > /usr/local/bin/turbodecky-power-monitor.sh
+#!/usr/bin/env bash
+
+# Detecta se está na tomada
+ONLINE=0
+for supply in /sys/class/power_supply/*; do
+    type=$(cat "$supply/type" 2>/dev/null)
+    if [ "$type" == "Mains" ]; then
+        online=$(cat "$supply/online" 2>/dev/null)
+        if [ "$online" == "1" ]; then ONLINE=1; break; fi
+    fi
+done
+
+if [ "$ONLINE" == "1" ]; then
+    # --- MODO TOMADA (PERFORMANCE & BAIXA LATÊNCIA) ---
+    logger "TurboDecky: Conectado a energia - Boost Seguro"
+    
+    # CPU: Performance (Reação rápida, não clock travado)
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
+        for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
+            echo "performance" > "$epp" 2>/dev/null || true
+        done
+    fi
+    
+    # Wi-Fi: Sem Power Save (Ping estável)
+    if command -v iw &>/dev/null; then
+        WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
+        [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
+    fi
+
+    # THP TUNING: "Micro-Doses" (ANTI-STUTTER)
+    # Scan frequente (1s), mas PEQUENO (512 pág = 2MB).
+    # Isso evita travar a memória (Lock Contention) enquanto joga.
+    echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+    echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
+    # Segurança para falhas de alocação (50s)
+    echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+
+else
+    # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
+    logger "TurboDecky: Bateria - Revertendo"
+    
+    # CPU: Balanceada (Padrão SteamOS)
+    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
+        for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
+            echo "balance_power" > "$epp" 2>/dev/null || true
+        done
+    fi
+    
+    # Wi-Fi: Com Power Save (Economia)
+    if command -v iw &>/dev/null; then
+        WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
+        [ -n "$WLAN" ] && iw dev "$WLAN" set power_save on 2>/dev/null || true
+    fi
+
+    # THP Relaxado (Economia de Ciclos CPU)
+    # Mantém valores originais mais altos para não acordar CPU
+    echo 5000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+    echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
+    echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+fi
+EOF
+    chmod +x /usr/local/bin/turbodecky-power-monitor.sh
+
+    # 2. Regra UDEV (Gatilho automático)
+    cat <<'UDEV' > /etc/udev/rules.d/99-turbodecky-power.rules
+SUBSYSTEM=="power_supply", ATTR{online}!="", RUN+="/usr/local/bin/turbodecky-power-monitor.sh"
+UDEV
+
+    # 3. Ativar imediatamente
+    if command -v udevadm &>/dev/null; then 
+        udevadm control --reload-rules 2>/dev/null || true
+    fi
+    # Executa uma vez para setar o estado atual
+    /usr/local/bin/turbodecky-power-monitor.sh &
+    _log "monitoramento de energia configurado (THP Latency Tuned)."
+}
+
 create_common_scripts_and_services() {
     _log "criando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
 
     # --- 1. APLICAÇÃO DE VARIÁVEIS DE AMBIENTE ---
-    # Garante que o arquivo existe e tem conteúdo. Inclui RADEONSI_SHADER_PRECOMPILE=true
     if [ ${#game_env_vars[@]} -gt 0 ]; then
         printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/turbodecky-game.conf
         chmod 644 /etc/environment.d/turbodecky-game.conf
         _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
     fi
 
-    # --- 2. SCRIPT IO-BOOST (Otimizado para MicroSD/NVMe/ZRAM) ---
+    # --- 2. SCRIPT IO-BOOST ---
     cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
-# Script IO-BOOST - Revisao Persistente
 sleep 5
 for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/zram*; do
     [ -d "$dev_path" ] || continue
     dev_name=$(basename "$dev_path")
     queue_path="$dev_path/queue"
-    
-    # Configurações Gerais
     echo 0 > "$queue_path/iostats" 2>/dev/null || true
     echo 0 > "$queue_path/add_random" 2>/dev/null || true
 
     case "$dev_name" in
     nvme*)
-        # NVMe Tuning
         if echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :;
         elif echo "none" > "$queue_path/scheduler" 2>/dev/null; then :;
         else echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true; fi
@@ -251,28 +328,21 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         echo 0 > "$queue_path/nomerges" 2>/dev/null || true
         echo 0 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
-    
     mmcblk*|sd*)
-        # MicroSD Tuning (Latência e Scheduler)
         if grep -q "bfq" "$queue_path/scheduler" 2>/dev/null; then
             echo "bfq" > "$queue_path/scheduler" 2>/dev/null || true
         else
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
-
         echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1 > "$queue_path/rq_affinity" 2>/dev/null || true
         echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
-        
-        # Loop para aplicar parâmetros em qualquer variação de caminho do kernel (Legacy/Modern)
         for sched_path in "$queue_path/iosched" "$queue_path/mq-deadline" "$queue_path/bfq"; do
             if [ -d "$sched_path" ]; then
-                # Common Deadline/Async params
                 echo 1 > "$sched_path/back_seek_penalty" 2>/dev/null || true
                 echo 200 > "$sched_path/fifo_expire_async" 2>/dev/null || true
                 echo 100 > "$sched_path/fifo_expire_sync" 2>/dev/null || true
                 echo 100 > "$sched_path/timeout_sync" 2>/dev/null || true
-                # BFQ params
                 echo 0 > "$sched_path/slice_idle" 2>/dev/null || true
                 echo 0 > "$sched_path/slice_idle_us" 2>/dev/null || true
             fi
@@ -283,13 +353,16 @@ done
 IOB
     chmod +x /usr/local/bin/io-boost.sh
 
-    # --- 3. SCRIPT THP ---
+    # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
 echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
+# Segurança para evitar loop em falha de alocação (Fix Geral)
+echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+# Valores base (Bateria) - Serão sobrescritos dinamicamente pelo monitor de energia
 echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
 echo 5000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
@@ -386,25 +459,22 @@ _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "executando reversão geral"
 
-    # --- REMOÇÃO LIMPA DE ARQUIVOS DE AMBIENTE (Inclui RADEONSI_SHADER_PRECOMPILE) ---
-    # Remove tanto o padrão novo quanto o legado específico "99-game-vars.conf"
     rm -f /etc/environment.d/turbodecky*.conf /etc/environment.d/99-game-vars.conf
-
-    # --- REMOÇÃO DO LIMITE DE ARQUIVO ABERTO (ULIMIT) ---
     rm -f /etc/security/limits.d/99-game-limits.conf
 
-    # --- PARADA E REMOÇÃO DE SERVIÇOS ---
+    # Limpeza do Power Monitor
+    rm -f /usr/local/bin/turbodecky-power-monitor.sh
+    rm -f /etc/udev/rules.d/99-turbodecky-power.rules
+    if command -v udevadm &>/dev/null; then udevadm control --reload-rules; fi
+
     systemctl stop "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
     systemctl disable "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
     
-    # Remove arquivos de unidade
     for svc in "${otimization_services[@]}" zswap-config.service zram-config.service; do
         rm -f "/etc/systemd/system/$svc"
     done
     
-    # Remove scripts binários
     rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh
-    # Reutilizando a lista otimization_services para remover scripts
     for script_svc in "${otimization_services[@]}"; do
         rm -f "/usr/local/bin/${script_svc%%.service}.sh"
     done
@@ -426,12 +496,13 @@ _executar_reversao() {
 }
 
 aplicar_zswap() {
-    _log "Aplicando ZSWAP (Persistente)"
+    _log "Aplicando ZSWAP (Híbrido AC/Battery)"
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
-    _configure_ulimits # Aplica o ulimit
+    _configure_ulimits
     create_common_scripts_and_services
+    create_power_rules # Ativa monitoramento de energia
     _configure_irqbalance
     local free_space_gb; free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
     if (( free_space_gb < zswap_swapfile_size_gb )); then _ui_info "erro" "espaço insuficiente"; exit 1; fi
@@ -483,22 +554,19 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
-    # Ativação explícita de persistência para todos os serviços
     systemctl enable --now "${otimization_services[@]}" zswap-config.service || true
-    
-    # Força releitura de regras udev (para aplicar I/O rules imediatamente sem reboot)
     if command -v udevadm &>/dev/null; then udevadm trigger; fi
-    
     _ui_info "sucesso" "ZSWAP aplicado. Reinicie para efeito total (GRUB e EnvVars)."
 }
 
 aplicar_zram() {
-    _log "Aplicando ZRAM (Persistente - Manual Reorder Fix)"
+    _log "Aplicando ZRAM (Híbrido AC/Battery)"
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
-    _configure_ulimits # Aplica o ulimit
+    _configure_ulimits
     create_common_scripts_and_services
+    create_power_rules # Ativa monitoramento de energia
     _configure_irqbalance
 
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${base_sysctl_params[@]}"
@@ -522,8 +590,6 @@ aplicar_zram() {
 #!/usr/bin/env bash
 CPU_CORES=$(nproc)
 if [[ -z "$CPU_CORES" ]]; then CPU_CORES=4; fi
-
-# 1. Kill and Wait Loop
 MAX_RETRY=10
 count=0
 while lsmod | grep -q "zram" && [ $count -lt $MAX_RETRY ]; do
@@ -534,51 +600,33 @@ while lsmod | grep -q "zram" && [ $count -lt $MAX_RETRY ]; do
     sleep 1
     ((count++))
 done
-
-# 2. Load Module
 modprobe zram num_devices=2 2>/dev/null || true
 if command -v udevadm &>/dev/null; then udevadm settle; else sleep 3; fi
 
-# 3. ZRAM0 (LZ4 / 2G)
 if [ -d "/sys/block/zram0" ]; then
-    # ORDEM CRÍTICA KERNEL 6.1+: Reset -> ALGO -> STREAMS -> SIZE
     echo 1 > /sys/block/zram0/reset 2>/dev/null || true
     if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
-
-    # Algoritmo PRIMEIRO (pois isso reseta streams para 1)
     echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
-
-    # Streams DEPOIS
     echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
-
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
     echo 2G > /sys/block/zram0/disksize 2>/dev/null || true
     mkswap /dev/zram0 2>/dev/null || true
     swapon /dev/zram0 -p 3000 2>/dev/null || true
 fi
 
-# 4. ZRAM1 (ZSTD / 6G)
 if [ -d "/sys/block/zram1" ]; then
     echo 1 > /sys/block/zram1/reset 2>/dev/null || true
     if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
-
-    # Algoritmo PRIMEIRO
     echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
-
-    # Streams DEPOIS
     echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
-
     echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
     echo 6G > /sys/block/zram1/disksize 2>/dev/null || true
     mkswap /dev/zram1 2>/dev/null || true
     swapon /dev/zram1 -p 10 2>/dev/null || true
 fi
 
-# 5. Tweaks
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-
-# DEBUG
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
 ZRAM_SCRIPT
@@ -596,12 +644,8 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
-    # Ativação explícita de persistência para todos os serviços
     systemctl enable --now "${otimization_services[@]}" zram-config.service || true
-    
-    # Força releitura de regras udev
     if command -v udevadm &>/dev/null; then udevadm trigger; fi
-
     _ui_info "sucesso" "ZRAM Dual Layer aplicado. Reinicie o sistema para efeito total."
 }
 
