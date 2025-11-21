@@ -4,7 +4,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.5 rev03 - AVENGERS ASSEMBLE"
+versao="1.5 rev04 - AVENGERS ASSEMBLE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -22,7 +22,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=70"
+    "vm.swappiness=80"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
@@ -164,6 +164,8 @@ _configure_ulimits() {
 * hard nofile 1048576
 root soft nofile 1048576
 root hard nofile 1048576
+* hard memlock 2147484
+* soft memlock 2147484
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
