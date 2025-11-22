@@ -4,7 +4,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.5 rev05 - AVENGERS ASSEMBLE"
+versao="1.5 rev06 - AVENGERS ASSEMBLE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -152,6 +152,7 @@ _steamos_readonly_disable_if_needed() {
 _optimize_gpu() {
     _log "aplicando otimizações amdgpu..."
     mkdir -p /etc/modprobe.d
+    # Cria o arquivo que será removido na reversão
     echo "options amdgpu moverate=128 mes=1 lbpw=0 uni_mes=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
@@ -174,6 +175,7 @@ _configure_irqbalance() {
     _log "configurando irqbalance..."
     mkdir -p /etc/default
     _backup_file_once "/etc/default/irqbalance"
+    # Apenas substitui o conteúdo, não desativa o serviço
     echo "IRQBALANCE_BANNED_CPUS=0x01" > /etc/default/irqbalance
     systemctl unmask irqbalance.service 2>/dev/null || true
     systemctl enable irqbalance.service 2>/dev/null || true
@@ -184,6 +186,7 @@ _configure_irqbalance() {
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d
+
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
@@ -203,6 +206,7 @@ create_timer_configs() {
 w /sys/class/rtc/rtc0/max_user_freq - - - - 1024
 w /sys/dev/hpet/max-user-freq - - - - 1024
 EOF
+    _log "timers de alta frequência criados."
 }
 
 manage_unnecessary_services() {
@@ -461,14 +465,21 @@ _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "executando reversão geral"
 
-    rm -f /etc/environment.d/turbodecky*.conf /etc/environment.d/99-game-vars.conf
+    # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
+    rm -f /etc/environment.d/turbodecky*.conf
     rm -f /etc/security/limits.d/99-game-limits.conf
+    # Arquivos que foram criados em /etc/modprobe.d e /etc/tmpfiles.d
+    rm -f /etc/modprobe.d/99-amdgpu-tuning.conf 
+    rm -f /etc/tmpfiles.d/mglru.conf 
+    rm -f /etc/tmpfiles.d/thp_shrinker.conf 
+    rm -f /etc/tmpfiles.d/custom-timers.conf 
 
     # Limpeza do Power Monitor
     rm -f /usr/local/bin/turbodecky-power-monitor.sh
     rm -f /etc/udev/rules.d/99-turbodecky-power.rules
     if command -v udevadm &>/dev/null; then udevadm control --reload-rules; fi
 
+    # --- 2. GERENCIAMENTO DE SERVIÇOS (STOP/DISABLE/REMOVE) ---
     systemctl stop "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
     systemctl disable "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
     
@@ -480,10 +491,22 @@ _executar_reversao() {
     for script_svc in "${otimization_services[@]}"; do
         rm -f "/usr/local/bin/${script_svc%%.service}.sh"
     done
+    
+    # Desmascara e (re)inicia o ZRAM padrão do sistema (reversão do ZSwap)
+    systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
+    systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
+    _log "Serviço systemd-zram-setup@zram0.service desmascarado e iniciado."
 
+    # --- 3. REVERSÃO IRQBALANCE ---
+    # Restaura o backup do arquivo de configuração ou o remove
+    _restore_file /etc/default/irqbalance || rm -f /etc/default/irqbalance
+    systemctl restart irqbalance.service 2>/dev/null || true # Reinicia para limpar o IRQBALANCE_BANNED_CPUS
+
+    # --- 4. SWAP/FSTAB/SYSCTL/GRUB ---
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
+    # A reversão do tweak do /home e do swapfile é feita aqui
     _restore_file /etc/fstab || true
-    swapon -a 2>/dev/null || true
+    swapon -a 2>/dev/null || true # Ativa o swap padrão do sistema (se houver)
 
     _restore_file /etc/sysctl.d/99-sdweak-performance.conf || rm -f /etc/sysctl.d/99-sdweak-performance.conf
     _restore_file "$grub_config" || true
@@ -491,7 +514,8 @@ _executar_reversao() {
     if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
     mkinitcpio -P &>/dev/null || true
 
-    sysctl --system || true
+    # --- 5. APLICAÇÃO FINAL ---
+    sysctl --system || true # Recarrega sysctl sem o 99-sdweak-performance.conf
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
     _log "reversão concluída."
@@ -506,6 +530,20 @@ aplicar_zswap() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia
     _configure_irqbalance
+    
+    # Mascara o ZRAM padrão do sistema para evitar conflitos
+    systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
+    systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
+    _log "Serviço systemd-zram-setup@zram0.service mascarado."
+    
+    # --- TWEAK FSTAB ---
+    _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
+    if grep -q " /home " /etc/fstab 2>/dev/null; then
+        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
+        _log "tweak FSTAB para /home (ext4) aplicado."
+    fi
+    # --- FIM TWEAK FSTAB ---
+    
     local free_space_gb; free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
     if (( free_space_gb < zswap_swapfile_size_gb )); then _ui_info "erro" "espaço insuficiente"; exit 1; fi
 
@@ -570,7 +608,15 @@ aplicar_zram() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia
     _configure_irqbalance
-
+    
+    # --- TWEAK FSTAB ---
+    _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
+    if grep -q " /home " /etc/fstab 2>/dev/null; then
+        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
+        _log "tweak FSTAB para /home (ext4) aplicado."
+    fi
+    # --- FIM TWEAK FSTAB ---
+    
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${base_sysctl_params[@]}"
     sysctl --system || true
 
@@ -658,6 +704,10 @@ reverter_alteracoes() {
 
 main() {
     echo -e "\n=== Turbo Decky $versao ==="
+    echo "Bem vindo ao Turbo Decky! Otimize seu Steam Deck para obter o melhor desempenho em jogos!"
+    echo "Todas as otimizações são seguras e podem ser revertidas."
+    echo "Escolha a opção desejada e digite o número correspondente."
+    echo
     echo "1) ZSwap + Swapfile (Recomendado)"
     echo "2) Dual ZRAM (Alternativa para pouco espaço livre)"
     echo "3) Otimizar MicroSD"
