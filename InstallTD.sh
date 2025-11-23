@@ -4,7 +4,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.5 rev07 - AVENGERS ASSEMBLE"
+versao="1.5 rev08 - AVENGERS ASSEMBLE"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -80,7 +80,8 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 readonly game_env_vars=(
     "RADV_PERFTEST=gpl,aco,sam,shader_ballot" 
-    "WINEFSYNC=1"
+    "PROTON_USE_NTSYNC=1"
+    "PROTON_USE_WOW64=1"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "RADEONSI_SHADER_PRECOMPILE=true" 
