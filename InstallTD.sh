@@ -1,10 +1,9 @@
-
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.5 rev08 - AVENGERS ASSEMBLE"
+versao="1.6 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -79,13 +78,25 @@ readonly unnecessary_services=(
 
 # --- variáveis de ambiente (Configuração de Jogos) ---
 readonly game_env_vars=(
-    "RADV_PERFTEST=gpl,aco,sam,shader_ballot" 
-    "PROTON_USE_NTSYNC=1"
-    "PROTON_USE_WOW64=1"
-    "MESA_SHADER_CACHE_MAX_SIZE=10G"
-    "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-    "RADEONSI_SHADER_PRECOMPILE=true" 
+   "RADV_PERFTEST=gpl,aco,sam,shader_ballot"
+"RADV_DEBUG=novrsflatshading"
+"RADEONSI_SHADER_PRECOMPILE=true"
+
+"MESA_DISK_CACHE_COMPRESSION=zstd"
+"MESA_SHADER_CACHE_MAX_SIZE=6G"
+"VKD3D_SHADER_CACHE=1"
+
+"PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
+"WINE_DISABLE_PROTOCOL_FORK=1"
+"WINE_DISABLE_WRITE_WATCH=1"
+
+"PROTON_USE_NTSYNC=1"
+"WINEFSYNC=1"
+"WINEESYNC=0"
+
+"DXVK_STATE_CACHE=1"
 )
+
 
 # --- Funções Utilitárias ---
 _ui_info() { echo -e "\n[info] $1: $2"; }
@@ -222,25 +233,160 @@ manage_unnecessary_services() {
 
 # --- FUNÇÃO: REGRAS DE ENERGIA (HÍBRIDO AC/BATERIA COM ANTI-STUTTER) ---
 create_power_rules() {
-    _log "configurando regras dinâmicas de energia (AC/Bateria)..."
+    _log "configurando regras dinâmicas de energia (AC/Bateria) com detecção híbrida..."
     
-    # 1. Script de Monitoramento Inteligente
+    # ------------------------------------------------------------------
+    # --- LÓGICA DE DETECÇÃO HÍBRIDA (SYSFS DINÂMICO + UPOWER FALLBACK NORMALIZADO) ---
+    # ------------------------------------------------------------------
+
+    # detecta AC via sysfs (varre dispositivos) 
+    get_ac_state_sysfs() { 
+        for ps in /sys/class/power_supply/*; do 
+            [ -d "$ps" ] || continue 
+            local type_file="$ps/type" 
+            local online_file="$ps/online" 
+            
+            # se não há type, pula (regra obrigatória)
+            [[ -f "$type_file" ]] || continue 
+            
+            local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null) 
+            local online_val="" 
+
+            if [[ -f "$online_file" ]]; then 
+                online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null) 
+            fi 
+            
+            # 1. Prefer explicit line_power/AC types
+            case "$type_val" in 
+            "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD") 
+                # retorna valor de online (pode ser vazio se nao existir) 
+                echo "${online_val:-unknown}" 
+                return 
+                ;; 
+            esac
+            
+            # 2. Fallback: Catch generic "USB" devices 
+            if [[ "$type_val" == "USB" ]]; then
+                # usa online se disponível
+                if [[ -n "$online_val" ]]; then 
+                    echo "$online_val" 
+                    return
+                # senão, usa present (último recurso; risco em alguns firmwares, mas cobre Steam Deck odd cases)
+                elif [[ -f "$ps/present" ]]; then
+                    local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
+                    echo "$present_val"
+                    return
+                fi
+            fi
+        done 
+        echo "unknown" 
+    } 
+    
+    # fallback via upower, se disponível 
+    get_ac_state_upower() { 
+        if ! command -v upower &>/dev/null; then 
+            echo "unknown" 
+            return 
+        fi 
+        # tenta identificar o objeto line_power dinamicamente 
+        local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1) 
+        if [[ -z "$lp" ]]; then 
+            echo "unknown" 
+            return 
+        fi 
+        # Extrai o estado, normaliza para minúsculas e remove espaços (cobre yes/no, on/off, 1/0)
+        upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
+    }
+
+    # Combina Sysfs e UPower para detecção resiliente
+    is_on_ac() {
+        local sysfs_state; sysfs_state=$(get_ac_state_sysfs)
+
+        if [[ "$sysfs_state" == "1" ]]; then
+            return 0 # AC Detectado via SysFS (1)
+        fi
+
+        if [[ "$sysfs_state" == "0" ]]; then
+            return 1 # Bateria Detectada via SysFS (0)
+        fi
+
+        # Se sysfs falhar (retornar 'unknown' ou vazio), tentamos o UPower (Normalizado)
+        local up_state; up_state=$(get_ac_state_upower)
+
+        # Testa se a string normalizada corresponde a 'yes', 'on' ou '1'
+        if [[ "$up_state" =~ ^(yes|on|1)$ ]]; then
+            return 0 # AC Detectado via UPower
+        fi
+
+        return 1 # Fallback (Bateria ou Falha)
+    }
+
+    # ------------------------------------------------------------------
+    # --- SCRIPT DE MONITORAMENTO (EMBUTIDO) ---
+    # ------------------------------------------------------------------
     cat <<'EOF' > /usr/local/bin/turbodecky-power-monitor.sh
 #!/usr/bin/env bash
 
-# Detecta se está na tomada
-ONLINE=0
-for supply in /sys/class/power_supply/*; do
-    type=$(cat "$supply/type" 2>/dev/null)
-    if [ "$type" == "Mains" ]; then
-        online=$(cat "$supply/online" 2>/dev/null)
-        if [ "$online" == "1" ]; then ONLINE=1; break; fi
-    fi
-done
+# Funções de Detecção (Inclusas no script para execução standalone - Refatoradas)
+get_ac_state_sysfs() { 
+    for ps in /sys/class/power_supply/*; do 
+        [ -d "$ps" ] || continue 
+        local type_file="$ps/type" 
+        local online_file="$ps/online" 
+        
+        [[ -f "$type_file" ]] || continue 
+        
+        local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null) 
+        local online_val="" 
 
-if [ "$ONLINE" == "1" ]; then
+        if [[ -f "$online_file" ]]; then 
+            online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null) 
+        fi 
+        
+        case "$type_val" in 
+        "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD") 
+            echo "${online_val:-unknown}" 
+            return 
+            ;; 
+        esac
+        
+        if [[ "$type_val" == "USB" ]]; then
+            if [[ -n "$online_val" ]]; then 
+                echo "$online_val" 
+                return
+            elif [[ -f "$ps/present" ]]; then
+                local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
+                echo "$present_val"
+                return
+            fi
+        fi
+    done 
+    echo "unknown" 
+} 
+get_ac_state_upower() { 
+    if ! command -v upower &>/dev/null; then 
+        echo "unknown" 
+        return 
+    fi 
+    local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1) 
+    if [[ -z "$lp" ]]; then 
+        echo "unknown" 
+        return 
+    fi 
+    upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
+}
+is_on_ac() {
+    local sysfs_state; sysfs_state=$(get_ac_state_sysfs)
+    if [[ "$sysfs_state" == "1" ]]; then return 0; fi
+    if [[ "$sysfs_state" == "0" ]]; then return 1; fi
+    local up_state; up_state=$(get_ac_state_upower)
+    if [[ "$up_state" =~ ^(yes|on|1)$ ]]; then return 0; fi
+    return 1
+}
+
+if is_on_ac; then
     # --- MODO TOMADA (PERFORMANCE & BAIXA LATÊNCIA) ---
-    logger "TurboDecky: Conectado a energia - Boost Seguro"
+    logger "TurboDecky: Conectado a energia - Boost Seguro (Híbrido)"
     
     # CPU: Performance (Reação rápida, não clock travado)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
@@ -256,16 +402,13 @@ if [ "$ONLINE" == "1" ]; then
     fi
 
     # THP TUNING: "Micro-Doses" (ANTI-STUTTER)
-    # Scan frequente (1s), mas PEQUENO (512 pág = 2MB).
-    # Isso evita travar a memória (Lock Contention) enquanto joga.
     echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
     echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-    # Segurança para falhas de alocação (50s)
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
 
 else
     # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
-    logger "TurboDecky: Bateria - Revertendo"
+    logger "TurboDecky: Bateria - Revertendo (Híbrido)"
     
     # CPU: Balanceada (Padrão SteamOS)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
@@ -281,7 +424,6 @@ else
     fi
 
     # THP Relaxado (Economia de Ciclos CPU)
-    # Mantém valores originais mais altos para não acordar CPU
     echo 5000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
     echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
@@ -289,18 +431,34 @@ fi
 EOF
     chmod +x /usr/local/bin/turbodecky-power-monitor.sh
 
-    # 2. Regra UDEV (Gatilho automático)
+    # 4. CRIAÇÃO DO SERVICE (Para ser acionado pelo UDEV/SYSTEMD)
+    cat <<UNIT > /etc/systemd/system/turbodecky-power-monitor.service
+[Unit]
+Description=TurboDecky Power Monitor (oneshot udev-triggered)
+Wants=sys-devices-virtual-power_supply-*/device
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/turbodecky-power-monitor.sh
+UNIT
+    systemctl daemon-reload || true
+
+    # 5. Regra UDEV OTIMIZADA (Gatilho Systemd - Foca apenas nos tipos de fonte AC)
     cat <<'UDEV' > /etc/udev/rules.d/99-turbodecky-power.rules
-SUBSYSTEM=="power_supply", ATTR{online}!="", RUN+="/usr/local/bin/turbodecky-power-monitor.sh"
+SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="Mains", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
+SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="ACAD", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
+SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB_C", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
+SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB-PD", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
 UDEV
 
-    # 3. Ativar imediatamente
+    # 6. Ativar imediatamente (usando --no-block para não travar o script principal)
     if command -v udevadm &>/dev/null; then 
         udevadm control --reload-rules 2>/dev/null || true
+        # Também disparamos um evento de mudança para garantir que o estado inicial seja setado.
+        udevadm trigger --action=change --subsystem-match=power_supply 2>/dev/null || true
     fi
-    # Executa uma vez para setar o estado atual
-    /usr/local/bin/turbodecky-power-monitor.sh &
-    _log "monitoramento de energia configurado (THP Latency Tuned)."
+    # Executa uma vez via systemd para setar o estado atual
+    systemctl start --no-block turbodecky-power-monitor.service || true
+    _log "monitoramento de energia configurado (THP Latency Tuned - Híbrido/Systemd)."
 }
 
 create_common_scripts_and_services() {
@@ -476,6 +634,9 @@ _executar_reversao() {
     rm -f /etc/tmpfiles.d/custom-timers.conf 
 
     # Limpeza do Power Monitor
+    systemctl stop turbodecky-power-monitor.service 2>/dev/null || true
+    systemctl disable turbodecky-power-monitor.service 2>/dev/null || true
+    rm -f /etc/systemd/system/turbodecky-power-monitor.service
     rm -f /usr/local/bin/turbodecky-power-monitor.sh
     rm -f /etc/udev/rules.d/99-turbodecky-power.rules
     if command -v udevadm &>/dev/null; then udevadm control --reload-rules; fi
@@ -493,7 +654,7 @@ _executar_reversao() {
         rm -f "/usr/local/bin/${script_svc%%.service}.sh"
     done
     
-    # Desmascara e (re)inicia o ZRAM padrão do sistema (reversão do ZSwap)
+    # Desmascara e (re)inicia o ZRAM padrão do sistema (Restaurando o ZRAM original)
     systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service desmascarado e iniciado."
@@ -529,10 +690,10 @@ aplicar_zswap() {
     _optimize_gpu
     _configure_ulimits
     create_common_scripts_and_services
-    create_power_rules # Ativa monitoramento de energia
+    create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
     
-    # Mascara o ZRAM padrão do sistema para evitar conflitos
+    # Mascara o ZRAM padrão do sistema para evitar conflitos (Correto e Necessário)
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
@@ -596,7 +757,7 @@ WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zswap-config.service || true
-    if command -v udevadm &>/dev/null; then udevadm trigger; fi
+    if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
     _ui_info "sucesso" "ZSWAP aplicado. Reinicie para efeito total (GRUB e EnvVars)."
 }
 
@@ -607,8 +768,13 @@ aplicar_zram() {
     _optimize_gpu
     _configure_ulimits
     create_common_scripts_and_services
-    create_power_rules # Ativa monitoramento de energia
+    create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
+    
+    # --- CORREÇÃO APLICADA: Mascara o ZRAM padrão do sistema para evitar conflitos ---
+    systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
+    systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
+    _log "Serviço systemd-zram-setup@zram0.service mascarado."
     
     # --- TWEAK FSTAB ---
     _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
@@ -694,7 +860,7 @@ WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zram-config.service || true
-    if command -v udevadm &>/dev/null; then udevadm trigger; fi
+    if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
     _ui_info "sucesso" "ZRAM Dual Layer aplicado. Reinicie o sistema para efeito total."
 }
 
