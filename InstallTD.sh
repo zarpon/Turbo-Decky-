@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.6 - ENDLESS GAME"
+versao="1.6.rev01- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,7 +21,7 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=80"
+    "vm.swappiness=45"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
