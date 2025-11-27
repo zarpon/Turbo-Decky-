@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.6.rev01- ENDLESS GAME"
+versao="1.6.rev04- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -18,6 +18,8 @@ readonly logfile="/var/log/turbodecky.log"
 # --- Constantes para otimização do MicroSD ---
 readonly sdcard_device="/dev/mmcblk0p1"
 readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
+# Caminho do cache DXVK
+readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
@@ -77,6 +79,7 @@ readonly unnecessary_services=(
 )
 
 # --- variáveis de ambiente (Configuração de Jogos) ---
+# Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
    "RADV_PERFTEST=gpl,aco,sam,shader_ballot"
 "RADV_DEBUG=novrsflatshading"
@@ -95,6 +98,7 @@ readonly game_env_vars=(
 "WINEESYNC=0"
 
 "DXVK_STATE_CACHE=1"
+"DXVK_STATE_CACHE_PATH=${dxvk_cache_path}"
 )
 
 
@@ -159,6 +163,20 @@ _steamos_readonly_disable_if_needed() {
     else
         trap 'true' EXIT
     fi
+}
+
+# --- NOVA FUNÇÃO: Configurar pasta DXVK ---
+_setup_dxvk_folder() {
+    _log "Configurando pasta DXVK Cache..."
+    if [ ! -d "$dxvk_cache_path" ]; then
+        mkdir -p "$dxvk_cache_path"
+        _log "Pasta criada: $dxvk_cache_path"
+    fi
+    # Corrige permissões para o usuário 'deck' (UID 1000)
+    # Isso é crucial pois a pasta foi criada via sudo (root)
+    chown -R 1000:1000 "$dxvk_cache_path" 2>/dev/null || chown -R deck:deck "$dxvk_cache_path" 2>/dev/null || true
+    chmod 755 "$dxvk_cache_path"
+    _log "Permissões da pasta DXVK ajustadas para usuário deck."
 }
 
 _optimize_gpu() {
@@ -499,23 +517,39 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         else
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
-        echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        
+        # --- AJUSTE DE BAIXA LATÊNCIA PARA BFQ ---
+        # Reduz a latência de writeback e força o modo de baixa latência
+        echo 500 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         echo 1 > "$queue_path/rq_affinity" 2>/dev/null || true
-        echo 2000 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
-        for sched_path in "$queue_path/iosched" "$queue_path/mq-deadline" "$queue_path/bfq"; do
-            if [ -d "$sched_path" ]; then
-                echo 1 > "$sched_path/back_seek_penalty" 2>/dev/null || true
-                echo 200 > "$sched_path/fifo_expire_async" 2>/dev/null || true
-                echo 100 > "$sched_path/fifo_expire_sync" 2>/dev/null || true
-                echo 100 > "$sched_path/timeout_sync" 2>/dev/null || true
-                echo 0 > "$sched_path/slice_idle" 2>/dev/null || true
-                echo 0 > "$sched_path/slice_idle_us" 2>/dev/null || true
+
+        # Tenta aplicar low_latency=1 diretamente para o BFQ
+        for bfq_path in "$queue_path/bfq" "$queue_path/iosched"; do
+            if [ -d "$bfq_path" ]; then
+                # Força o modo de baixa latência (pode ser 'low_latency' ou 'low_latency_mode')
+                if [ -f "$bfq_path/low_latency" ]; then
+                    echo 1 > "$bfq_path/low_latency" 2>/dev/null || true
+                elif [ -f "$bfq_path/low_latency_mode" ]; then
+                    echo 1 > "$bfq_path/low_latency_mode" 2>/dev/null || true
+                fi
+                
+                # Outros ajustes de latência do BFQ
+                echo 0 > "$bfq_path/back_seek_penalty" 2>/dev/null || true # Mais agressivo
+                echo 50 > "$bfq_path/fifo_expire_async" 2>/dev/null || true # Reduzido
+                echo 50 > "$bfq_path/fifo_expire_sync" 2>/dev/null || true # Reduzido
+                echo 100 > "$bfq_path/timeout_sync" 2>/dev/null || true
+                echo 0 > "$bfq_path/slice_idle" 2>/dev/null || true
+                echo 0 > "$bfq_path/slice_idle_us" 2>/dev/null || true
             fi
         done
+        # --- FIM AJUSTE BFQ ---
+
+        echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         ;;
     esac
 done
 IOB
+
     chmod +x /usr/local/bin/io-boost.sh
 
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
@@ -685,6 +719,10 @@ _executar_reversao() {
 
 aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
+
+    # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
+    _setup_dxvk_folder
+
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
@@ -718,7 +756,7 @@ aplicar_zswap() {
     sysctl --system || true
 
     _backup_file_once "$grub_config"
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "split_lock_detect=off")
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
     for param in "${kernel_params[@]}"; do local key="${param%%=*}"; new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g"); done
@@ -735,7 +773,7 @@ aplicar_zswap() {
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
@@ -758,11 +796,27 @@ UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zswap-config.service || true
     if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
-    _ui_info "sucesso" "ZSWAP aplicado. Reinicie para efeito total (GRUB e EnvVars)."
+    _ui_info "sucesso" "ZSWAP aplicado."
+    
+    echo -e "\n------------------------------------------------------------"
+    echo "Deseja otimizar o Shader Cache para jogos instalados no MicroSD?"
+    echo "Benefício: Move os arquivos de cache (pequenos e frequentes) do SD para o SSD interno."
+    echo "Isso reduz significativamente os 'engasgos' (stutters) em jogos rodando pelo cartão de memória."
+    echo "------------------------------------------------------------"
+    read -rp "Aplicar otimização do Shader Cache? (s/n): " resp_shader
+    if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
+        otimizar_sdcard_cache
+    fi
+    
+    _ui_info "aviso" "Reinicie para efeito total (GRUB e EnvVars)."
 }
 
 aplicar_zram() {
     _log "Aplicando ZRAM (Híbrido AC/Battery)"
+    
+    # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
+    _setup_dxvk_folder
+    
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
@@ -861,7 +915,19 @@ UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zram-config.service || true
     if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
-    _ui_info "sucesso" "ZRAM Dual Layer aplicado. Reinicie o sistema para efeito total."
+    _ui_info "sucesso" "ZRAM Dual Layer aplicado."
+
+    echo -e "\n------------------------------------------------------------"
+    echo "Deseja otimizar o Shader Cache para jogos instalados no MicroSD?"
+    echo "Benefício: Move os arquivos de cache (pequenos e frequentes) do SD para o SSD interno."
+    echo "Isso reduz significativamente os 'engasgos' (stutters) em jogos rodando pelo cartão de memória."
+    echo "------------------------------------------------------------"
+    read -rp "Aplicar otimização do Shader Cache? (s/n): " resp_shader
+    if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
+        otimizar_sdcard_cache
+    fi
+
+    _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
 
 reverter_alteracoes() {
@@ -875,22 +941,21 @@ main() {
     echo "Todas as otimizações são seguras e podem ser revertidas."
     echo "Escolha a opção desejada e digite o número correspondente."
     echo
-    echo "1) ZSwap + Swapfile (Recomendado)"
-    echo "2) Dual ZRAM (Alternativa para pouco espaço livre)"
-    echo "3) Otimizar MicroSD"
-    echo "4) Reverter Tudo"
-    echo "5) Reverter MicroSD"
-    echo "6) Sair"
+    echo "1) Aplicar Otimizações Recomendadas)"
+    echo "2) Aplicar Otimizações (Alternativa para pouco espaço livre)"
+    echo "3) Reverter Tudo"
+    echo "4) Reverter Otimizações de shader cache de jogos instalados no MicroSD"
+    echo "5) Sair"
     read -rp "Opção: " escolha
     case "$escolha" in
         1) aplicar_zswap ;;
         2) aplicar_zram ;;
-        3) otimizar_sdcard_cache ;;
-        4) reverter_alteracoes ;;
-        5) reverter_sdcard_cache ;;
-        6) exit 0 ;;
+        3) reverter_alteracoes ;;
+        4) reverter_sdcard_cache ;;
+        5) exit 0 ;;
         *) echo "Inválido" ;;
     esac
 }
 
 main "$@"
+
