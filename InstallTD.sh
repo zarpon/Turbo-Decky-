@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.6.rev04- ENDLESS GAME"
+versao="1.6.rev05- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -205,14 +205,21 @@ _configure_irqbalance() {
     _log "configurando irqbalance..."
     mkdir -p /etc/default
     _backup_file_once "/etc/default/irqbalance"
-    # Apenas substitui o conteúdo, não desativa o serviço
-    echo "IRQBALANCE_BANNED_CPUS=0x01" > /etc/default/irqbalance
+
+    cat << 'EOF' > /etc/default/irqbalance
+# Impede o uso do core 0 para interrupções (ideal para APU do Steam Deck)
+IRQBALANCE_BANNED_CPUS=0x01
+
+# Habilita heurísticas mais estáveis (melhor distribuição em cargas mistas)
+IRQBALANCE_ARGS="--powerthrottle --hintpolicy=exact"
+EOF
+
     systemctl unmask irqbalance.service 2>/dev/null || true
     systemctl enable irqbalance.service 2>/dev/null || true
     systemctl restart irqbalance.service 2>/dev/null || true
-    _log "irqbalance configurado."
-}
 
+    _log "irqbalance configurado com política otimizada para o Steam Deck."
+}
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d
