@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.6.rev05- ENDLESS GAME"
+versao="1.6.1. Rev01 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -23,7 +23,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=45"
+    "vm.swappiness=100"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
@@ -31,7 +31,7 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1000"
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=15"
+    "vm.compaction_proactiveness=0"
     "vm.page_lock_unfairness=8"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
@@ -94,7 +94,7 @@ readonly game_env_vars=(
 "WINE_DISABLE_WRITE_WATCH=1"
 
 "PROTON_USE_NTSYNC=1"
-"WINEFSYNC=1"
+
 "WINEESYNC=0"
 
 "DXVK_STATE_CACHE=1"
@@ -746,7 +746,7 @@ aplicar_zswap() {
     # --- TWEAK FSTAB ---
     _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
     if grep -q " /home " /etc/fstab 2>/dev/null; then
-        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
+        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=15,data=writeback,x-systemd.growfs|g' /etc/fstab || true
         _log "tweak FSTAB para /home (ext4) aplicado."
     fi
     # --- FIM TWEAK FSTAB ---
