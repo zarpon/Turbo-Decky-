@@ -23,7 +23,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
