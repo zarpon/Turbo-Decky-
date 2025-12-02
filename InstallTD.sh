@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.0 - TOAA"
+versao="1.7.0. Rev02- TOAA"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -25,13 +25,13 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.swappiness=40"
     "vm.vfs_cache_pressure=66"
-    "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=419430400"
+    "vm.dirty_background_bytes=104857600"
+    "vm.dirty_bytes=209715200"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1000"
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=0"
     "vm.page_lock_unfairness=8"
     "kernel.numa_balancing=0"
     "kernel.sched_autogroup_enabled=0"
@@ -81,24 +81,7 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-   "RADV_PERFTEST=gpl,aco,sam,shader_ballot"
-"RADV_DEBUG=novrsflatshading"
-"RADEONSI_SHADER_PRECOMPILE=true"
-
-"MESA_DISK_CACHE_COMPRESSION=zstd"
-"MESA_SHADER_CACHE_MAX_SIZE=6G"
-"VKD3D_SHADER_CACHE=1"
-
-"PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-"WINE_DISABLE_PROTOCOL_FORK=1"
-"WINE_DISABLE_WRITE_WATCH=1"
-
-"PROTON_USE_NTSYNC=1"
-
-"WINEESYNC=0"
-
-"DXVK_STATE_CACHE=1"
-"DXVK_STATE_CACHE_PATH=${dxvk_cache_path}"
+   
 )
 
 
@@ -799,7 +782,7 @@ aplicar_zswap() {
     # --- TWEAK FSTAB ---
     _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
     if grep -q " /home " /etc/fstab 2>/dev/null; then
-        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=15,data=writeback,x-systemd.growfs|g' /etc/fstab || true
+        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
         _log "tweak FSTAB para /home (ext4) aplicado."
     fi
     # --- FIM TWEAK FSTAB ---
@@ -896,7 +879,7 @@ aplicar_zram() {
     # --- TWEAK FSTAB ---
     _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
     if grep -q " /home " /etc/fstab 2>/dev/null; then
-        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,lazytime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
+        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
         _log "tweak FSTAB para /home (ext4) aplicado."
     fi
     # --- FIM TWEAK FSTAB ---
