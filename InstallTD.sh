@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.0. Rev02- TOAA"
+versao="1.7.1 - ENDLESS GAME  - Charcoal Kernel"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -726,31 +726,66 @@ _instalar_kernel_customizado() {
 
     read -rp "Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.7.* (s/n): " resp_kernel
     if [[ "$resp_kernel" =~ ^[Ss]$ ]]; then
-        if [ ! -d "./kernel" ]; then
-            _ui_info "erro" "Pasta 'kernel' não encontrada no diretório atual."
+        # --- NEW DOWNLOAD LOGIC START ---
+        local REPO="V10lator/linux-charcoal"
+        local DEST_DIR="./kernel"
+
+        _log "Preparando diretório de download do Kernel..."
+        # Limpa versões antigas para evitar conflitos
+        if [ -d "$DEST_DIR" ]; then rm -rf "$DEST_DIR"; fi
+        mkdir -p "$DEST_DIR"
+
+        _log "Buscando o último release de $REPO..."
+        echo "Consultando API do GitHub..."
+
+        # Busca URLs e filtra apenas arquivos .pkg.tar.zst (pacotes instaláveis)
+        local DOWNLOAD_URLS
+        DOWNLOAD_URLS=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" \
+            | grep "browser_download_url" \
+            | cut -d '"' -f 4 \
+            | grep "\.pkg\.tar\.zst$")
+
+        if [ -z "$DOWNLOAD_URLS" ]; then
+            _ui_info "erro" "Nenhum pacote de kernel (.pkg.tar.zst) encontrado no repositório."
             return 1
         fi
+
+        # Download loop
+        for url in $DOWNLOAD_URLS; do
+            local filename
+            filename=$(basename "$url")
+            _log "Baixando: $filename"
+            echo "Baixando $filename..."
+            if ! wget -q --show-progress -P "$DEST_DIR" "$url"; then
+                _ui_info "erro" "Falha ao baixar $filename. Verifique sua internet."
+                return 1
+            fi
+        done
+        _log "Download do Kernel concluído."
+        # --- NEW DOWNLOAD LOGIC END ---
 
         _log "Iniciando instalação do kernel customizado..."
         _steamos_readonly_disable_if_needed
 
         # Ajuste de configuração do pacman para pacotes locais não assinados
-        sed -i "s/Required DatabaseOptional/TrustAll/g" /etc/pacman.conf &>/dev/null
+       # sed -i "s/Required DatabaseOptional/TrustAll/g" /etc/pacman.conf &>/dev/null
 
         # Limpeza de chaves e cache para evitar conflitos
-        rm -rf /home/.steamos/offload/var/cache/pacman/pkg/{*,.*} &>/dev/null
-        rm -rf /etc/pacman.d/gnupg &>/dev/null
+       # rm -rf /home/.steamos/offload/var/cache/pacman/pkg/{*,.*} &>/dev/null
+        # rm -rf /etc/pacman.d/gnupg &>/dev/null
 
         # Inicialização do chaveiro
         echo "Inicializando chaves do pacman..."
-        pacman-key --init
-        pacman-key --populate
+       # pacman-key --init
+       # pacman-key --populate
+       steamos-devmode enable --no-prompt
 
         echo "Instalando Kernel (linux-charcoal)..."
         echo ">>> QUANDO SOLICITADO, CONFIRME A REMOÇÃO DO PACOTE 'linux-neptune' <<<"
 
         # Instalação interativa (o usuário precisa confirmar a substituição)
-        if pacman -U kernel/linux-charcoal-*-x86_64.pkg.tar.zst; then
+        # O wildcard agora aponta para a pasta onde baixamos os arquivos
+        if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
              _log "Kernel customizado instalado com sucesso."
              # Garante atualização do GRUB após a troca do kernel
              update-grub &>/dev/null || true
@@ -973,9 +1008,6 @@ UNIT
         otimizar_sdcard_cache
     fi
 
-    # --- OFERTA DE KERNEL CUSTOMIZADO ---
-    _instalar_kernel_customizado
-
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
 
@@ -1007,3 +1039,4 @@ main() {
 }
 
 main "$@"
+
