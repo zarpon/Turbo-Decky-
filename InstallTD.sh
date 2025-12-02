@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.6.1. Rev02 - ENDLESS GAME"
+versao="1.7.0 - TOAA"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -45,7 +45,7 @@ readonly base_sysctl_params=(
     "vm.mmap_rnd_compat_bits=16"
     "vm.unprivileged_userfaultfd=1"
     "vm.hugetlb_optimize_vmemmap=0"
-    
+
     "fs.aio-max-nr=1048576"
     "fs.epoll.max_user_watches=100000"
     "fs.inotify.max_user_watches=524288"
@@ -200,7 +200,7 @@ root hard nofile 1048576
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
-    
+
 _configure_irqbalance() {
     _log "configurando irqbalance..."
     mkdir -p /etc/default
@@ -259,42 +259,42 @@ manage_unnecessary_services() {
 # --- FUNÇÃO: REGRAS DE ENERGIA (HÍBRIDO AC/BATERIA COM ANTI-STUTTER) ---
 create_power_rules() {
     _log "configurando regras dinâmicas de energia (AC/Bateria) com detecção híbrida..."
-    
+
     # ------------------------------------------------------------------
     # --- LÓGICA DE DETECÇÃO HÍBRIDA (SYSFS DINÂMICO + UPOWER FALLBACK NORMALIZADO) ---
     # ------------------------------------------------------------------
 
-    # detecta AC via sysfs (varre dispositivos) 
-    get_ac_state_sysfs() { 
-        for ps in /sys/class/power_supply/*; do 
-            [ -d "$ps" ] || continue 
-            local type_file="$ps/type" 
-            local online_file="$ps/online" 
-            
-            # se não há type, pula (regra obrigatória)
-            [[ -f "$type_file" ]] || continue 
-            
-            local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null) 
-            local online_val="" 
+    # detecta AC via sysfs (varre dispositivos)
+    get_ac_state_sysfs() {
+        for ps in /sys/class/power_supply/*; do
+            [ -d "$ps" ] || continue
+            local type_file="$ps/type"
+            local online_file="$ps/online"
 
-            if [[ -f "$online_file" ]]; then 
-                online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null) 
-            fi 
-            
+            # se não há type, pula (regra obrigatória)
+            [[ -f "$type_file" ]] || continue
+
+            local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null)
+            local online_val=""
+
+            if [[ -f "$online_file" ]]; then
+                online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null)
+            fi
+
             # 1. Prefer explicit line_power/AC types
-            case "$type_val" in 
-            "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD") 
-                # retorna valor de online (pode ser vazio se nao existir) 
-                echo "${online_val:-unknown}" 
-                return 
-                ;; 
+            case "$type_val" in
+            "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
+                # retorna valor de online (pode ser vazio se nao existir)
+                echo "${online_val:-unknown}"
+                return
+                ;;
             esac
-            
-            # 2. Fallback: Catch generic "USB" devices 
+
+            # 2. Fallback: Catch generic "USB" devices
             if [[ "$type_val" == "USB" ]]; then
                 # usa online se disponível
-                if [[ -n "$online_val" ]]; then 
-                    echo "$online_val" 
+                if [[ -n "$online_val" ]]; then
+                    echo "$online_val"
                     return
                 # senão, usa present (último recurso; risco em alguns firmwares, mas cobre Steam Deck odd cases)
                 elif [[ -f "$ps/present" ]]; then
@@ -303,22 +303,22 @@ create_power_rules() {
                     return
                 fi
             fi
-        done 
-        echo "unknown" 
-    } 
-    
-    # fallback via upower, se disponível 
-    get_ac_state_upower() { 
-        if ! command -v upower &>/dev/null; then 
-            echo "unknown" 
-            return 
-        fi 
-        # tenta identificar o objeto line_power dinamicamente 
-        local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1) 
-        if [[ -z "$lp" ]]; then 
-            echo "unknown" 
-            return 
-        fi 
+        done
+        echo "unknown"
+    }
+
+    # fallback via upower, se disponível
+    get_ac_state_upower() {
+        if ! command -v upower &>/dev/null; then
+            echo "unknown"
+            return
+        fi
+        # tenta identificar o objeto line_power dinamicamente
+        local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
+        if [[ -z "$lp" ]]; then
+            echo "unknown"
+            return
+        fi
         # Extrai o estado, normaliza para minúsculas e remove espaços (cobre yes/no, on/off, 1/0)
         upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
     }
@@ -353,31 +353,31 @@ create_power_rules() {
 #!/usr/bin/env bash
 
 # Funções de Detecção (Inclusas no script para execução standalone - Refatoradas)
-get_ac_state_sysfs() { 
-    for ps in /sys/class/power_supply/*; do 
-        [ -d "$ps" ] || continue 
-        local type_file="$ps/type" 
-        local online_file="$ps/online" 
-        
-        [[ -f "$type_file" ]] || continue 
-        
-        local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null) 
-        local online_val="" 
+get_ac_state_sysfs() {
+    for ps in /sys/class/power_supply/*; do
+        [ -d "$ps" ] || continue
+        local type_file="$ps/type"
+        local online_file="$ps/online"
 
-        if [[ -f "$online_file" ]]; then 
-            online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null) 
-        fi 
-        
-        case "$type_val" in 
-        "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD") 
-            echo "${online_val:-unknown}" 
-            return 
-            ;; 
+        [[ -f "$type_file" ]] || continue
+
+        local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null)
+        local online_val=""
+
+        if [[ -f "$online_file" ]]; then
+            online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null)
+        fi
+
+        case "$type_val" in
+        "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
+            echo "${online_val:-unknown}"
+            return
+            ;;
         esac
-        
+
         if [[ "$type_val" == "USB" ]]; then
-            if [[ -n "$online_val" ]]; then 
-                echo "$online_val" 
+            if [[ -n "$online_val" ]]; then
+                echo "$online_val"
                 return
             elif [[ -f "$ps/present" ]]; then
                 local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
@@ -385,19 +385,19 @@ get_ac_state_sysfs() {
                 return
             fi
         fi
-    done 
-    echo "unknown" 
-} 
-get_ac_state_upower() { 
-    if ! command -v upower &>/dev/null; then 
-        echo "unknown" 
-        return 
-    fi 
-    local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1) 
-    if [[ -z "$lp" ]]; then 
-        echo "unknown" 
-        return 
-    fi 
+    done
+    echo "unknown"
+}
+get_ac_state_upower() {
+    if ! command -v upower &>/dev/null; then
+        echo "unknown"
+        return
+    fi
+    local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
+    if [[ -z "$lp" ]]; then
+        echo "unknown"
+        return
+    fi
     upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
 }
 is_on_ac() {
@@ -412,14 +412,14 @@ is_on_ac() {
 if is_on_ac; then
     # --- MODO TOMADA (PERFORMANCE & BAIXA LATÊNCIA) ---
     logger "TurboDecky: Conectado a energia - Boost Seguro (Híbrido)"
-    
+
     # CPU: Performance (Reação rápida, não clock travado)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
         for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
             echo "performance" > "$epp" 2>/dev/null || true
         done
     fi
-    
+
     # Wi-Fi: Sem Power Save (Ping estável)
     if command -v iw &>/dev/null; then
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
@@ -434,14 +434,14 @@ if is_on_ac; then
 else
     # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
     logger "TurboDecky: Bateria - Revertendo (Híbrido)"
-    
+
     # CPU: Balanceada (Padrão SteamOS)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
         for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
             echo "balance_power" > "$epp" 2>/dev/null || true
         done
     fi
-    
+
     # Wi-Fi: Com Power Save (Economia)
     if command -v iw &>/dev/null; then
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
@@ -476,7 +476,7 @@ SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB-PD", TAG+="systemd
 UDEV
 
     # 6. Ativar imediatamente (usando --no-block para não travar o script principal)
-    if command -v udevadm &>/dev/null; then 
+    if command -v udevadm &>/dev/null; then
         udevadm control --reload-rules 2>/dev/null || true
         # Também disparamos um evento de mudança para garantir que o estado inicial seja setado.
         udevadm trigger --action=change --subsystem-match=power_supply 2>/dev/null || true
@@ -524,7 +524,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         else
             echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
         fi
-        
+
         # --- AJUSTE DE BAIXA LATÊNCIA PARA BFQ ---
         # Reduz a latência de writeback e força o modo de baixa latência
         echo 500 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
@@ -539,7 +539,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
                 elif [ -f "$bfq_path/low_latency_mode" ]; then
                     echo 1 > "$bfq_path/low_latency_mode" 2>/dev/null || true
                 fi
-                
+
                 # Outros ajustes de latência do BFQ
                 echo 0 > "$bfq_path/back_seek_penalty" 2>/dev/null || true # Mais agressivo
                 echo 50 > "$bfq_path/fifo_expire_async" 2>/dev/null || true # Reduzido
@@ -669,10 +669,10 @@ _executar_reversao() {
     rm -f /etc/environment.d/turbodecky*.conf
     rm -f /etc/security/limits.d/99-game-limits.conf
     # Arquivos que foram criados em /etc/modprobe.d e /etc/tmpfiles.d
-    rm -f /etc/modprobe.d/99-amdgpu-tuning.conf 
-    rm -f /etc/tmpfiles.d/mglru.conf 
-    rm -f /etc/tmpfiles.d/thp_shrinker.conf 
-    rm -f /etc/tmpfiles.d/custom-timers.conf 
+    rm -f /etc/modprobe.d/99-amdgpu-tuning.conf
+    rm -f /etc/tmpfiles.d/mglru.conf
+    rm -f /etc/tmpfiles.d/thp_shrinker.conf
+    rm -f /etc/tmpfiles.d/custom-timers.conf
 
     # Limpeza do Power Monitor
     systemctl stop turbodecky-power-monitor.service 2>/dev/null || true
@@ -685,16 +685,16 @@ _executar_reversao() {
     # --- 2. GERENCIAMENTO DE SERVIÇOS (STOP/DISABLE/REMOVE) ---
     systemctl stop "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
     systemctl disable "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
-    
+
     for svc in "${otimization_services[@]}" zswap-config.service zram-config.service; do
         rm -f "/etc/systemd/system/$svc"
     done
-    
+
     rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh
     for script_svc in "${otimization_services[@]}"; do
         rm -f "/usr/local/bin/${script_svc%%.service}.sh"
     done
-    
+
     # Desmascara e (re)inicia o ZRAM padrão do sistema (Restaurando o ZRAM original)
     systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
@@ -724,6 +724,59 @@ _executar_reversao() {
     _log "reversão concluída."
 }
 
+_instalar_kernel_customizado() {
+    echo -e "\n------------------------------------------------------------"
+    echo "NOVIDADE: Instalação de Kernel Customizado. Leia Atentamente antes de confirmar"
+    echo "------------------------------------------------------------"
+    echo "Atenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.7.*"
+    echo "Benefícios deste Kernel:"
+    echo " * Frequência de agendamento (Scheduling) de 1000Hz: Reduz latência de input."
+    echo " * NTSYNC (Wine/Proton): Melhora drástica de sincronização em jogos compatíveis."
+    echo " * Otimizações Zen 2 e Compilador LLVM: Instruções ajustadas para o hardware do Deck."
+    echo " * Clock CPU até 4.2GHz desbloqueado e mitigations desativadas."
+    echo " * Suporte a Binder (Waydroid) e FS patches."
+    echo ""
+    echo "⚠️  ATENÇÃO: O instalador irá substituir o kernel padrão (linux-neptune)."
+    echo "Para garantir compatibilidade, VOCÊ DEVE ACEITAR A REMOÇÃO do kernel antigo"
+    echo "quando o gerenciador de pacotes (pacman) perguntar. Ao final da instalação do Kernel o prompt apresentará mensagens de erro. Essa mensagem se refere á modulos removidos no kernel que não são necessários no steam deck. Para confirmar que o kernel customizado foi instalado, basta reinicar o steam deck e na aba sistemas constará o nome Charcoal no kernel instalado"
+    echo "------------------------------------------------------------"
+
+    read -rp "Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.7.* (s/n): " resp_kernel
+    if [[ "$resp_kernel" =~ ^[Ss]$ ]]; then
+        if [ ! -d "./kernel" ]; then
+            _ui_info "erro" "Pasta 'kernel' não encontrada no diretório atual."
+            return 1
+        fi
+
+        _log "Iniciando instalação do kernel customizado..."
+        _steamos_readonly_disable_if_needed
+
+        # Ajuste de configuração do pacman para pacotes locais não assinados
+        sed -i "s/Required DatabaseOptional/TrustAll/g" /etc/pacman.conf &>/dev/null
+
+        # Limpeza de chaves e cache para evitar conflitos
+        rm -rf /home/.steamos/offload/var/cache/pacman/pkg/{*,.*} &>/dev/null
+        rm -rf /etc/pacman.d/gnupg &>/dev/null
+
+        # Inicialização do chaveiro
+        echo "Inicializando chaves do pacman..."
+        pacman-key --init
+        pacman-key --populate
+
+        echo "Instalando Kernel (linux-charcoal)..."
+        echo ">>> QUANDO SOLICITADO, CONFIRME A REMOÇÃO DO PACOTE 'linux-neptune' <<<"
+
+        # Instalação interativa (o usuário precisa confirmar a substituição)
+        if pacman -U kernel/linux-charcoal-*-x86_64.pkg.tar.zst; then
+             _log "Kernel customizado instalado com sucesso."
+             # Garante atualização do GRUB após a troca do kernel
+             update-grub &>/dev/null || true
+        else
+             _ui_info "erro" "Falha na instalação do Kernel."
+        fi
+    fi
+}
+
 aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
@@ -737,12 +790,12 @@ aplicar_zswap() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
-    
+
     # Mascara o ZRAM padrão do sistema para evitar conflitos (Correto e Necessário)
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
-    
+
     # --- TWEAK FSTAB ---
     _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
     if grep -q " /home " /etc/fstab 2>/dev/null; then
@@ -750,7 +803,7 @@ aplicar_zswap() {
         _log "tweak FSTAB para /home (ext4) aplicado."
     fi
     # --- FIM TWEAK FSTAB ---
-    
+
     local free_space_gb; free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
     if (( free_space_gb < zswap_swapfile_size_gb )); then _ui_info "erro" "espaço insuficiente"; exit 1; fi
 
@@ -804,7 +857,7 @@ UNIT
     systemctl enable --now "${otimization_services[@]}" zswap-config.service || true
     if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
     _ui_info "sucesso" "ZSWAP aplicado."
-    
+
     echo -e "\n------------------------------------------------------------"
     echo "Deseja otimizar o Shader Cache para jogos instalados no MicroSD?"
     echo "Benefício: Move os arquivos de cache (pequenos e frequentes) do SD para o SSD interno."
@@ -814,16 +867,19 @@ UNIT
     if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
         otimizar_sdcard_cache
     fi
-    
-    _ui_info "aviso" "Reinicie para efeito total (GRUB e EnvVars)."
+
+    # --- OFERTA DE KERNEL CUSTOMIZADO ---
+    _instalar_kernel_customizado
+
+    _ui_info "aviso" "Reinicie para efeito total (Kernel, GRUB e EnvVars)."
 }
 
 aplicar_zram() {
     _log "Aplicando ZRAM (Híbrido AC/Battery)"
-    
+
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
     _setup_dxvk_folder
-    
+
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
@@ -831,12 +887,12 @@ aplicar_zram() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
-    
+
     # --- CORREÇÃO APLICADA: Mascara o ZRAM padrão do sistema para evitar conflitos ---
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
-    
+
     # --- TWEAK FSTAB ---
     _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
     if grep -q " /home " /etc/fstab 2>/dev/null; then
@@ -844,7 +900,7 @@ aplicar_zram() {
         _log "tweak FSTAB para /home (ext4) aplicado."
     fi
     # --- FIM TWEAK FSTAB ---
-    
+
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${base_sysctl_params[@]}"
     sysctl --system || true
 
@@ -934,6 +990,9 @@ UNIT
         otimizar_sdcard_cache
     fi
 
+    # --- OFERTA DE KERNEL CUSTOMIZADO ---
+    _instalar_kernel_customizado
+
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
 
@@ -965,4 +1024,3 @@ main() {
 }
 
 main "$@"
-
