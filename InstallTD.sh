@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1 - ENDLESS GAME  - Charcoal Kernel"
+versao="1.7.1. Rev02 - ENDLESS GAME  - Charcoal Kernel"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -775,7 +775,7 @@ _instalar_kernel_customizado() {
         # rm -rf /etc/pacman.d/gnupg &>/dev/null
 
         # Inicialização do chaveiro
-        echo "Inicializando chaves do pacman..."
+       # echo "Inicializando chaves do pacman..."
        # pacman-key --init
        # pacman-key --populate
        steamos-devmode enable --no-prompt
@@ -787,7 +787,8 @@ _instalar_kernel_customizado() {
         # O wildcard agora aponta para a pasta onde baixamos os arquivos
         if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
              _log "Kernel customizado instalado com sucesso."
-             # Garante atualização do GRUB após a troca do kernel
+
+         # Garante atualização do GRUB após a troca do kernel
              update-grub &>/dev/null || true
         else
              _ui_info "erro" "Falha na instalação do Kernel."
