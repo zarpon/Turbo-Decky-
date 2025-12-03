@@ -1009,6 +1009,9 @@ UNIT
         otimizar_sdcard_cache
     fi
 
+    # --- OFERTA DE KERNEL CUSTOMIZADO ---
+    _instalar_kernel_customizad
+
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
 
