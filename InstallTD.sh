@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev02 - ENDLESS GAME  - Charcoal Kernel"
+versao="1.7.1. Rev04 - ENDLESS GAME  - Charcoal Kernel"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -367,7 +367,7 @@ get_ac_state_sysfs() {
                 echo "$present_val"
                 return
             fi
-        fi
+        end
     done
     echo "unknown"
 }
@@ -517,7 +517,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         for bfq_path in "$queue_path/bfq" "$queue_path/iosched"; do
             if [ -d "$bfq_path" ]; then
                 # Força o modo de baixa latência (pode ser 'low_latency' ou 'low_latency_mode')
-                if [ -f "$bfq_path/low_latency" ]; then
+                if [ -f "$bffq_path/low_latency" ]; then
                     echo 1 > "$bfq_path/low_latency" 2>/dev/null || true
                 elif [ -f "$bfq_path/low_latency_mode" ]; then
                     echo 1 > "$bfq_path/low_latency_mode" 2>/dev/null || true
@@ -734,6 +734,8 @@ _instalar_kernel_customizado() {
         # Limpa versões antigas para evitar conflitos
         if [ -d "$DEST_DIR" ]; then rm -rf "$DEST_DIR"; fi
         mkdir -p "$DEST_DIR"
+        # Adição solicitada: Mudar a propriedade da pasta para o usuário deck
+        chown -R deck:deck "$DEST_DIR" 2>/dev/null || true
 
         _log "Buscando o último release de $REPO..."
         echo "Consultando API do GitHub..."
@@ -1010,7 +1012,7 @@ UNIT
     fi
 
     # --- OFERTA DE KERNEL CUSTOMIZADO ---
-    _instalar_kernel_customizad
+    _instalar_kernel_customizado
 
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
@@ -1043,4 +1045,3 @@ main() {
 }
 
 main "$@"
-
