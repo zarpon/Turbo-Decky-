@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev04 - ENDLESS GAME  - Charcoal Kernel"
+versao="1.7.1. Rev05 - ENDLESS GAME  - Charcoal Kernel"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -193,8 +193,6 @@ _configure_irqbalance() {
 # Impede o uso do core 0 para interrupções (ideal para APU do Steam Deck)
 IRQBALANCE_BANNED_CPUS=0x01
 
-# Habilita heurísticas mais estáveis (melhor distribuição em cargas mistas)
-IRQBALANCE_ARGS="--powerthrottle --hintpolicy=exact"
 EOF
 
     systemctl unmask irqbalance.service 2>/dev/null || true
@@ -493,19 +491,19 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
 
     case "$dev_name" in
     nvme*)
-        if echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :;
-        elif echo "none" > "$queue_path/scheduler" 2>/dev/null; then :;
-        else echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true; fi
+        if echo "adios" > "$queue_path/scheduler" 2>/dev/null; then :;
+        elif echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :;
+        else echo "none" > "$queue_path/scheduler" 2>/dev/null || true; fi
         echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 0 > "$queue_path/nomerges" 2>/dev/null || true
         echo 0 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         ;;
     mmcblk*|sd*)
-        if grep -q "bfq" "$queue_path/scheduler" 2>/dev/null; then
-            echo "bfq" > "$queue_path/scheduler" 2>/dev/null || true
+        if grep -q "adios" "$queue_path/scheduler" 2>/dev/null; then
+            echo "adios" > "$queue_path/scheduler" 2>/dev/null || true
         else
-            echo "mq-deadline" > "$queue_path/scheduler" 2>/dev/null || true
+            echo "bfq" > "$queue_path/scheduler" 2>/dev/null || true
         fi
 
         # --- AJUSTE DE BAIXA LATÊNCIA PARA BFQ ---
