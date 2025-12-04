@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev05 - ENDLESS GAME  - Charcoal Kernel"
+versao="1.7.1. Rev06 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -81,12 +81,24 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-   
+
 )
 
 
 # --- Funções Utilitárias ---
-_ui_info() { echo -e "\n[info] $1: $2"; }
+_ui_info() {
+    echo -e "\n[info] $1: $2";
+    # Se tiver zenity e for erro ou sucesso final, exibe popup
+    if command -v zenity &>/dev/null; then
+        if [[ "$1" == "erro" ]]; then
+            zenity --error --text="$2" --width=300 2>/dev/null || true
+        elif [[ "$1" == "sucesso" ]]; then
+            # Não bloqueia execução com sucesso para não irritar, apenas notifica
+            zenity --notification --text="$2" 2>/dev/null || true
+        fi
+    fi
+}
+
 _log() {
     mkdir -p "$(dirname "$logfile")" 2>/dev/null || true
     touch "$logfile" 2>/dev/null || true
@@ -94,6 +106,9 @@ _log() {
 }
 
 if [[ $EUID -ne 0 ]]; then
+    if command -v zenity &>/dev/null; then
+        zenity --error --text="Este script deve ser executado como root (sudo)." --width=300
+    fi
     echo "❌ erro: este script deve ser executado como root (sudo)." >&2; exit 1;
 fi
 
@@ -706,23 +721,27 @@ _executar_reversao() {
 }
 
 _instalar_kernel_customizado() {
-    echo -e "\n------------------------------------------------------------"
-    echo "NOVIDADE: Instalação de Kernel Customizado. Leia Atentamente antes de confirmar"
-    echo "------------------------------------------------------------"
-    echo "Atenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.7.*"
-    echo "Benefícios deste Kernel:"
-    echo " * Frequência de agendamento (Scheduling) de 1000Hz: Reduz latência de input."
-    echo " * NTSYNC (Wine/Proton): Melhora drástica de sincronização em jogos compatíveis."
-    echo " * Otimizações Zen 2 e Compilador LLVM: Instruções ajustadas para o hardware do Deck."
-    echo " * Clock CPU até 4.2GHz desbloqueado e mitigations desativadas."
-    echo " * Suporte a Binder (Waydroid) e FS patches."
-    echo ""
-    echo "⚠️  ATENÇÃO: O instalador irá substituir o kernel padrão (linux-neptune)."
-    echo "Para garantir compatibilidade, VOCÊ DEVE ACEITAR A REMOÇÃO do kernel antigo"
-    echo "quando o gerenciador de pacotes (pacman) perguntar. Ao final da instalação do Kernel o prompt apresentará mensagens de erro. Essa mensagem se refere á modulos removidos no kernel que não são necessários no steam deck. Para confirmar que o kernel customizado foi instalado, basta reinicar o steam deck e na aba sistemas constará o nome Charcoal no kernel instalado"
-    echo "------------------------------------------------------------"
+    local install_msg="NOVIDADE: Instalação de Kernel Customizado.\n\nAtenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.7.*\n\nBenefícios:\n * Freq. 1000Hz (Menor Latência)\n * NTSYNC (Melhor sincronização Wine/Proton)\n * Otimizações Zen 2\n\n⚠️ O instalador irá substituir o kernel padrão. Você deve aceitar a remoção do 'linux-neptune' quando solicitado."
 
-    read -rp "Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.7.* (s/n): " resp_kernel
+    local resp_kernel="n"
+
+    # --- INTEGRAÇÃO ZENITY ---
+    if command -v zenity &>/dev/null; then
+        # Exibe informação primeiro
+        if zenity --question --title="Kernel Customizado" --text="$install_msg\n\nDeseja instalar o Kernel Customizado agora? (Compatível apenas com 3.7.*)" --width=500; then
+            resp_kernel="s"
+        else
+            resp_kernel="n"
+        fi
+    else
+        # Fallback Texto Original
+        echo -e "\n------------------------------------------------------------"
+        echo -e "$install_msg"
+        echo "------------------------------------------------------------"
+        read -rp "Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.7.* (s/n): " input_val
+        resp_kernel="$input_val"
+    fi
+
     if [[ "$resp_kernel" =~ ^[Ss]$ ]]; then
         # --- NEW DOWNLOAD LOGIC START ---
         local REPO="V10lator/linux-charcoal"
@@ -782,6 +801,10 @@ _instalar_kernel_customizado() {
 
         echo "Instalando Kernel (linux-charcoal)..."
         echo ">>> QUANDO SOLICITADO, CONFIRME A REMOÇÃO DO PACOTE 'linux-neptune' <<<"
+
+        if command -v zenity &>/dev/null; then
+            zenity --info --text="A instalação continuará no terminal.\n\nPor favor, confirme a remoção do 'linux-neptune' digitando 's' ou 'y' quando o pacman solicitar." --width=400 2>/dev/null || true
+        fi
 
         # Instalação interativa (o usuário precisa confirmar a substituição)
         # O wildcard agora aponta para a pasta onde baixamos os arquivos
@@ -882,7 +905,17 @@ UNIT
     echo "Benefício: Move os arquivos de cache (pequenos e frequentes) do SD para o SSD interno."
     echo "Isso reduz significativamente os 'engasgos' (stutters) em jogos rodando pelo cartão de memória."
     echo "------------------------------------------------------------"
-    read -rp "Aplicar otimização do Shader Cache? (s/n): " resp_shader
+
+    local resp_shader="n"
+    if command -v zenity &>/dev/null; then
+        if zenity --question --text="Deseja otimizar o Shader Cache para jogos instalados no MicroSD?\n\nIsso move o cache para o SSD, reduzindo stutters em jogos do cartão SD." --width=400; then
+            resp_shader="s"
+        fi
+    else
+        read -rp "Aplicar otimização do Shader Cache? (s/n): " input_shader
+        resp_shader="$input_shader"
+    fi
+
     if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
         otimizar_sdcard_cache
     fi
@@ -1004,7 +1037,17 @@ UNIT
     echo "Benefício: Move os arquivos de cache (pequenos e frequentes) do SD para o SSD interno."
     echo "Isso reduz significativamente os 'engasgos' (stutters) em jogos rodando pelo cartão de memória."
     echo "------------------------------------------------------------"
-    read -rp "Aplicar otimização do Shader Cache? (s/n): " resp_shader
+
+    local resp_shader="n"
+    if command -v zenity &>/dev/null; then
+        if zenity --question --text="Deseja otimizar o Shader Cache para jogos instalados no MicroSD?\n\nIsso move o cache para o SSD, reduzindo stutters em jogos do cartão SD." --width=400; then
+            resp_shader="s"
+        fi
+    else
+        read -rp "Aplicar otimização do Shader Cache? (s/n): " input_shader
+        resp_shader="$input_shader"
+    fi
+
     if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
         otimizar_sdcard_cache
     fi
@@ -1024,21 +1067,44 @@ main() {
     echo -e "\n=== Turbo Decky $versao ==="
     echo "Bem vindo ao Turbo Decky! Otimize seu Steam Deck para obter o melhor desempenho em jogos!"
     echo "Todas as otimizações são seguras e podem ser revertidas."
-    echo "Escolha a opção desejada e digite o número correspondente."
-    echo
-    echo "1) Aplicar Otimizações Recomendadas)"
-    echo "2) Aplicar Otimizações (Alternativa para pouco espaço livre)"
-    echo "3) Reverter Tudo"
-    echo "4) Reverter Otimizações de shader cache de jogos instalados no MicroSD"
-    echo "5) Sair"
-    read -rp "Opção: " escolha
+
+    if command -v zenity &>/dev/null; then
+        # Opção Zenity
+        local z_escolha
+        z_escolha=$(zenity --list --title="Turbo Decky - $versao" \
+            --text="Escolha a opção desejada:" \
+            --radiolist \
+            --column="Ativo" --column="Opção" --column="Descrição" \
+            TRUE "1" "Aplicar Otimizações Recomendadas (ZSWAP)" \
+            FALSE "2" "Aplicar Otimizações (ZRAM - Pouco espaço)" \
+            FALSE "3" "Reverter Tudo" \
+            FALSE "4" "Reverter Otimizações SD Card" \
+            FALSE "5" "Sair" \
+            --height 350 --width 500 --hide-column=2 --print-column=2 || echo "5")
+
+        # Tratamento se o usuário cancelar (z_escolha vazio)
+        if [ -z "$z_escolha" ]; then z_escolha="5"; fi
+        escolha="$z_escolha"
+    else
+        # Opção Legado Texto
+        echo "1) Aplicar Otimizações Recomendadas (ZSWAP)"
+        echo "2) Aplicar Otimizações (ZRAM - Alternativa para pouco espaço)"
+        echo "3) Reverter Tudo"
+        echo "4) Reverter Otimizações de shader cache de jogos instalados no MicroSD"
+        echo "5) Sair"
+        read -rp "Opção: " escolha
+    fi
+
     case "$escolha" in
         1) aplicar_zswap ;;
         2) aplicar_zram ;;
         3) reverter_alteracoes ;;
         4) reverter_sdcard_cache ;;
         5) exit 0 ;;
-        *) echo "Inválido" ;;
+        *)
+           _ui_info "erro" "Opção Inválida"
+           if command -v zenity &>/dev/null; then exit 1; else main "$@"; fi
+           ;;
     esac
 }
 
