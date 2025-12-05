@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev08 - ENDLESS GAME"
+versao="1.7.1. Rev09 - ENDLESS GAME (Kernel Safe)"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -654,6 +654,9 @@ reverter_sdcard_cache() {
     _ui_info "sucesso" "reversão microsd concluída."
 }
 
+# ----------------------------------------------------------------------------------
+# --- FUNÇÃO DE REVERSÃO ATUALIZADA (COM SEGURANÇA DO KERNEL) ---
+# ----------------------------------------------------------------------------------
 _executar_reversao() {
     _steamos_readonly_disable_if_needed;
     _log "executando reversão geral"
@@ -693,12 +696,39 @@ _executar_reversao() {
     systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service desmascarado e iniciado."
 
-    # --- 3. REVERSÃO IRQBALANCE ---
+    # --- 3. REVERSÃO KERNEL (Verificação e Reinstalação de Segurança) ---
+    if command -v pacman &>/dev/null; then
+        # Verifica se o kernel padrão do Steam Deck (linux-neptune) está instalado
+        if ! pacman -Q linux-neptune &>/dev/null; then
+            _log "Kernel padrão (linux-neptune) não encontrado. Iniciando reinstalação."
+            # Verifica e remove o kernel customizado (linux-charcoal ou similar) para evitar conflitos
+            if pacman -Q linux-charcoal &>/dev/null; then
+                _log "Removendo kernel customizado (linux-charcoal)..."
+                # Remove o pacote e suas dependências não utilizadas
+                pacman -Rsc --noconfirm linux-charcoal 2>/dev/null || true
+            fi
+            
+            # Reinstala o kernel padrão do sistema
+            _log "Reinstalando o kernel padrão (linux-neptune) do repositório..."
+            pacman -S --noconfirm linux-neptune 2>/dev/null || true
+
+            if ! pacman -Q linux-neptune &>/dev/null; then
+                 _log "⚠️ Falha ao reinstalar linux-neptune. Verifique a conexão e o repositório."
+            else
+                 _log "Kernel padrão linux-neptune reinstalado com sucesso."
+            fi
+        else
+            _log "Kernel padrão (linux-neptune) encontrado. Nenhuma reinstalação necessária."
+        fi
+    fi
+    # --- FIM REVERSÃO KERNEL ---
+
+    # --- 4. REVERSÃO IRQBALANCE ---
     # Restaura o backup do arquivo de configuração ou o remove
     _restore_file /etc/default/irqbalance || rm -f /etc/default/irqbalance
     systemctl restart irqbalance.service 2>/dev/null || true # Reinicia para limpar o IRQBALANCE_BANNED_CPUS
 
-    # --- 4. SWAP/FSTAB/SYSCTL/GRUB ---
+    # --- 5. SWAP/FSTAB/SYSCTL/GRUB ---
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
     # A reversão do tweak do /home e do swapfile é feita aqui
     _restore_file /etc/fstab || true
@@ -710,12 +740,15 @@ _executar_reversao() {
     if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
     mkinitcpio -P &>/dev/null || true
 
-    # --- 5. APLICAÇÃO FINAL ---
+    # --- 6. APLICAÇÃO FINAL ---
     sysctl --system || true # Recarrega sysctl sem o 99-sdweak-performance.conf
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
     _log "reversão concluída."
 }
+# ----------------------------------------------------------------------------------
+# --- FIM FUNÇÃO DE REVERSÃO ATUALIZADA ---
+# ----------------------------------------------------------------------------------
 
 _instalar_kernel_customizado() {
     local install_msg="NOVIDADE: Instalação de Kernel Customizado.\n\nAtenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.7.*\n\nBenefícios:\n * Freq. 1000Hz (Menor Latência)\n * NTSYNC (Melhor sincronização Wine/Proton)\n * Otimizações Zen 2\n\n⚠️ O instalador irá substituir o kernel padrão. Você deve aceitar a remoção do 'linux-neptune' quando solicitado."
@@ -1047,7 +1080,7 @@ UNIT
 
     if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
         otimizar_sdcard_cache
-    fi
+    }
 
     # --- OFERTA DE KERNEL CUSTOMIZADO ---
     _instalar_kernel_customizado
