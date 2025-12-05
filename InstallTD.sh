@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev07 - ENDLESS GAME"
+versao="1.7.1. Rev08 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -34,7 +34,6 @@ readonly base_sysctl_params=(
     "vm.compaction_proactiveness=10"
     "vm.page_lock_unfairness=8"
     "kernel.numa_balancing=0"
-    "kernel.sched_autogroup_enabled=0"
     "kernel.sched_tunable_scaling=0"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
