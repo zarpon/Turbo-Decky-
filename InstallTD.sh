@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev06 - ENDLESS GAME"
+versao="1.7.1. Rev07 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -380,7 +380,7 @@ get_ac_state_sysfs() {
                 echo "$present_val"
                 return
             fi
-        end
+        fi
     done
     echo "unknown"
 }
@@ -530,7 +530,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         for bfq_path in "$queue_path/bfq" "$queue_path/iosched"; do
             if [ -d "$bfq_path" ]; then
                 # Força o modo de baixa latência (pode ser 'low_latency' ou 'low_latency_mode')
-                if [ -f "$bffq_path/low_latency" ]; then
+                if [ -f "$bfq_path/low_latency" ]; then
                     echo 1 > "$bfq_path/low_latency" 2>/dev/null || true
                 elif [ -f "$bfq_path/low_latency_mode" ]; then
                     echo 1 > "$bfq_path/low_latency_mode" 2>/dev/null || true
@@ -1004,7 +1004,7 @@ if [ -d "/sys/block/zram1" ]; then
     echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
     echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
     echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
-    echo 6G > /sys/block/zram1/disksize 2>/dev/null || true
+    echo 4G > /sys/block/zram1/disksize 2>/dev/null || true
     mkswap /dev/zram1 2>/dev/null || true
     swapon /dev/zram1 -p 10 2>/dev/null || true
 fi
