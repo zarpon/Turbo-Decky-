@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev09 - ENDLESS GAME (Kernel Safe)"
+versao="1.7.1. Rev09 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1080,7 +1080,7 @@ UNIT
 
     if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
         otimizar_sdcard_cache
-    }
+    fi
 
     # --- OFERTA DE KERNEL CUSTOMIZADO ---
     _instalar_kernel_customizado
