@@ -23,12 +23,12 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
-    "vm.swappiness=40"
-    "vm.vfs_cache_pressure=66"
+    "vm.swappiness=100"
+    "vm.vfs_cache_pressure=50"
     "vm.dirty_background_bytes=104857600"
     "vm.dirty_bytes=209715200"
     "vm.dirty_expire_centisecs=1500"
-    "vm.dirty_writeback_centisecs=1000"
+    "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=10"
@@ -55,7 +55,7 @@ readonly base_sysctl_params=(
     "kernel.core_pattern=/dev/null"
     "kernel.core_pipe_limit=0"
     "kernel.printk_devkmsg=off"
-    "net.core.default_qdisc=fq"
+    "net.core.default_qdisc=fq_pie"
     "net.ipv4.tcp_congestion_control=bbr"
     "net.core.netdev_max_backlog=16384"
 )
