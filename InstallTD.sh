@@ -34,7 +34,6 @@ readonly base_sysctl_params=(
     "vm.compaction_proactiveness=10"
     "vm.page_lock_unfairness=8"
     "kernel.numa_balancing=0"
-    "kernel.sched_tunable_scaling=0"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=0"
@@ -44,7 +43,6 @@ readonly base_sysctl_params=(
     "vm.mmap_rnd_compat_bits=16"
     "vm.unprivileged_userfaultfd=1"
     "vm.hugetlb_optimize_vmemmap=0"
-
     "fs.aio-max-nr=1048576"
     "fs.epoll.max_user_watches=100000"
     "fs.inotify.max_user_watches=524288"
