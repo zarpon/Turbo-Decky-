@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev12 - ENDLESS GAME"
+versao="1.7.1. Rev13 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -77,6 +77,23 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
+"RADV_PERFTEST=gpl,aco,sam,shader_ballot"
+"RADV_DEBUG=novrsflatshading"
+"RADEONSI_SHADER_PRECOMPILE=true"
+
+"MESA_DISK_CACHE_COMPRESSION=zstd"
+"MESA_SHADER_CACHE_MAX_SIZE=6G"
+"VKD3D_SHADER_CACHE=1"
+
+"PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
+"WINE_DISABLE_PROTOCOL_FORK=1"
+"WINE_DISABLE_WRITE_WATCH=1"
+
+"PROTON_USE_NTSYNC=1"
+
+"WINEESYNC=0"
+
+
 
 )
 
