@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev10 - ENDLESS GAME"
+versao="1.7.1. Rev11 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -695,31 +695,11 @@ _executar_reversao() {
     systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service desmascarado e iniciado."
 
-    # --- 3. REVERSÃO KERNEL (Verificação e Reinstalação de Segurança) ---
-    if command -v pacman &>/dev/null; then
-        # Verifica se o kernel padrão do Steam Deck (linux-neptune) está instalado
-        if ! pacman -Q linux-neptune &>/dev/null; then
-            _log "Kernel padrão (linux-neptune) não encontrado. Iniciando reinstalação."
-            # Verifica e remove o kernel customizado (linux-charcoal ou similar) para evitar conflitos
-            if pacman -Q linux-charcoal &>/dev/null; then
-                _log "Removendo kernel customizado (linux-charcoal)..."
-                # Remove o pacote e suas dependências não utilizadas
-                pacman -Rsc --noconfirm linux-charcoal 2>/dev/null || true
-            fi
-            
-            # Reinstala o kernel padrão do sistema
-            _log "Reinstalando o kernel padrão (linux-neptune) do repositório..."
-            pacman -S --noconfirm linux-neptune 2>/dev/null || true
+    # --- 3. REVERSÃO KERNEL (Reinstalação automática removida) ---
+    # Observação: a reinstalação automática do kernel padrão (linux-neptune)
+    # foi removida conforme solicitado para evitar alterações automáticas do kernel.
+    # (Nenhuma ação de pacman relacionada a kernel é executada aqui.)
 
-            if ! pacman -Q linux-neptune &>/dev/null; then
-                 _log "⚠️ Falha ao reinstalar linux-neptune. Verifique a conexão e o repositório."
-            else
-                 _log "Kernel padrão linux-neptune reinstalado com sucesso."
-            fi
-        else
-            _log "Kernel padrão (linux-neptune) encontrado. Nenhuma reinstalação necessária."
-        fi
-    fi
     # --- FIM REVERSÃO KERNEL ---
 
     # --- 4. REVERSÃO IRQBALANCE ---
@@ -826,7 +806,7 @@ _instalar_kernel_customizado() {
        # echo "Inicializando chaves do pacman..."
        # pacman-key --init
        # pacman-key --populate
-       steamos-devmode enable --no-prompt
+        steamos-devmode enable --no-prompt
 
         echo "Instalando Kernel (linux-charcoal)..."
         echo ">>> QUANDO SOLICITADO, CONFIRME A REMOÇÃO DO PACOTE 'linux-neptune' <<<"
