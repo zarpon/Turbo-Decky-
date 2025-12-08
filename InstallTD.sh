@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev09 - ENDLESS GAME"
+versao="1.7.1. Rev10 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,15 +24,14 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base ---
 readonly base_sysctl_params=(
     "vm.swappiness=100"
-    "vm.vfs_cache_pressure=50"
+    "vm.vfs_cache_pressure=66"
     "vm.dirty_background_bytes=104857600"
     "vm.dirty_bytes=209715200"
     "vm.dirty_expire_centisecs=1500"
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=10"
-    "vm.page_lock_unfairness=8"
+    "vm.compaction_proactiveness=0"
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
@@ -220,7 +219,7 @@ create_persistent_configs() {
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 0
 EOF
     # THP Shrinker
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
