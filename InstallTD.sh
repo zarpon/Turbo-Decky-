@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev11 - ENDLESS GAME"
+versao="1.7.1. Rev12 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -31,7 +31,7 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=0"
+    "vm.compaction_proactiveness=10"
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
@@ -177,7 +177,7 @@ _optimize_gpu() {
     _log "aplicando otimizações amdgpu..."
     mkdir -p /etc/modprobe.d
     # Cria o arquivo que será removido na reversão
-    echo "options amdgpu moverate=128 mes=1 lbpw=0 uni_mes=0 mes_kiq=1" > /etc/modprobe.d/99-amdgpu-tuning.conf
+    echo "options amdgpu moverate=128" > /etc/modprobe.d/99-amdgpu-tuning.conf
     _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
 
