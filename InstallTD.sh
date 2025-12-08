@@ -228,16 +228,6 @@ EOF
     _log "configurações mglru e thp_shrinker criadas."
 }
 
-create_timer_configs() {
-    _log "configurando timers de alta frequência"
-    mkdir -p /etc/tmpfiles.d
-    cat << EOF > /etc/tmpfiles.d/custom-timers.conf
-w /sys/class/rtc/rtc0/max_user_freq - - - - 1024
-w /sys/dev/hpet/max-user-freq - - - - 1024
-EOF
-    _log "timers de alta frequência criados."
-}
-
 manage_unnecessary_services() {
     local action="$1"
     if [[ "$action" == "disable" ]]; then
@@ -502,8 +492,8 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
 
     case "$dev_name" in
     nvme*)
-        if echo "adios" > "$queue_path/scheduler" 2>/dev/null; then :;
-        elif echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :;
+        if echo "adios" > "$queue_path/scheduler" 2>/dev/null; then :
+        elif echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :
         else echo "none" > "$queue_path/scheduler" 2>/dev/null || true; fi
         echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
@@ -878,7 +868,6 @@ aplicar_zswap() {
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
 
-    create_timer_configs
     create_persistent_configs
 
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
@@ -976,7 +965,6 @@ aplicar_zram() {
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
 
-    create_timer_configs
     create_persistent_configs
 
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
