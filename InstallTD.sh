@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev14 - ENDLESS GAME"
+versao="1.7.1. Rev15 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -206,8 +206,8 @@ _configure_ulimits() {
 * hard nofile 1048576
 root soft nofile 1048576
 root hard nofile 1048576
-* hard memlock 2147484
-* soft memlock 2147484
+* hard memlock 2147483648
+* soft memlock 2147483648
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
