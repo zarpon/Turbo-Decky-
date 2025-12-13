@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.2 - ENDLESS GAME"
+versao="1.7.2.rev01- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1086,6 +1086,9 @@ reverter_alteracoes() {
 
 # --- NOVA FUNÇÃO: Remover kernel customizado e reinstalar linux-neptune ---
 _restore_kernel_to_neptune() {
+
+steamos-devmode enable --no-prompt
+
     _log "Iniciando restauração do kernel padrão (linux-neptune)"
 
     if ! command -v pacman &>/dev/null; then
