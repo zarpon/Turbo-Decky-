@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.1. Rev13 - ENDLESS GAME"
+versao="1.7.1. Rev14 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -231,7 +231,7 @@ EOF
 }
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
-    mkdir -p /etc/tmpfiles.d /etc/modprobe.d
+    mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
 
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
@@ -242,7 +242,12 @@ EOF
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 EOF
-    _log "configurações mglru e thp_shrinker criadas."
+
+    # NTSYNC - Carregamento Persistente do Módulo
+    echo "ntsync" > /etc/modules-load.d/ntsync.conf
+    _log "configuração ntsync criada em /etc/modules-load.d/ntsync.conf"
+
+    _log "configurações mglru, thp_shrinker e ntsync criadas."
 }
 
 manage_unnecessary_services() {
@@ -675,6 +680,8 @@ _executar_reversao() {
     rm -f /etc/tmpfiles.d/mglru.conf
     rm -f /etc/tmpfiles.d/thp_shrinker.conf
     rm -f /etc/tmpfiles.d/custom-timers.conf
+    # Remove configuração persistente do ntsync
+    rm -f /etc/modules-load.d/ntsync.conf
 
     # Limpeza do Power Monitor
     systemctl stop turbodecky-power-monitor.service 2>/dev/null || true
