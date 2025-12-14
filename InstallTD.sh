@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.2.rev01- ENDLESS GAME"
+versao="1.7.2.rev02 - ENDLESS GAME (Performance Tuned)"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -21,17 +21,17 @@ readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # Caminho do cache DXVK
 readonly dxvk_cache_path="/home/deck/dxvkcache"
 
-# --- parâmetros sysctl base ---
+# --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.swappiness=100"
-    "vm.vfs_cache_pressure=66"
+    "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
     "vm.dirty_background_bytes=262144000" 
     "vm.dirty_bytes=524288000" 
-    "vm.dirty_expire_centisecs=1500"
+    "vm.dirty_expire_centisecs=3000"     # Aumentado para 30s: Melhora bateria agrupando escritas
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=20"     # Aumentado de 10: Evita stalls de alocação de memória sob pressão
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
@@ -48,6 +48,14 @@ readonly base_sysctl_params=(
     "fs.pipe-max-size=2097152"
     "fs.pipe-user-pages-soft=65536"
     "fs.file-max=1000000"
+    
+    # --- TUNING DO SCHEDULER (CFS) PARA JOGOS ---
+    "kernel.sched_min_granularity_ns=10000000"       # 10ms: Reduz trocas de contexto excessivas
+    "kernel.sched_wakeup_granularity_ns=15000000"    # 15ms: Evita preempção muito agressiva
+    "kernel.sched_migration_cost_ns=5000000"         # 5ms: "Cola" a thread no núcleo (cache locality)
+    "kernel.sched_cfs_bandwidth_slice_us=5000"
+    
+    # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
     "kernel.soft_watchdog=0"
     "kernel.watchdog=0"
@@ -57,6 +65,7 @@ readonly base_sysctl_params=(
     "net.core.default_qdisc=fq_pie"
     "net.ipv4.tcp_congestion_control=bbr"
     "net.core.netdev_max_backlog=16384"
+    "net.ipv4.tcp_fastopen=3"            # Reduz latência de handshake em jogos online
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -92,9 +101,6 @@ readonly game_env_vars=(
 "PROTON_USE_NTSYNC=1"
 
 "WINEESYNC=0"
-
-
-
 )
 
 
@@ -501,7 +507,7 @@ create_common_scripts_and_services() {
         _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
     fi
 
-    # --- 2. SCRIPT IO-BOOST ---
+    # --- 2. SCRIPT IO-BOOST (ATUALIZADO PARA LATÊNCIA NVME) ---
     cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
 sleep 5
@@ -520,7 +526,10 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 0 > "$queue_path/nomerges" 2>/dev/null || true
+        
+        # OTIMIZAÇÃO I/O AGRESSIVA (LATÊNCIA)
         echo 0 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
+        echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true # Força conclusão na mesma CPU
         ;;
     mmcblk*|sd*)
         if grep -q "adios" "$queue_path/scheduler" 2>/dev/null; then
@@ -530,24 +539,20 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         fi
 
         # --- AJUSTE DE BAIXA LATÊNCIA PARA BFQ ---
-        # Reduz a latência de writeback e força o modo de baixa latência
         echo 500 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
         echo 1 > "$queue_path/rq_affinity" 2>/dev/null || true
 
-        # Tenta aplicar low_latency=1 diretamente para o BFQ
         for bfq_path in "$queue_path/bfq" "$queue_path/iosched"; do
             if [ -d "$bfq_path" ]; then
-                # Força o modo de baixa latência (pode ser 'low_latency' ou 'low_latency_mode')
                 if [ -f "$bfq_path/low_latency" ]; then
                     echo 1 > "$bfq_path/low_latency" 2>/dev/null || true
                 elif [ -f "$bfq_path/low_latency_mode" ]; then
                     echo 1 > "$bfq_path/low_latency_mode" 2>/dev/null || true
                 fi
 
-                # Outros ajustes de latência do BFQ
-                echo 0 > "$bfq_path/back_seek_penalty" 2>/dev/null || true # Mais agressivo
-                echo 50 > "$bfq_path/fifo_expire_async" 2>/dev/null || true # Reduzido
-                echo 50 > "$bfq_path/fifo_expire_sync" 2>/dev/null || true # Reduzido
+                echo 0 > "$bfq_path/back_seek_penalty" 2>/dev/null || true
+                echo 50 > "$bfq_path/fifo_expire_async" 2>/dev/null || true
+                echo 50 > "$bfq_path/fifo_expire_sync" 2>/dev/null || true
                 echo 100 > "$bfq_path/timeout_sync" 2>/dev/null || true
                 echo 0 > "$bfq_path/slice_idle" 2>/dev/null || true
                 echo 0 > "$bfq_path/slice_idle_us" 2>/dev/null || true
@@ -881,7 +886,10 @@ aplicar_zswap() {
     sysctl --system || true
 
     _backup_file_once "$grub_config"
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "split_lock_detect=off")
+    
+    # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
     for param in "${kernel_params[@]}"; do local key="${param%%=*}"; new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g"); done
@@ -945,6 +953,7 @@ UNIT
     # --- OFERTA DE KERNEL CUSTOMIZADO ---
     _instalar_kernel_customizado
 
+    _ui_info "aviso" "Dica extra: Configure o UMA Buffer Size para 4GB na BIOS para máximo desempenho."
     _ui_info "aviso" "Reinicie para efeito total (Kernel, GRUB e EnvVars)."
 }
 
@@ -979,7 +988,10 @@ aplicar_zram() {
     sysctl --system || true
 
     _backup_file_once "$grub_config"
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "split_lock_detect=off")
+    
+    # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
     for param in "${kernel_params[@]}"; do local key="${param%%=*}"; new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g" | sed -E "s/ ?zswap\.[^ =]+(=[^ ]*)?//g"); done
@@ -1076,6 +1088,7 @@ UNIT
     # --- OFERTA DE KERNEL CUSTOMIZADO ---
     _instalar_kernel_customizado
 
+    _ui_info "aviso" "Dica extra: Configure o UMA Buffer Size para 4GB na BIOS para máximo desempenho."
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
 
@@ -1138,8 +1151,8 @@ main() {
             --text="Escolha a opção desejada:" \
             --radiolist \
             --column="Ativo" --column="Opção" --column="Descrição" \
-            TRUE "1" "Aplicar Otimizações Recomendadas (ZSWAP)" \
-            FALSE "2" "Aplicar Otimizações (ZRAM - Pouco espaço)" \
+            TRUE "1" "Aplicar Otimizações Recomendadas (ZSWAP + Tuning)" \
+            FALSE "2" "Aplicar Otimizações (ZRAM + Tuning - Pouco espaço)" \
             FALSE "3" "Reverter Tudo" \
             FALSE "4" "Reverter Otimizações SD Card" \
             FALSE "5" "Restaurar Kernel Padrão (Remover linux-charcoal)" \
@@ -1151,8 +1164,8 @@ main() {
         escolha="$z_escolha"
     else
         # Opção Legado Texto
-        echo "1) Aplicar Otimizações Recomendadas (ZSWAP)"
-        echo "2) Aplicar Otimizações (ZRAM - Alternativa para pouco espaço)"
+        echo "1) Aplicar Otimizações Recomendadas (ZSWAP + Tuning)"
+        echo "2) Aplicar Otimizações (ZRAM + Tuning - Alternativa para pouco espaço)"
         echo "3) Reverter Tudo"
         echo "4) Reverter Otimizações de shader cache de jogos instalados no MicroSD"
         echo "5) Reinstalar kernel padrão (remover kernel customizado)"
