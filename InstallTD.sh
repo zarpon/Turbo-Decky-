@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.2.rev02 - ENDLESS GAME (Performance Tuned)"
+versao="1.7.2.rev03 - ENDLESS GAME (Performance Tuned)"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -81,6 +81,7 @@ readonly unnecessary_services=(
     "gpu-trace.service"
     "steamos-log-submitter.service"
     "cups.service"
+    "steamos-cfs-debugfs-tunings.service" 
 )
 
 # --- variáveis de ambiente (Configuração de Jogos) ---
