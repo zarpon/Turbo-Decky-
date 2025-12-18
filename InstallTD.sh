@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.2.rev03 - ENDLESS GAME (Performance Tuned)"
+versao="1.8.0 - ENDLESS GAME "
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -681,7 +681,7 @@ _executar_reversao() {
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
     rm -f /etc/environment.d/turbodecky*.conf
     rm -f /etc/security/limits.d/99-game-limits.conf
-    # Arquivos que foram criados em /etc/modprobe.d e /etc/tmpfiles.d
+    # Arquivos que foram criados em /etc/modprobe.d e /etc.tmpfiles.d
     rm -f /etc/modprobe.d/99-amdgpu-tuning.conf
     rm -f /etc/tmpfiles.d/mglru.conf
     rm -f /etc/tmpfiles.d/thp_shrinker.conf
@@ -772,78 +772,77 @@ _instalar_kernel_customizado() {
     fi
 
     if [[ "$resp_kernel" =~ ^[Ss]$ ]]; then
-        # --- NEW DOWNLOAD LOGIC START ---
-        local REPO="V10lator/linux-charcoal"
+        # preparar diretório
         local DEST_DIR="./kernel"
-
-        _log "Preparando diretório de download do Kernel..."
-        # Limpa versões antigas para evitar conflitos
+        _log "Preparando diretório de download do Kernel CachyOS..."
         if [ -d "$DEST_DIR" ]; then rm -rf "$DEST_DIR"; fi
         mkdir -p "$DEST_DIR"
-        # Adição solicitada: Mudar a propriedade da pasta para o usuário deck
         chown -R deck:deck "$DEST_DIR" 2>/dev/null || true
 
-        _log "Buscando o último release de $REPO..."
-        echo "Consultando API do GitHub..."
+        # páginas oficiais fornecidas
+        local KERNEL_PAGE="https://packages.cachyos.org/package/cachyos-v3/x86_64_v3/linux-cachyos-deckify"
+        local HEADERS_PAGE="https://packages.cachyos.org/package/cachyos-v3/x86_64_v3/linux-cachyos-deckify-headers"
 
-        # Busca URLs e filtra apenas arquivos .pkg.tar.zst (pacotes instaláveis)
-        local DOWNLOAD_URLS
-        DOWNLOAD_URLS=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" \
-            | grep "browser_download_url" \
-            | cut -d '"' -f 4 \
-            | grep "\.pkg\.tar\.zst$")
+        _log "Consultando página do kernel CachyOS: $KERNEL_PAGE"
+        _log "Consultando página dos headers CachyOS: $HEADERS_PAGE"
 
-        if [ -z "$DOWNLOAD_URLS" ]; then
-            _ui_info "erro" "Nenhum pacote de kernel (.pkg.tar.zst) encontrado no repositório."
+        # extrai links para os .pkg.tar.zst (relativos ou absolutos)
+        mapfile -t kernel_urls < <(
+            curl -fsSL "$KERNEL_PAGE" 2>/dev/null |
+            grep -oE 'href="[^"]+linux-cachyos-deckify[^"]+\.pkg\.tar\.zst"' |
+            sed -E 's/href="([^"]+)"/\1/' |
+            sed -E 's|^/|https://packages.cachyos.org/|' |
+            uniq
+        )
+
+        mapfile -t headers_urls < <(
+            curl -fsSL "$HEADERS_PAGE" 2>/dev/null |
+            grep -oE 'href="[^"]+linux-cachyos-deckify-headers[^"]+\.pkg\.tar\.zst"' |
+            sed -E 's/href="([^"]+)"/\1/' |
+            sed -E 's|^/|https://packages.cachyos.org/|' |
+            uniq
+        )
+
+        if [ ${#kernel_urls[@]} -eq 0 ]; then
+            _ui_info "erro" "Nenhum pacote linux-cachyos-deckify encontrado em $KERNEL_PAGE"
+            return 1
+        fi
+        if [ ${#headers_urls[@]} -eq 0 ]; then
+            _ui_info "erro" "Nenhum pacote linux-cachyos-deckify-headers encontrado em $HEADERS_PAGE"
             return 1
         fi
 
-        # Download loop
-        for url in $DOWNLOAD_URLS; do
-            local filename
-            filename=$(basename "$url")
-            _log "Baixando: $filename"
-            echo "Baixando $filename..."
+        # escolhe a versão mais nova (sort -V)
+        latest_kernel_url=$(printf "%s\n" "${kernel_urls[@]}" | sort -V | tail -n1)
+        latest_headers_url=$(printf "%s\n" "${headers_urls[@]}" | sort -V | tail -n1)
+
+        _log "URL Kernel escolhida: $latest_kernel_url"
+        _log "URL Headers escolhida: $latest_headers_url"
+
+        _log "Baixando Kernel e Headers mais recentes..."
+        for url in "$latest_kernel_url" "$latest_headers_url"; do
+            fname=$(basename "$url")
+            _log "Baixando: $fname"
             if ! wget -q --show-progress -P "$DEST_DIR" "$url"; then
-                _ui_info "erro" "Falha ao baixar $filename. Verifique sua internet."
+                _ui_info "erro" "Falha ao baixar $fname. Verifique sua conexão e tente novamente."
                 return 1
             fi
         done
-        _log "Download do Kernel concluído."
-        # --- NEW DOWNLOAD LOGIC END ---
 
-        _log "Iniciando instalação do kernel customizado..."
+        _log "Download concluído: $(ls -1 "$DEST_DIR"/*.pkg.tar.zst 2>/dev/null || true)"
+
+        _log "Iniciando instalação do kernel customizado (linux-cachyos-deckify)..."
         _steamos_readonly_disable_if_needed
+        steamos-devmode enable --no-prompt || true
 
-        # Ajuste de configuração do pacman para pacotes locais não assinados
-       # sed -i "s/Required DatabaseOptional/TrustAll/g" /etc/pacman.conf &>/dev/null
-
-        # Limpeza de chaves e cache para evitar conflitos
-       # rm -rf /home/.steamos/offload/var/cache/pacman/pkg/{*,.*} &>/dev/null
-        # rm -rf /etc/pacman.d/gnupg &>/dev/null
-
-        # Inicialização do chaveiro
-       # echo "Inicializando chaves do pacman..."
-       # pacman-key --init
-       # pacman-key --populate
-        steamos-devmode enable --no-prompt
-
-        echo "Instalando Kernel (linux-charcoal)..."
-        echo ">>> QUANDO SOLICITADO, CONFIRME A REMOÇÃO DO PACOTE 'linux-neptune' <<<"
-
-        if command -v zenity &>/dev/null; then
-            zenity --info --text="A instalação continuará no terminal.\n\nPor favor, confirme a remoção do 'linux-neptune' digitando 's' ou 'y' quando o pacman solicitar." --width=400 2>/dev/null || true
-        fi
-
-        # Instalação interativa (o usuário precisa confirmar a substituição)
-        # O wildcard agora aponta para a pasta onde baixamos os arquivos
-        if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
-             _log "Kernel customizado instalado com sucesso."
-
-         # Garante atualização do GRUB após a troca do kernel
-             update-grub &>/dev/null || true
+        if pacman -U --noconfirm "$DEST_DIR"/*.pkg.tar.zst; then
+            _log "linux-cachyos-deckify instalado com sucesso."
+            if command -v update-grub &>/dev/null; then update-grub &>/dev/null || true; else steamos-update-grub &>/dev/null || true; fi
+            mkinitcpio -P &>/dev/null || true
+            _ui_info "sucesso" "Kernel CachyOS instalado. Reinicie para aplicar."
         else
-             _ui_info "erro" "Falha na instalação do Kernel."
+            _ui_info "erro" "Falha na instalação dos pacotes CachyOS."
+            return 1
         fi
     fi
 }
@@ -1110,7 +1109,21 @@ steamos-devmode enable --no-prompt
         return 1
     fi
 
-    # Remove linux-charcoal-611 se instalado
+    # Remove linux-cachyos-deckify se instalado (adicionado conforme solicitado)
+    if pacman -Q linux-cachyos-deckify &>/dev/null || pacman -Q linux-cachyos-deckify-headers &>/dev/null; then
+        _log "linux-cachyos-deckify detectado. Removendo..."
+        _steamos_readonly_disable_if_needed
+        if pacman -Rs --noconfirm linux-cachyos-deckify linux-cachyos-deckify-headers; then
+            _log "linux-cachyos-deckify removido com sucesso."
+        else
+            _ui_info "erro" "Falha ao remover linux-cachyos-deckify"
+            # não retorna; tenta continuar com remoção de linux-charcoal e reinstalação do neptune
+        fi
+    else
+        _log "linux-cachyos-deckify não está instalado. Pulando remoção."
+    fi
+
+    # Remove linux-charcoal-611 se instalado (mantido exatamente como no seu código)
     if pacman -Q linux-charcoal-611 &>/dev/null; then
         _log "linux-charcoal-611 detectado. Removendo..."
         _steamos_readonly_disable_if_needed
@@ -1125,7 +1138,7 @@ steamos-devmode enable --no-prompt
         _ui_info "info" "Kernel customizado não encontrado instalado."
     fi
 
-    # Instala linux-neptune-611
+    # Instala linux-neptune-611 (mantido exatamente como no seu código)
     _log "Instalando linux-neptune-611..."
     if pacman -S --noconfirm linux-neptune-611; then
         _log "linux-neptune-611 instalado com sucesso."
