@@ -1169,7 +1169,7 @@ main() {
             FALSE "2" "Aplicar Otimizações (ZRAM + Tuning - Pouco espaço)" \
             FALSE "3" "Reverter Tudo" \
             FALSE "4" "Reverter Otimizações SD Card" \
-            FALSE "5" "Restaurar Kernel Padrão (Remover linux-charcoal)" \
+            FALSE "5" "Restaurar Kernel Padrão" \
             FALSE "6" "Sair" \
             --height 350 --width 500 --hide-column=2 --print-column=2 || echo "5")
 
