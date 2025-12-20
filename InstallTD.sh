@@ -23,7 +23,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.swappiness=150"
+    "vm.swappiness=180"
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
     "vm.dirty_background_bytes=262144000" 
     "vm.dirty_bytes=524288000" 
