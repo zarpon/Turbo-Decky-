@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.2.rev04 - ENDLESS GAME"
+versao="1.7.3 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -23,7 +23,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.swappiness=180"
+    "vm.swappiness=100"
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
     "vm.dirty_background_bytes=262144000" 
     "vm.dirty_bytes=524288000" 
@@ -236,6 +236,55 @@ EOF
 
     _log "irqbalance configurado com política otimizada para o Steam Deck."
 }
+
+# --- NOVA FUNÇÃO: CONFIGURAÇÃO DO LAVD SCHEDULER ---
+_setup_lavd_scheduler() {
+    _log "Configurando LAVD Scheduler (scx)..."
+    
+    # Verifica se o binário já existe, se não, instala
+    if ! command -v scx_lavd &>/dev/null; then
+        _log "scx_lavd não encontrado. Iniciando instalação..."
+        
+        # Habilita devmode e desabilita readonly
+        steamos-devmode enable --no-prompt
+        _steamos_readonly_disable_if_needed
+
+        # Inicializa chaves do pacman (necessário no SteamOS)
+        _log "Inicializando chaves do pacman..."
+        pacman-key --init 2>/dev/null || true
+        pacman-key --populate archlinux holo 2>/dev/null || true
+
+        # Instala o pacote scx-scheds
+        _log "Instalando pacote scx-scheds..."
+        if ! pacman -S --noconfirm scx-scheds; then
+            _log "AVISO: Falha ao instalar scx-scheds. O LAVD não será ativado."
+            return 1
+        fi
+    fi
+
+    # Criação do serviço se o binário estiver disponível
+    if command -v scx_lavd &>/dev/null; then
+        local lavd_path; lavd_path=$(command -v scx_lavd)
+        cat <<UNIT > /etc/systemd/system/scx_lavd.service
+[Unit]
+Description=LAVD Scheduler (Latency-criticality Aware Virtual Deadline)
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=${lavd_path} --performance
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload
+        systemctl enable --now scx_lavd.service
+        _log "LAVD Scheduler ativado e serviço iniciado."
+    fi
+}
+
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
@@ -689,6 +738,11 @@ _executar_reversao() {
     # Remove configuração persistente do ntsync
     rm -f /etc/modules-load.d/ntsync.conf
 
+    # --- REVERSÃO LAVD (ADICIONADO) ---
+    systemctl stop scx_lavd.service 2>/dev/null || true
+    systemctl disable scx_lavd.service 2>/dev/null || true
+    rm -f /etc/systemd/system/scx_lavd.service
+
     # Limpeza do Power Monitor
     systemctl stop turbodecky-power-monitor.service 2>/dev/null || true
     systemctl disable turbodecky-power-monitor.service 2>/dev/null || true
@@ -861,6 +915,9 @@ aplicar_zswap() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
+    
+    # --- ADIÇÃO: Configuração do LAVD Scheduler ---
+    _setup_lavd_scheduler
 
     # Mascara o ZRAM padrão do sistema para evitar conflitos (Correto e Necessário)
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
@@ -971,6 +1028,9 @@ aplicar_zram() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
+    
+    # --- ADIÇÃO: Configuração do LAVD Scheduler ---
+    _setup_lavd_scheduler
 
     # --- CORREÇÃO APLICADA: Mascara o ZRAM padrão do sistema para evitar conflitos ---
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
