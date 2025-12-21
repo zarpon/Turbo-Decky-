@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.3 - ENDLESS GAME"
+versao="1.7.3.rev01 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -272,7 +272,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=${lavd_path} --performance
+ExecStart=${lavd_path} --autopower
 Restart=always
 RestartSec=5
 
