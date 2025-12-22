@@ -241,30 +241,31 @@ EOF
 _setup_lavd_scheduler() {
     _log "Configurando LAVD Scheduler (scx)..."
     
-    # Verifica se o binário já existe, se não, instala
+    # 1. Instalação Segura
     if ! command -v scx_lavd &>/dev/null; then
         _log "scx_lavd não encontrado. Iniciando instalação..."
         
-        # Habilita devmode e desabilita readonly
+        # Garante permissões
         steamos-devmode enable --no-prompt
         _steamos_readonly_disable_if_needed
 
-        # Inicializa chaves do pacman (necessário no SteamOS)
-        _log "Inicializando chaves do pacman..."
+        # Inicializa chaves
         pacman-key --init 2>/dev/null || true
         pacman-key --populate archlinux holo 2>/dev/null || true
 
-        # Instala o pacote scx-scheds
-        _log "Instalando pacote scx-scheds..."
-        if ! pacman -S --noconfirm scx-scheds; then
-            _log "AVISO: Falha ao instalar scx-scheds. O LAVD não será ativado."
+        # Atualiza DB e instala (-Sy garante que encontre o pacote)
+        _log "Baixando scx-scheds..."
+        if ! pacman -Sy --noconfirm scx-scheds; then
+            _log "ERRO: Falha ao baixar scx-scheds. Verifique a conexão."
             return 1
         fi
     fi
 
-    # Criação do serviço se o binário estiver disponível
+    # 2. Criação do Serviço
     if command -v scx_lavd &>/dev/null; then
         local lavd_path; lavd_path=$(command -v scx_lavd)
+        
+        # Define o serviço com a flag CORRETA (--performance)
         cat <<UNIT > /etc/systemd/system/scx_lavd.service
 [Unit]
 Description=LAVD Scheduler (Latency-criticality Aware Virtual Deadline)
@@ -272,18 +273,24 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=${lavd_path} --autopower
+# Usamos --performance para garantir baixa latência.
+# A economia de energia é gerenciada pelo EPP do seu script (turbodecky-power-monitor).
+ExecStart=${lavd_path} --performance
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 UNIT
+        
         systemctl daemon-reload
         systemctl enable --now scx_lavd.service
-        _log "LAVD Scheduler ativado e serviço iniciado."
+        _log "LAVD Scheduler ativado (Modo Performance)."
+    else
+        _log "Aviso: Binário scx_lavd não encontrado após tentativa de instalação."
     fi
 }
+
 
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
