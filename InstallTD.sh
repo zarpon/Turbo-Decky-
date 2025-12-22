@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.3.rev03 - ENDLESS GAME"
+versao="1.7.3.rev04 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -23,7 +23,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    "vm.swappiness=150"
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
     "vm.dirty_background_bytes=262144000" 
     "vm.dirty_bytes=524288000" 
@@ -47,13 +47,7 @@ readonly base_sysctl_params=(
     "fs.inotify.max_user_watches=524288"
     "fs.pipe-max-size=2097152"
     "fs.pipe-user-pages-soft=65536"
-    "fs.file-max=1000000"
-    
-    # --- TUNING DO SCHEDULER (CFS) PARA JOGOS ---
-    "kernel.sched_min_granularity_ns=10000000"       # 10ms: Reduz trocas de contexto excessivas
-    "kernel.sched_wakeup_granularity_ns=15000000"    # 15ms: Evita preempção muito agressiva
-    "kernel.sched_migration_cost_ns=5000000"         # 5ms: "Cola" a thread no núcleo (cache locality)
-    "kernel.sched_cfs_bandwidth_slice_us=5000"
+    "fs.file-max=1000000"   
     
     # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
