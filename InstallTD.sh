@@ -274,7 +274,7 @@ ConditionPathExists=${lavd_path}
 [Service]
 Type=simple
 # ExecStart com flags otimizadas para o Steam Deck
-ExecStart=${lavd_path} --performance
+ExecStart=${lavd_path} --autopower
 Restart=always
 RestartSec=5
 # Garante prioridade de execução do próprio processo do scheduler
