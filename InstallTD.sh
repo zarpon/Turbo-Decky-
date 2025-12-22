@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.3.rev02 - ENDLESS GAME"
+versao="1.7.3.rev03 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -237,47 +237,48 @@ EOF
     _log "irqbalance configurado com política otimizada para o Steam Deck."
 }
 
-# --- NOVA FUNÇÃO: CONFIGURAÇÃO DO LAVD SCHEDULER ---
+# --- FUNÇÃO REVISADA: CONFIGURAÇÃO DO LAVD SCHEDULER ---
 _setup_lavd_scheduler() {
     _log "Configurando LAVD Scheduler (scx)..."
     
-    # 1. Instalação Segura
+    # 1. Instalação Segura com verificação de DevMode
     if ! command -v scx_lavd &>/dev/null; then
-        _log "scx_lavd não encontrado. Iniciando instalação..."
+        _log "scx_lavd não encontrado. Preparando ambiente..."
         
-        # Garante permissões
+        # Garante que o modo desenvolvedor e escrita estejam ativos para o pacman
         steamos-devmode enable --no-prompt
         _steamos_readonly_disable_if_needed
 
-        # Inicializa chaves
+        # Inicializa chaves para evitar erros de assinatura
         pacman-key --init 2>/dev/null || true
         pacman-key --populate archlinux holo 2>/dev/null || true
 
-        # Atualiza DB e instala (-Sy garante que encontre o pacote)
-        _log "Baixando scx-scheds..."
+        _log "Instalando scx-scheds via pacman..."
         if ! pacman -Sy --noconfirm scx-scheds; then
-            _log "ERRO: Falha ao baixar scx-scheds. Verifique a conexão."
+            _log "AVISO: Falha ao instalar scx-scheds. O scheduler padrão (CFS) será mantido."
             return 1
         fi
     fi
 
-    # 2. Criação do Serviço
+    # 2. Criação do Serviço Systemd
     if command -v scx_lavd &>/dev/null; then
         local lavd_path; lavd_path=$(command -v scx_lavd)
         
-        # Define o serviço com a flag CORRETA (--performance)
         cat <<UNIT > /etc/systemd/system/scx_lavd.service
 [Unit]
 Description=LAVD Scheduler (Latency-criticality Aware Virtual Deadline)
+# Garante que inicie após o sistema base estar pronto
 After=multi-user.target
+ConditionPathExists=${lavd_path}
 
 [Service]
 Type=simple
-# Usamos --performance para garantir baixa latência.
-# A economia de energia é gerenciada pelo EPP do seu script (turbodecky-power-monitor).
+# ExecStart com flags otimizadas para o Steam Deck
 ExecStart=${lavd_path} --performance
 Restart=always
 RestartSec=5
+# Garante prioridade de execução do próprio processo do scheduler
+Nice=-20
 
 [Install]
 WantedBy=multi-user.target
@@ -285,11 +286,12 @@ UNIT
         
         systemctl daemon-reload
         systemctl enable --now scx_lavd.service
-        _log "LAVD Scheduler ativado (Modo Performance)."
+        _log "LAVD Scheduler ativado com sucesso como escalonador padrão."
     else
-        _log "Aviso: Binário scx_lavd não encontrado após tentativa de instalação."
+        _log "Erro: scx_lavd não disponível após instalação."
     fi
 }
+
 
 
 create_persistent_configs() {
