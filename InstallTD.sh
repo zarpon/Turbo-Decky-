@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.3.rev06 - ENDLESS GAME"
+versao="1.7.3.rev07- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -576,7 +576,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         if echo "adios" > "$queue_path/scheduler" 2>/dev/null; then :
         elif echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :
         else echo "none" > "$queue_path/scheduler" 2>/dev/null || true; fi
-        echo 1024 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 4096 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         echo 1024 > "$queue_path/nr_requests" 2>/dev/null || true
         echo 0 > "$queue_path/nomerges" 2>/dev/null || true
         
@@ -613,7 +613,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         done
         # --- FIM AJUSTE BFQ ---
 
-        echo 2048 > "$queue_path/read_ahead_kb" 2>/dev/null || true
+        echo 512 > "$queue_path/read_ahead_kb" 2>/dev/null || true
         ;;
     esac
 done
