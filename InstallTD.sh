@@ -589,7 +589,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
         fi
 
         # --- AJUSTE DE BAIXA LATÊNCIA PARA BFQ ---
-        echo 500 > "$queue_path/wbt_lat_usec" 2>/dev/null || true
+        
         echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
 
         for bfq_path in "$queue_path/bfq" "$queue_path/iosched"; do
