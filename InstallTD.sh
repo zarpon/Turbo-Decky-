@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.3.rev08- ENDLESS GAME"
+versao="1.7.3.rev09- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -177,7 +177,86 @@ _steamos_readonly_disable_if_needed() {
     fi
 }
 
-# --- NOVA FUNÇÃO: Configurar pasta DXVK ---
+# --- Nova: detecta o tipo de sistema de arquivos para um caminho ---
+_get_fstype_for_path() {
+    local target="$1"
+    # Usa findmnt para determinar FSTYPE do ponto de montagem que contém o target
+    local fstype
+    fstype=$(findmnt -n -o FSTYPE --target "$target" 2>/dev/null || true)
+    echo "${fstype:-}"
+}
+
+# --- Nova: cria swapfile corretamente considerando Btrfs ---
+_create_swapfile() {
+    local path="$1"; local size_gb="$2"
+    local dir; dir=$(dirname "$path")
+    mkdir -p "$dir" 2>/dev/null || true
+
+    local fstype; fstype=$(_get_fstype_for_path "$dir")
+    _log "criando swapfile em: $path (fs: ${fstype:-unknown})"
+
+    if [[ "$fstype" == "btrfs" ]]; then
+        # Em btrfs, criar um diretório dedicado sem CoW e colocar o swapfile lá,
+        # então criar um symlink no caminho desejado para manter compatibilidade com $swapfile_path.
+        local swapdir="${dir}/.swap"
+        mkdir -p "$swapdir" 2>/dev/null || true
+
+        # Tenta marcar o diretório com NOCOW (chattr +C) *antes* de criar o arquivo
+        chattr +C "$swapdir" 2>/dev/null || true
+
+        local actual_path="${swapdir}/$(basename "$path")"
+
+        # Cria o arquivo (fallocate preferido; dd como fallback)
+        if ! fallocate -l "${size_gb}G" "$actual_path" 2>/dev/null; then
+            dd if=/dev/zero of="$actual_path" bs=1M count=$((size_gb * 1024)) status=progress 2>/dev/null || true
+        fi
+
+        # Ajustes de permissões e swap
+        chmod 600 "$actual_path" 2>/dev/null || true
+        # mkswap no arquivo real
+        mkswap "$actual_path" 2>/dev/null || true
+
+        # Remove entrada antiga ou arquivo/symlink e criar symlink no local esperado
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            rm -f "$path" 2>/dev/null || true
+        fi
+        ln -s "$actual_path" "$path" 2>/dev/null || true
+
+        _log "swapfile criado em (btrfs-safe): $actual_path -> symlink $path"
+    else
+        # Sistemas que não são btrfs: cria normalmente no caminho solicitado
+        # fallocate preferível para velocidade; dd fallback
+        if ! fallocate -l "${size_gb}G" "$path" 2>/dev/null; then
+            dd if=/dev/zero of="$path" bs=1G count="$size_gb" status=progress 2>/dev/null || true
+        fi
+        chmod 600 "$path" 2>/dev/null || true
+        mkswap "$path" 2>/dev/null || true
+        _log "swapfile criado: $path"
+    fi
+
+    return 0
+}
+
+# --- NOVA FUNÇÃO: Tenta aplicar tweak no /etc/fstab SOMENTE se /home for EXT4 ---
+_apply_fstab_tweak_if_ext4() {
+    local fstab_file="/etc/fstab"
+    local mount_point="/home"
+    local fstype; fstype=$(_get_fstype_for_path "$mount_point")
+    _backup_file_once "$fstab_file"
+    if [[ "$fstype" == "ext4" ]]; then
+        if grep -q " /home " "$fstab_file" 2>/dev/null; then
+            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=60,data=writeback,x-systemd.growfs|g' "$fstab_file" || true
+            _log "tweak FSTAB para /home (ext4) aplicado."
+        else
+            _log "nenhuma entrada /home encontrada em $fstab_file para ajustar."
+        fi
+    else
+        _log "Tweak FSTAB para /home SKIPPED: filesystem /home é '$fstype' (somente aplica se ext4)."
+    fi
+}
+
+# --- RESTANTE DO SCRIPT (sem alterações funcionais fora do solicitado) ---
+
 _setup_dxvk_folder() {
     _log "Configurando pasta DXVK Cache..."
     if [ ! -d "$dxvk_cache_path" ]; then
@@ -924,19 +1003,17 @@ aplicar_zswap() {
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
 
-    # --- TWEAK FSTAB ---
-    _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
-    if grep -q " /home " /etc/fstab 2>/dev/null; then
-        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
-        _log "tweak FSTAB para /home (ext4) aplicado."
-    fi
+    # --- TWEAK FSTAB (somente se /home for ext4) ---
+    _apply_fstab_tweak_if_ext4
     # --- FIM TWEAK FSTAB ---
 
     local free_space_gb; free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
     if (( free_space_gb < zswap_swapfile_size_gb )); then _ui_info "erro" "espaço insuficiente"; exit 1; fi
 
-    fallocate -l "${zswap_swapfile_size_gb}G" "$swapfile_path" 2>/dev/null || dd if=/dev/zero of="$swapfile_path" bs=1G count="$zswap_swapfile_size_gb" status=progress
-    chmod 600 "$swapfile_path" || true; mkswap "$swapfile_path" || true
+    # Cria swapfile corretamente considerando possíveis btrfs em /home
+    _create_swapfile "$swapfile_path" "$zswap_swapfile_size_gb"
+
+    # Garante entrada única em /etc/fstab apontando para $swapfile_path (pode ser symlink para local btrfs-safe)
     sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true; echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab
     swapon --priority -2 "$swapfile_path" || true
 
@@ -1037,12 +1114,8 @@ aplicar_zram() {
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
 
-    # --- TWEAK FSTAB ---
-    _backup_file_once /etc/fstab # Garante que o backup esteja atualizado
-    if grep -q " /home " /etc/fstab 2>/dev/null; then
-        sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=60,data=writeback,x-systemd.growfs|g' /etc/fstab || true
-        _log "tweak FSTAB para /home (ext4) aplicado."
-    fi
+    # --- TWEAK FSTAB (somente se /home for ext4) ---
+    _apply_fstab_tweak_if_ext4
     # --- FIM TWEAK FSTAB ---
 
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${base_sysctl_params[@]}"
