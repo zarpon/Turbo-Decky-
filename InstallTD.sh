@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.3.rev10- ENDLESS GAME"
+versao="1.7.4 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -52,9 +52,6 @@ readonly base_sysctl_params=(
    # --- Scheduler (scx_lavd friendly) ---
     "kernel.sched_autogroup_enabled=0"
     "kernel.sched_migration_cost_ns=250000"
-
-# --- PSI (reduz wakeups e jitter) ---
-    "kernel.psi=0" 
     
     # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
@@ -63,7 +60,7 @@ readonly base_sysctl_params=(
     "kernel.core_pattern=/dev/null"
     "kernel.core_pipe_limit=0"
     "kernel.printk_devkmsg=off"
-    "net.core.default_qdisc=fq_pie"
+    "net.core.default_qdisc=cake"
     "net.ipv4.tcp_congestion_control=bbr"
     "net.core.netdev_max_backlog=16384"
     "net.ipv4.tcp_fastopen=3"            # Reduz latência de handshake em jogos online
