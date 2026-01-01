@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.3.rev09- ENDLESS GAME"
+versao="1.7.3.rev10- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -48,6 +48,13 @@ readonly base_sysctl_params=(
     "fs.pipe-max-size=2097152"
     "fs.pipe-user-pages-soft=65536"
     "fs.file-max=1000000"   
+
+   # --- Scheduler (scx_lavd friendly) ---
+    "kernel.sched_autogroup_enabled=0"
+    "kernel.sched_migration_cost_ns=250000"
+
+# --- PSI (reduz wakeups e jitter) ---
+    "kernel.psi=0" 
     
     # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
