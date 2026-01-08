@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.4 - ENDLESS GAME"
+versao="1.7.5 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -63,7 +63,16 @@ readonly base_sysctl_params=(
     "net.core.default_qdisc=cake"
     "net.ipv4.tcp_congestion_control=bbr"
     "net.core.netdev_max_backlog=16384"
-    "net.ipv4.tcp_fastopen=3"            # Reduz latência de handshake em jogos online
+    "net.ipv4.tcp_fastopen=3"  
+   # --- REDE (BAIXA LATÊNCIA / JOGOS ONLINE) ---
+    "net.core.busy_read=50"
+    "net.core.busy_poll=50"
+    "net.ipv4.tcp_slow_start_after_idle=0"
+    "net.ipv4.tcp_mtu_probing=1" # Ajuda em conexões instáveis
+
+    # --- TIMERS / EMULAÇÃO ---
+    "dev.hpet.max-user-freq=2048" 
+    # Reduz latência de handshake em jogos online
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -378,7 +387,7 @@ create_persistent_configs() {
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 0
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
 EOF
     # THP Shrinker
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
