@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.5 - ENDLESS GAME"
+versao="1.7.5. Rev01- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -70,9 +70,7 @@ readonly base_sysctl_params=(
     "net.ipv4.tcp_slow_start_after_idle=0"
     "net.ipv4.tcp_mtu_probing=1" # Ajuda em conexões instáveis
 
-    # --- TIMERS / EMULAÇÃO ---
-    "dev.hpet.max-user-freq=2048" 
-    # Reduz latência de handshake em jogos online
+    
 )
 
 # --- listas de serviços para ativar/monitorar ---
