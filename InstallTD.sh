@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.5. Rev01- ENDLESS GAME"
+versao="1.7.5. Rev02- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -973,15 +973,17 @@ _instalar_kernel_customizado() {
         steamos-devmode enable --no-prompt
 
         echo "Instalando Kernel (linux-charcoal)..."
-        echo ">>> QUANDO SOLICITADO, CONFIRME A REMOÇÃO DO PACOTE 'linux-neptune' <<<"
+    
 
-        if command -v zenity &>/dev/null; then
-            zenity --info --text="A instalação continuará no terminal.\n\nPor favor, confirme a remoção do 'linux-neptune' digitando 's' ou 'y' quando o pacman solicitar." --width=400 2>/dev/null || true
-        fi
+    
 
         # Instalação interativa (o usuário precisa confirmar a substituição)
         # O wildcard agora aponta para a pasta onde baixamos os arquivos
-        if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
+       
+        pacman -R --noconfirm linux-neptune-611 || true
+        pacman -R --noconfirm linux-neptune-611-headers || true
+
+        if pacman -U --noconfirm "$DEST_DIR"/*.pkg.tar.zst; then
              _log "Kernel customizado instalado com sucesso."
 
          # Garante atualização do GRUB após a troca do kernel
