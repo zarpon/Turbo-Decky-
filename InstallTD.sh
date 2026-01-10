@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.5. Rev02- ENDLESS GAME"
+versao="1.7.5. Rev03- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -972,18 +972,14 @@ _instalar_kernel_customizado() {
        # pacman-key --populate
         steamos-devmode enable --no-prompt
 
-        echo "Instalando Kernel (linux-charcoal)..."
-    
-
-    
+        echo "Instalando Kernel (linux-charcoal)..." 
 
         # Instalação interativa (o usuário precisa confirmar a substituição)
-        # O wildcard agora aponta para a pasta onde baixamos os arquivos
-       
-        pacman -R --noconfirm linux-neptune-611 || true
-        pacman -R --noconfirm linux-neptune-611-headers || true
+        # O wildcard agora aponta para a pasta onde baixamos os arquivos   
 
         if pacman -U --noconfirm "$DEST_DIR"/*.pkg.tar.zst; then
+        pacman -R --noconfirm linux-neptune-611 || true
+        pacman -R --noconfirm linux-neptune-611-headers || true
              _log "Kernel customizado instalado com sucesso."
 
          # Garante atualização do GRUB após a troca do kernel
