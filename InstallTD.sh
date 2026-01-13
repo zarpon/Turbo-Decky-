@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.5. Rev04- ENDLESS GAME"
+versao="1.7.5. Rev05- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -23,7 +23,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.swappiness=100"
+    
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
     "vm.dirty_background_bytes=33554432" 
     "vm.dirty_bytes=268435456" 
@@ -991,6 +991,7 @@ _instalar_kernel_customizado() {
 }
 
 aplicar_zswap() {
+sysctl -w vm.swappiness=30 || true
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
@@ -1102,6 +1103,7 @@ UNIT
 }
 
 aplicar_zram() {
+sysctl -w vm.swappiness=100 || true
     _log "Aplicando ZRAM (Híbrido AC/Battery)"
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
