@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.5. Rev05- ENDLESS GAME"
+versao="1.7.5. Rev06- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -991,7 +991,7 @@ _instalar_kernel_customizado() {
 }
 
 aplicar_zswap() {
-sysctl -w vm.swappiness=30 || true
+
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
@@ -1056,6 +1056,7 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
+sysctl -w vm.swappiness=30 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
@@ -1103,7 +1104,7 @@ UNIT
 }
 
 aplicar_zram() {
-sysctl -w vm.swappiness=100 || true
+
     _log "Aplicando ZRAM (Híbrido AC/Battery)"
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
@@ -1188,6 +1189,7 @@ if [ -d "/sys/block/zram1" ]; then
 fi
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
+sysctl -w vm.swappiness=100 || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
