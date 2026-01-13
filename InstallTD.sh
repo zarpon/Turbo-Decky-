@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.5. Rev06- ENDLESS GAME"
+versao="1.7.5. Rev07- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -25,10 +25,10 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
-    "vm.dirty_background_bytes=33554432" 
-    "vm.dirty_bytes=268435456" 
-    "vm.dirty_expire_centisecs=3000"     # Aumentado para 30s: Melhora bateria agrupando escritas
-    "vm.dirty_writeback_centisecs=1500"
+    "vm.dirty_background_bytes=16777216"   # 16 MB
+    "vm.dirty_bytes=67108864"              # 64 MB
+    "vm.dirty_expire_centisecs=1000"       # 10 s
+    "vm.dirty_writeback_centisecs=500"     # 5 s
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=0"     
