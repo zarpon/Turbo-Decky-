@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.5. Rev03- ENDLESS GAME"
+versao="1.7.5. Rev04- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -23,19 +23,19 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.swappiness=80"
+    "vm.swappiness=100"
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
-    "vm.dirty_background_bytes=262144000" 
-    "vm.dirty_bytes=524288000" 
+    "vm.dirty_background_bytes=33554432" 
+    "vm.dirty_bytes=268435456" 
     "vm.dirty_expire_centisecs=3000"     # Aumentado para 30s: Melhora bateria agrupando escritas
     "vm.dirty_writeback_centisecs=1500"
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=20"     # Aumentado de 10: Evita stalls de alocação de memória sob pressão
+    "vm.compaction_proactiveness=0"     
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
-    "vm.compact_unevictable_allowed=0"
+    "vm.compact_unevictable_allowed=1"
     "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
     "vm.max_map_count=2147483642"
@@ -92,7 +92,7 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-"RADV_PERFTEST=gpl,aco,sam,shader_ballot"
+"RADV_PERFTEST=gpl,aco,sam,shader_ballot,ngcc"
 "RADV_DEBUG=novrsflatshading"
 "RADEONSI_SHADER_PRECOMPILE=true"
 
