@@ -25,10 +25,10 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
-    "vm.dirty_background_bytes=16777216"   # 16 MB
-    "vm.dirty_bytes=67108864"              # 64 MB
-    "vm.dirty_expire_centisecs=1000"       # 10 s
-    "vm.dirty_writeback_centisecs=500"     # 5 s
+    "vm.dirty_background_bytes=33554432"   # 16 MB
+    "vm.dirty_bytes=268435456"              # 64 MB
+    "vm.dirty_expire_centisecs=3000"       # 10 s
+    "vm.dirty_writeback_centisecs=1500"     # 5 s
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=0"     
@@ -591,7 +591,7 @@ else
     # CPU: Balanceada (Padrão SteamOS)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
         for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-            echo "balance_power" > "$epp" 2>/dev/null || true
+            echo "balance_performance" > "$epp" 2>/dev/null || true
         done
     fi
 
