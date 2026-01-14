@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.6- ENDLESS GAME"
+versao="1.7.6 Rev01- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -25,16 +25,16 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     
     "vm.vfs_cache_pressure=50"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
-    "vm.dirty_background_bytes=33554432"   
-    "vm.dirty_bytes=268435456"              
-    "vm.dirty_expire_centisecs=3000"       
+    "vm.dirty_background_bytes=67108864"   
+    "vm.dirty_bytes=402653184"              
+    "vm.dirty_expire_centisecs=4500"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=0"     
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
-    "vm.stat_interval=15"
+    "vm.stat_interval=10"
     "vm.compact_unevictable_allowed=1"
     "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
@@ -1033,7 +1033,7 @@ aplicar_zswap() {
     _backup_file_once "$grub_config"
     
     # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1051,12 +1051,12 @@ aplicar_zswap() {
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-sysctl -w vm.swappiness=30 || true
+sysctl -w vm.swappiness=10 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
