@@ -65,8 +65,7 @@ readonly base_sysctl_params=(
     "net.core.netdev_max_backlog=16384"
     "net.ipv4.tcp_fastopen=3"  
    # --- REDE (BAIXA LATÊNCIA / JOGOS ONLINE) ---
-    "net.core.busy_read=50"
-    "net.core.busy_poll=50"
+    
     "net.ipv4.tcp_slow_start_after_idle=0"
     "net.ipv4.tcp_mtu_probing=1" # Ajuda em conexões instáveis
 
