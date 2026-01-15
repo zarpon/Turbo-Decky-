@@ -92,7 +92,7 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-"RADV_PERFTEST=gpl,aco,sam,shader_ballot,ngcc"
+"RADV_PERFTEST=gpl,aco,sam,shader_ballot,nggc"
 "RADV_DEBUG=novrsflatshading"
 "RADEONSI_SHADER_PRECOMPILE=true"
 
