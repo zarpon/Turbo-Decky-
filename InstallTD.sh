@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.6 Rev04- ENDLESS GAME"
+versao="1.7.6 Rev05- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -52,7 +52,7 @@ readonly base_sysctl_params=(
    # --- Scheduler (scx_lavd friendly) ---
     "kernel.sched_autogroup_enabled=0"
     "kernel.sched_migration_cost_ns=250000"
-    
+    "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
     "kernel.soft_watchdog=0"
@@ -94,7 +94,7 @@ readonly game_env_vars=(
 "RADV_PERFTEST=gpl,aco,sam,shader_ballot,nggc"
 "RADV_DEBUG=novrsflatshading"
 "RADEONSI_SHADER_PRECOMPILE=true"
-
+"MESA_DISK_CACHE_SINGLE_FILE=1"
 "MESA_DISK_CACHE_COMPRESSION=zstd"
 "MESA_SHADER_CACHE_MAX_SIZE=6G"
 "VKD3D_SHADER_CACHE=1"
