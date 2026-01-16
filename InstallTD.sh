@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.6 Rev06- ENDLESS GAME"
+versao="1.7.6 Rev07- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -302,23 +302,7 @@ EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
 
-_configure_irqbalance() {
-    _log "configurando irqbalance..."
-    mkdir -p /etc/default
-    _backup_file_once "/etc/default/irqbalance"
 
-    cat << 'EOF' > /etc/default/irqbalance
-# Impede o uso do core 0 para interrupções (ideal para APU do Steam Deck)
-IRQBALANCE_BANNED_CPUS=0x01
-
-EOF
-
-    systemctl unmask irqbalance.service 2>/dev/null || true
-    systemctl enable irqbalance.service 2>/dev/null || true
-    systemctl restart irqbalance.service 2>/dev/null || true
-
-    _log "irqbalance configurado com política otimizada para o Steam Deck."
-}
 
 # --- FUNÇÃO REVISADA: CONFIGURAÇÃO DO LAVD SCHEDULER ---
 _setup_lavd_scheduler() {
@@ -908,7 +892,7 @@ aplicar_zswap() {
     _configure_ulimits
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
-    _configure_irqbalance
+    
     
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
@@ -938,7 +922,7 @@ aplicar_zswap() {
     _backup_file_once "$grub_config"
     
     # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -955,7 +939,7 @@ aplicar_zswap() {
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
@@ -1021,7 +1005,7 @@ aplicar_zram() {
     _configure_ulimits
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
-    _configure_irqbalance
+    
     
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
