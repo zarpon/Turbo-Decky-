@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.6 Rev05- ENDLESS GAME"
+versao="1.7.6 Rev06- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -437,7 +437,7 @@ create_power_rules() {
             case "$type_val" in
             "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
                 # retorna valor de online (pode ser vazio se nao existir)
-                echo "${online_val:-unknown}"
+                echo "${online_val:-unktenown}"
                 return
                 ;;
             esac
@@ -450,101 +450,7 @@ create_power_rules() {
                     return
                 # senão, usa present (último recurso; risco em alguns firmwares, mas cobre Steam Deck odd cases)
                 elif [[ -f "$ps/present" ]]; then
-                    local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
-                    echo "$present_val"
-                    return
-                fi
-            fi
-        done
-        echo "unknown"
-    }
-
-    # fallback via upower, se disponível
-    get_ac_state_upower() {
-        if ! command -v upower &>/dev/null; then
-            echo "unknown"
-            return
-        fi
-        # tenta identificar o objeto line_power dinamicamente
-        local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
-        if [[ -z "$lp" ]]; then
-            echo "unknown"
-            return
-        fi
-        # Extrai o estado, normaliza para minúsculas e remove espaços (cobre yes/no, on/off, 1/0)
-        upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
-    }
-
-    # Combina Sysfs e UPower para detecção resiliente
-    is_on_ac() {
-        local sysfs_state; sysfs_state=$(get_ac_state_sysfs)
-
-        if [[ "$sysfs_state" == "1" ]]; then
-            return 0 # AC Detectado via SysFS (1)
-        fi
-
-        if [[ "$sysfs_state" == "0" ]]; then
-            return 1 # Bateria Detectada via SysFS (0)
-        fi
-
-        # Se sysfs falhar (retornar 'unknown' ou vazio), tentamos o UPower (Normalizado)
-        local up_state; up_state=$(get_ac_state_upower)
-
-        # Testa se a string normalizada corresponde a 'yes', 'on' ou '1'
-        if [[ "$up_state" =~ ^(yes|on|1)$ ]]; then
-            return 0 # AC Detectado via UPower
-        fi
-
-        return 1 # Fallback (Bateria ou Falha)
-    }
-
-    # ------------------------------------------------------------------
-    # --- SCRIPT DE MONITORAMENTO (EMBUTIDO) ---
-    # ------------------------------------------------------------------
-    cat <<'EOF' > /usr/local/bin/turbodecky-power-monitor.sh
-#!/usr/bin/env bash
-
-# Funções de Detecção (Inclusas no script para execução standalone - Refatoradas)
-get_ac_state_sysfs() {
-    for ps in /sys/class/power_supply/*; do
-        [ -d "$ps" ] || continue
-        local type_file="$ps/type"
-        local online_file="$ps/online"
-
-        [[ -f "$type_file" ]] || continue
-
-        local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null)
-        local online_val=""
-
-        if [[ -f "$online_file" ]]; then
-            online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null)
-        fi
-
-        case "$type_val" in
-        "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
-            echo "${online_val:-unknown}"
-            return
-            ;;
-        esac
-
-        if [[ "$type_val" == "USB" ]]; then
-            if [[ -n "$online_val" ]]; then
-                echo "$online_val"
-                return
-            elif [[ -f "$ps/present" ]]; then
-                local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
-                echo "$present_val"
-                return
-            fi
-        fi
-    done
-    echo "unknown"
-}
-get_ac_state_upower() {
-    if ! command -v upower &>/dev/null; then
-        echo "unknown"
-        return
-    fi
+                    local present_val;     fi
     local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
     if [[ -z "$lp" ]]; then
         echo "unknown"
@@ -597,7 +503,7 @@ else
     # Wi-Fi: Com Power Save (Economia)
     if command -v iw &>/dev/null; then
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
-        [ -n "$WLAN" ] && iw dev "$WLAN" set power_save on 2>/dev/null || true
+        [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
     fi
 
     # THP Relaxado (Economia de Ciclos CPU)
