@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.6 Rev07- ENDLESS GAME"
+versao="1.7.6 Rev06- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -31,7 +31,7 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1500"     
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
-    "vm.compaction_proactiveness=0"     
+    "vm.compaction_proactiveness=10"     
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
     "vm.stat_interval=60"
@@ -302,7 +302,23 @@ EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
 
+_configure_irqbalance() {
+    _log "configurando irqbalance..."
+    mkdir -p /etc/default
+    _backup_file_once "/etc/default/irqbalance"
 
+    cat << 'EOF' > /etc/default/irqbalance
+# Impede o uso do core 0 para interrupções (ideal para APU do Steam Deck)
+IRQBALANCE_BANNED_CPUS=0x01
+
+EOF
+
+    systemctl unmask irqbalance.service 2>/dev/null || true
+    systemctl enable irqbalance.service 2>/dev/null || true
+    systemctl restart irqbalance.service 2>/dev/null || true
+
+    _log "irqbalance configurado com política otimizada para o Steam Deck."
+}
 
 # --- FUNÇÃO REVISADA: CONFIGURAÇÃO DO LAVD SCHEDULER ---
 _setup_lavd_scheduler() {
@@ -421,7 +437,7 @@ create_power_rules() {
             case "$type_val" in
             "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
                 # retorna valor de online (pode ser vazio se nao existir)
-                echo "${online_val:-unktenown}"
+                echo "${online_val:-unknown}"
                 return
                 ;;
             esac
@@ -434,7 +450,101 @@ create_power_rules() {
                     return
                 # senão, usa present (último recurso; risco em alguns firmwares, mas cobre Steam Deck odd cases)
                 elif [[ -f "$ps/present" ]]; then
-                    local present_val;     fi
+                    local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
+                    echo "$present_val"
+                    return
+                fi
+            fi
+        done
+        echo "unknown"
+    }
+
+    # fallback via upower, se disponível
+    get_ac_state_upower() {
+        if ! command -v upower &>/dev/null; then
+            echo "unknown"
+            return
+        fi
+        # tenta identificar o objeto line_power dinamicamente
+        local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
+        if [[ -z "$lp" ]]; then
+            echo "unknown"
+            return
+        fi
+        # Extrai o estado, normaliza para minúsculas e remove espaços (cobre yes/no, on/off, 1/0)
+        upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
+    }
+
+    # Combina Sysfs e UPower para detecção resiliente
+    is_on_ac() {
+        local sysfs_state; sysfs_state=$(get_ac_state_sysfs)
+
+        if [[ "$sysfs_state" == "1" ]]; then
+            return 0 # AC Detectado via SysFS (1)
+        fi
+
+        if [[ "$sysfs_state" == "0" ]]; then
+            return 1 # Bateria Detectada via SysFS (0)
+        fi
+
+        # Se sysfs falhar (retornar 'unknown' ou vazio), tentamos o UPower (Normalizado)
+        local up_state; up_state=$(get_ac_state_upower)
+
+        # Testa se a string normalizada corresponde a 'yes', 'on' ou '1'
+        if [[ "$up_state" =~ ^(yes|on|1)$ ]]; then
+            return 0 # AC Detectado via UPower
+        fi
+
+        return 1 # Fallback (Bateria ou Falha)
+    }
+
+    # ------------------------------------------------------------------
+    # --- SCRIPT DE MONITORAMENTO (EMBUTIDO) ---
+    # ------------------------------------------------------------------
+    cat <<'EOF' > /usr/local/bin/turbodecky-power-monitor.sh
+#!/usr/bin/env bash
+
+# Funções de Detecção (Inclusas no script para execução standalone - Refatoradas)
+get_ac_state_sysfs() {
+    for ps in /sys/class/power_supply/*; do
+        [ -d "$ps" ] || continue
+        local type_file="$ps/type"
+        local online_file="$ps/online"
+
+        [[ -f "$type_file" ]] || continue
+
+        local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null)
+        local online_val=""
+
+        if [[ -f "$online_file" ]]; then
+            online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null)
+        fi
+
+        case "$type_val" in
+        "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
+            echo "${online_val:-unknown}"
+            return
+            ;;
+        esac
+
+        if [[ "$type_val" == "USB" ]]; then
+            if [[ -n "$online_val" ]]; then
+                echo "$online_val"
+                return
+            elif [[ -f "$ps/present" ]]; then
+                local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
+                echo "$present_val"
+                return
+            fi
+        fi
+    done
+    echo "unknown"
+}
+get_ac_state_upower() {
+    if ! command -v upower &>/dev/null; then
+        echo "unknown"
+        return
+    fi
     local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
     if [[ -z "$lp" ]]; then
         echo "unknown"
@@ -892,7 +1002,7 @@ aplicar_zswap() {
     _configure_ulimits
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
-    
+    _configure_irqbalance
     
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
@@ -1005,7 +1115,7 @@ aplicar_zram() {
     _configure_ulimits
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
-    
+    _configure_irqbalance
     
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
