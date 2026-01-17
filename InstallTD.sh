@@ -1303,10 +1303,10 @@ main() {
             FALSE "4" "Reverter Otimizações SD Card" \
             FALSE "5" "Restaurar Kernel Padrão (Remover linux-charcoal)" \
             FALSE "6" "Sair" \
-            --height 350 --width 500 --hide-column=2 --print-column=2 || echo "5")
+            --height 350 --width 500 --hide-column=2 --print-column=2 || echo "6")
 
         # Tratamento se o usuário cancelar (z_escolha vazio)
-        if [ -z "$z_escolha" ]; then z_escolha="5"; fi
+        if [ -z "$z_escolha" ]; then z_escolha="6"; fi
         escolha="$z_escolha"
     else
         # Opção Legado Texto
