@@ -3,14 +3,14 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.7. Rev01- ENDLESS GAME"
+versao="1.7.7. Rev02- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-readonly zswap_swapfile_size_gb="8"
+readonly zswap_swapfile_size_gb="12"
 readonly zram_swapfile_size_gb="2"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
