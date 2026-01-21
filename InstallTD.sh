@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.7. Rev06- ENDLESS GAME"
+versao="1.7.7. Rev07- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,7 +27,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     
-    "vm.vfs_cache_pressure=66"           Mantém cache de diretórios na RAM por mais tempo
+               
     "vm.dirty_background_ratio=1" 
     "vm.dirty_ratio=4"            
     "vm.dirty_expire_centisecs=4500"       
@@ -1059,6 +1059,7 @@ echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 sysctl -w vm.swappiness=100 || true
+sysctl -w vm.vfs_cache_pressure=120 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
@@ -1191,7 +1192,8 @@ if [ -d "/sys/block/zram1" ]; then
 fi
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=150 || true
+sysctl -w vm.swappiness=180 || true
+sysctl -w vm.vfs_cache_pressure=150  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
