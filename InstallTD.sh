@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.7. Rev08- ENDLESS GAME"
+versao="1.7.8 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,9 +28,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     
                
-    "vm.dirty_background_ratio=1" 
-    "vm.dirty_ratio=4"            
-    "vm.dirty_expire_centisecs=4500"       
+    "vm.dirty_background_ratio=2" 
+    "vm.dirty_ratio=8"            
+    "vm.dirty_expire_centisecs=3000"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
@@ -1060,7 +1060,7 @@ echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 sysctl -w vm.swappiness=100 || true
-sysctl -w vm.vfs_cache_pressure=120 || true
+sysctl -w vm.vfs_cache_pressure=100 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
@@ -1176,7 +1176,7 @@ if [ -d "/sys/block/zram0" ]; then
     echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
     echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-    echo 2G > /sys/block/zram0/disksize 2>/dev/null || true
+    echo 3G > /sys/block/zram0/disksize 2>/dev/null || true
     mkswap /dev/zram0 2>/dev/null || true
     swapon /dev/zram0 -p 3000 2>/dev/null || true
 fi
@@ -1187,14 +1187,14 @@ if [ -d "/sys/block/zram1" ]; then
     echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
     echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
     echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
-    echo 4G > /sys/block/zram1/disksize 2>/dev/null || true
+    echo 5G > /sys/block/zram1/disksize 2>/dev/null || true
     mkswap /dev/zram1 2>/dev/null || true
     swapon /dev/zram1 -p 10 2>/dev/null || true
 fi
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=180 || true
-sysctl -w vm.vfs_cache_pressure=150  || true
+sysctl -w vm.swappiness=133 || true
+sysctl -w vm.vfs_cache_pressure=120  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
