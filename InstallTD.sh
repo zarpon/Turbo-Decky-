@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.7. Rev07- ENDLESS GAME"
+versao="1.7.7. Rev08- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -593,7 +593,7 @@ else
     # CPU: Balanceada (Padrão SteamOS)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
         for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-            echo "performance" > "$epp" 2>/dev/null || true
+            echo "balance_performance" > "$epp" 2>/dev/null || true
         done
     fi
 
@@ -602,11 +602,12 @@ else
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
         [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
     fi
-
-    # THP Relaxado (Economia de Ciclos CPU)
-    echo 5000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
-    echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
+    
+# THP TUNING: "Micro-Doses" (ANTI-STUTTER)
+    echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+    echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+
 fi
 EOF
     chmod +x /usr/local/bin/turbodecky-power-monitor.sh
