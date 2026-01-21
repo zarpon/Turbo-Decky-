@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.7. Rev03- ENDLESS GAME"
+versao="1.7.7. Rev04- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -593,7 +593,7 @@ else
     # CPU: Balanceada (Padrão SteamOS)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
         for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-            echo "balance_performance" > "$epp" 2>/dev/null || true
+            echo "performance" > "$epp" 2>/dev/null || true
         done
     fi
 
