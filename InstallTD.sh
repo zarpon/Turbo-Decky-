@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.7. Rev05- ENDLESS GAME"
+versao="1.7.7. Rev06- ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,9 +27,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     
-    "vm.vfs_cache_pressure=100"           # Reduzido de 66: Mantém cache de diretórios na RAM por mais tempo
-    "vm.dirty_background_ratio=2" 
-    "vm.dirty_ratio=5"            
+    "vm.vfs_cache_pressure=66"           Mantém cache de diretórios na RAM por mais tempo
+    "vm.dirty_background_ratio=1" 
+    "vm.dirty_ratio=4"            
     "vm.dirty_expire_centisecs=4500"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.min_free_kbytes=131072"
