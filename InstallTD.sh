@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev02 - ENDLESS GAME"
+versao="1.7.8 rev01 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -643,163 +643,6 @@ UDEV
     _log "monitoramento de energia configurado (THP Latency Tuned - Híbrido/Systemd)."
 }
 
-# monitora modo de energia ac ou bateria
-turbodecky_install_gamescope_hook(){
-  set -euo pipefail
-
-  SUDO=""
-  if [ "$(id -u)" -ne 0 ]; then
-    if command -v sudo >/dev/null 2>&1; then
-      SUDO="sudo"
-    else
-      echo "ERRO: precisa ser root ou ter sudo disponível" >&2
-      return 1
-    fi
-  fi
-
-  SCRIPT_PATH="/usr/local/bin/turbodecky-gamescope-hook.sh"
-  UNIT_PATH="/etc/systemd/system/turbodecky-gamescope-hook.service"
-  TIMESTAMP="$(date +%Y%m%d%H%M%S)"
-
-  # Backup se já existir (não remove nem altera o original)
-  if $SUDO test -f "$SCRIPT_PATH"; then
-    $SUDO cp -a "$SCRIPT_PATH" "${SCRIPT_PATH}.bak.$TIMESTAMP"
-  fi
-  if $SUDO test -f "$UNIT_PATH"; then
-    $SUDO cp -a "$UNIT_PATH" "${UNIT_PATH}.bak.$TIMESTAMP"
-  fi
-
-  # Instala o script que aplica/reverte EPP durante execução do gamescope
-  $SUDO tee "$SCRIPT_PATH" > /dev/null <<'EOF'
-#!/usr/bin/env bash
-# turbodecky-gamescope-hook.sh
-# Aplica "performance" enquanto gamescope está rodando (se no AC),
-# e reverte para "balance_performance" ao terminar.
-set -eo pipefail
-
-EPP_GLOB='/sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference'
-PGREP_PATTERN='gamescope'
-SLEEP_WHILE=2
-SLEEP_POLL=3
-
-_get_ac_state_sysfs(){
-  for ps in /sys/class/power_supply/*; do
-    [ -d "$ps" ] || continue
-    [[ -f "$ps/type" ]] || continue
-    type_val=$(tr -d ' \t\n' < "$ps/type" 2>/dev/null || echo "")
-    online_val=""
-    [[ -f "$ps/online" ]] && online_val=$(tr -d ' \t\n' < "$ps/online" 2>/dev/null || echo "")
-    case "$type_val" in
-      Mains|Line|AC|USB_C|ACAD|USB-PD)
-        printf '%s' "${online_val:-unknown}"
-        return
-        ;;
-    esac
-    if [[ "$type_val" == "USB" ]]; then
-      if [[ -n "$online_val" ]]; then
-        printf '%s' "$online_val"
-        return
-      elif [[ -f "$ps/present" ]]; then
-        tr -d ' \t\n' < "$ps/present" 2>/dev/null || printf ''
-        return
-      fi
-    fi
-  done
-  printf 'unknown'
-}
-
-_is_on_ac(){
-  s=$(_get_ac_state_sysfs)
-  [[ "$s" == "1" ]] && return 0
-  [[ "$s" == "0" ]] && return 1
-  return 1
-}
-
-_apply_epp(){
-  local val="$1"
-  for f in $EPP_GLOB; do
-    [ -f "$f" ] || continue
-    cur=$(cat "$f" 2>/dev/null || echo "")
-    if [[ "$cur" != "$val" ]]; then
-      echo "$val" > "$f" 2>/dev/null || true
-      logger "TurboDecky-hook: wrote $val -> $f"
-    fi
-  done
-}
-
-# Loop principal
-last_state=""
-while true; do
-  if pgrep -f -x "$PGREP_PATTERN" >/dev/null 2>&1 || pgrep -f "$PGREP_PATTERN" >/dev/null 2>&1; then
-    if _is_on_ac; then
-      _apply_epp "performance"
-      last_state="performance"
-      logger "TurboDecky-hook: gamescope detected + AC -> performance"
-    else
-      _apply_epp "balance_performance"
-      last_state="balance_performance"
-      logger "TurboDecky-hook: gamescope detected + BAT -> balance_performance"
-    fi
-
-    while pgrep -f -x "$PGREP_PATTERN" >/dev/null 2>&1 || pgrep -f "$PGREP_PATTERN" >/dev/null 2>&1; do
-      if _is_on_ac && [[ "$last_state" != "performance" ]]; then
-        _apply_epp "performance"
-        last_state="performance"
-        logger "TurboDecky-hook: AC connected during game -> performance"
-      elif ! _is_on_ac && [[ "$last_state" != "balance_performance" ]]; then
-        _apply_epp "balance_performance"
-        last_state="balance_performance"
-        logger "TurboDecky-hook: unplugged during game -> balance_performance"
-      fi
-      sleep "$SLEEP_POLL"
-    done
-
-    # gamescope saiu -> reverte para baseline (seguindo política Valve)
-    _apply_epp "balance_performance"
-    last_state="balance_performance"
-    logger "TurboDecky-hook: gamescope exited -> balance_performance"
-  fi
-  sleep "$SLEEP_WHILE"
-done
-EOF
-
-  # Permissões
-  $SUDO chmod 0755 "$SCRIPT_PATH"
-  $SUDO chown root:root "$SCRIPT_PATH"
-
-  # Instala o unit systemd
-  $SUDO tee "$UNIT_PATH" > /dev/null <<'UNIT'
-[Unit]
-Description=TurboDecky Gamescope Hook (aplica EPP durante jogos)
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/turbodecky-gamescope-hook.sh
-Restart=always
-RestartSec=5
-StartLimitBurst=5
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-  $SUDO chmod 0644 "$UNIT_PATH"
-  $SUDO chown root:root "$UNIT_PATH"
-
-  # Recarrega systemd e habilita/ativa o serviço
-  $SUDO systemctl daemon-reload
-  $SUDO systemctl enable --now turbodecky-gamescope-hook.service
-
-  # Mostrar status resumido (não falha se status retornar erro)
-  $SUDO systemctl status turbodecky-gamescope-hook.service --no-pager || true
-
-  echo "TurboDecky gamescope hook instalado. Script: $SCRIPT_PATH  Unit: $UNIT_PATH"
-  return 0
-}
-
-
 create_common_scripts_and_services() {
     _log "criando scripts e services comuns"
     mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
@@ -1157,7 +1000,7 @@ aplicar_zswap() {
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
     _setup_dxvk_folder
-    turbodecky_install_gamescope_hook
+
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
@@ -1271,7 +1114,7 @@ aplicar_zram() {
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
     _setup_dxvk_folder
-    turbodecky_install_gamescope_hook
+
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
