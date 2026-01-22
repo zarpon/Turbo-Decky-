@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev05 - ENDLESS GAME"
+versao="1.7.8 rev06 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1219,7 +1219,7 @@ if [ -d "/sys/block/zram0" ]; then
     echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
     echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-    echo 3G > /sys/block/zram0/disksize 2>/dev/null || true
+    echo 6G > /sys/block/zram0/disksize 2>/dev/null || true
     mkswap /dev/zram0 2>/dev/null || true
     swapon /dev/zram0 -p 3000 2>/dev/null || true
 fi
@@ -1230,7 +1230,7 @@ if [ -d "/sys/block/zram1" ]; then
     echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
     echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
     echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
-    echo 5G > /sys/block/zram1/disksize 2>/dev/null || true
+    echo 10G > /sys/block/zram1/disksize 2>/dev/null || true
     mkswap /dev/zram1 2>/dev/null || true
     swapon /dev/zram1 -p 10 2>/dev/null || true
 fi
