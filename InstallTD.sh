@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev04 - ENDLESS GAME"
+versao="1.7.8 rev05 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -647,7 +647,7 @@ fi
 
 # 4. PCIe / NVMe: economia de energia padrão
 if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
-    echo powersave > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
+    echo default > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
 fi
 
 
