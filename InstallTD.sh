@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev03 - ENDLESS GAME"
+versao="1.7.8 rev04 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -586,7 +586,7 @@ if is_on_ac; then
     echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
     echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-    echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+    
  
 
 # 1. CPU: garante boost agressivo (mais importante que trocar governor)
@@ -607,9 +607,6 @@ if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
     echo performance > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
 fi
 
-# 5. Dirty writeback levemente mais agressivo (streaming de assets)
-sysctl -w vm.dirty_writeback_centisecs=500 2>/dev/null || true
-sysctl -w vm.dirty_expire_centisecs=1000 2>/dev/null || true
 
 # 6. Prioridade do compositor (gamescope) – frametime > FPS médio
 if pgrep -x gamescope >/dev/null 2>&1; then
@@ -636,8 +633,8 @@ else
 # THP TUNING: "Micro-Doses maiores" (ANTI-STUTTER)
     echo 2000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
     echo 1024 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-    echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-    echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+    echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+    
 
    
 # 1. CPU: comportamento dinâmico e eficiente
@@ -658,9 +655,6 @@ if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
     echo powersave > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
 fi
 
-# 5. Dirty writeback padrão (menos wakeups)
-sysctl -w vm.dirty_writeback_centisecs=1500 2>/dev/null || true
-sysctl -w vm.dirty_expire_centisecs=3000 2>/dev/null || true
 
 fi
 EOF
