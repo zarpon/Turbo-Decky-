@@ -54,7 +54,6 @@ readonly base_sysctl_params=(
 
    # --- Scheduler (scx_lavd friendly) ---
     "kernel.sched_autogroup_enabled=0"
-    "kernel.sched_migration_cost_ns=250000"
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
@@ -594,8 +593,6 @@ if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
     echo 1 > /sys/devices/system/cpu/amd_pstate/boost 2>/dev/null || true
 fi
 
-# 2. CPU: reduzir jitter de migração de threads (Zen 2)
-sysctl -w kernel.sched_migration_cost_ns=500000 2>/dev/null || true
 
 # 3. GPU RDNA2: evitar quedas agressivas de clock (menus / loads)
 if [ -f /sys/class/drm/card0/device/power_dpm_force_performance_level ]; then
@@ -642,8 +639,6 @@ if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
     echo 0 > /sys/devices/system/cpu/amd_pstate/boost 2>/dev/null || true
 fi
 
-# 2. CPU: restaurar custo padrão de migração
-sysctl -w kernel.sched_migration_cost_ns=2500000 2>/dev/null || true
 
 # 3. GPU RDNA2: permitir escalonamento automático
 if [ -f /sys/class/drm/card0/device/power_dpm_force_performance_level ]; then
