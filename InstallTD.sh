@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev02 - ENDLESS GAME"
+versao="1.7.8 rev03 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -587,6 +587,35 @@ if is_on_ac; then
     echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
     echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+ 
+
+# 1. CPU: garante boost agressivo (mais importante que trocar governor)
+if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
+    echo 1 > /sys/devices/system/cpu/amd_pstate/boost 2>/dev/null || true
+fi
+
+# 2. CPU: reduzir jitter de migração de threads (Zen 2)
+sysctl -w kernel.sched_migration_cost_ns=500000 2>/dev/null || true
+
+# 3. GPU RDNA2: evitar quedas agressivas de clock (menus / loads)
+if [ -f /sys/class/drm/card0/device/power_dpm_force_performance_level ]; then
+    echo high > /sys/class/drm/card0/device/power_dpm_force_performance_level 2>/dev/null || true
+fi
+
+# 4. PCIe / NVMe: evitar economia agressiva de energia (reduz stutter de streaming)
+if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
+    echo performance > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
+fi
+
+# 5. Dirty writeback levemente mais agressivo (streaming de assets)
+sysctl -w vm.dirty_writeback_centisecs=500 2>/dev/null || true
+sysctl -w vm.dirty_expire_centisecs=1000 2>/dev/null || true
+
+# 6. Prioridade do compositor (gamescope) – frametime > FPS médio
+if pgrep -x gamescope >/dev/null 2>&1; then
+    chrt -f -p 20 "$(pgrep -n gamescope)" 2>/dev/null || true
+fi
+
 else
     # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
     logger "TurboDecky: Bateria - Revertendo (Híbrido)"
@@ -609,6 +638,30 @@ else
     echo 1024 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
     echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+
+   
+# 1. CPU: comportamento dinâmico e eficiente
+if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
+    echo 0 > /sys/devices/system/cpu/amd_pstate/boost 2>/dev/null || true
+fi
+
+# 2. CPU: restaurar custo padrão de migração
+sysctl -w kernel.sched_migration_cost_ns=2500000 2>/dev/null || true
+
+# 3. GPU RDNA2: permitir escalonamento automático
+if [ -f /sys/class/drm/card0/device/power_dpm_force_performance_level ]; then
+    echo auto > /sys/class/drm/card0/device/power_dpm_force_performance_level 2>/dev/null || true
+fi
+
+# 4. PCIe / NVMe: economia de energia padrão
+if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
+    echo powersave > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
+fi
+
+# 5. Dirty writeback padrão (menos wakeups)
+sysctl -w vm.dirty_writeback_centisecs=1500 2>/dev/null || true
+sysctl -w vm.dirty_expire_centisecs=3000 2>/dev/null || true
+
 fi
 EOF
     chmod +x /usr/local/bin/turbodecky-power-monitor.sh
