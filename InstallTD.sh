@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 - ENDLESS GAME"
+versao="1.7.8 rev01 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -570,7 +570,8 @@ if is_on_ac; then
 
     # CPU: Performance (Reação rápida, não clock travado)
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
-        for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
+      sleep 2
+      for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
             echo "performance" > "$epp" 2>/dev/null || true
         done
     fi
