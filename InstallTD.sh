@@ -586,7 +586,7 @@ if is_on_ac; then
     echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
     echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-
+    echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 else
     # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
     logger "TurboDecky: Bateria - Revertendo (Híbrido)"
@@ -604,11 +604,11 @@ else
         [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
     fi
     
-# THP TUNING: "Micro-Doses" (ANTI-STUTTER)
+# THP TUNING: "Micro-Doses maiores" (ANTI-STUTTER)
     echo 2000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
     echo 1024 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-
+    echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 fi
 EOF
     chmod +x /usr/local/bin/turbodecky-power-monitor.sh
