@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev08 - ENDLESS GAME"
+versao="1.7.8 rev09 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -594,11 +594,6 @@ if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
 fi
 
 
-# 3. GPU RDNA2: evitar quedas agressivas de clock (menus / loads)
-if [ -f /sys/class/drm/card0/device/power_dpm_force_performance_level ]; then
-    echo high > /sys/class/drm/card0/device/power_dpm_force_performance_level 2>/dev/null || true
-fi
-
 # 4. PCIe / NVMe: evitar economia agressiva de energia (reduz stutter de streaming)
 if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
     echo performance > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
@@ -640,10 +635,6 @@ if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
 fi
 
 
-# 3. GPU RDNA2: permitir escalonamento automático
-if [ -f /sys/class/drm/card0/device/power_dpm_force_performance_level ]; then
-    echo auto > /sys/class/drm/card0/device/power_dpm_force_performance_level 2>/dev/null || true
-fi
 
 # 4. PCIe / NVMe: economia de energia padrão
 if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
