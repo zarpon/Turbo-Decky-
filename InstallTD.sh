@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev011 - ENDLESS GAME"
+versao="1.7.9 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -12,7 +12,7 @@ readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
 # Calcula 75% da RAM total de forma dinâmica
 readonly total_mem_gb=$(awk '/MemTotal/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
-readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 50) / 100 ))
+readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 40) / 100 ))
 
 readonly zram_swapfile_size_gb="2"
 readonly backup_suffix="bak-turbodecky"
@@ -28,9 +28,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     
                
-    "vm.dirty_background_ratio=2" 
-    "vm.dirty_ratio=20"            
-    "vm.dirty_expire_centisecs=3000"       
+    "vm.dirty_background_ratio=3" 
+    "vm.dirty_ratio=40"            
+    "vm.dirty_expire_centisecs=4500"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
@@ -390,7 +390,7 @@ w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
 EOF
     # THP Shrinker
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
-w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
+w /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 EOF
 
     # NTSYNC - Carregamento Persistente do Módulo
@@ -575,17 +575,12 @@ if is_on_ac; then
         done
     fi
 
-    # Wi-Fi: Sem Power Save (Ping estável)
+    
     if command -v iw &>/dev/null; then
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
         [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
     fi
 
-    # THP TUNING: "Micro-Doses" (ANTI-STUTTER)
-    echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
-    echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-    echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-    
 
 else
     # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
@@ -598,17 +593,12 @@ else
         done
     fi
 
-    # Wi-Fi: Com Power Save (Economia)
+    
     if command -v iw &>/dev/null; then
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
         [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
     fi
     
-# THP TUNING: "Micro-Doses maiores" (ANTI-STUTTER)
-    echo 2000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
-    echo 1024 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-    echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-       
 
 fi
 EOF
@@ -701,6 +691,7 @@ for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/
                 echo 100 > "$bfq_path/timeout_sync" 2>/dev/null || true
                 echo 0 > "$bfq_path/slice_idle" 2>/dev/null || true
                 echo 0 > "$bfq_path/slice_idle_us" 2>/dev/null || true
+                echo 0 > "$queue_path/iosched/strict_guarantees" 2>/dev/null || true
             fi
         done
         # --- FIM AJUSTE BFQ ---
@@ -716,15 +707,15 @@ IOB
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > /usr/local/bin/thp-config.sh
 #!/usr/bin/env bash
-echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 # Segurança para evitar loop em falha de alocação (Fix Geral)
-echo 60000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
+echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
 # Valores base (Bateria) - Serão sobrescritos dinamicamente pelo monitor de energia
-echo 1024 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-echo 2000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
+echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 THP
     chmod +x /usr/local/bin/thp-config.sh
@@ -1195,7 +1186,7 @@ if [ -d "/sys/block/zram1" ]; then
 fi
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=180 || true
+sysctl -w vm.swappiness=133 || true
 sysctl -w vm.vfs_cache_pressure=150  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
