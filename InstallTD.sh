@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev09 - ENDLESS GAME"
+versao="1.7.8 rev010 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -586,24 +586,6 @@ if is_on_ac; then
     echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
     
- 
-
-# 1. CPU: garante boost agressivo (mais importante que trocar governor)
-if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
-    echo 1 > /sys/devices/system/cpu/amd_pstate/boost 2>/dev/null || true
-fi
-
-
-# 4. PCIe / NVMe: evitar economia agressiva de energia (reduz stutter de streaming)
-if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
-    echo performance > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
-fi
-
-
-# 6. Prioridade do compositor (gamescope) – frametime > FPS médio
-if pgrep -x gamescope >/dev/null 2>&1; then
-    chrt -f -p 20 "$(pgrep -n gamescope)" 2>/dev/null || true
-fi
 
 else
     # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
@@ -626,21 +608,7 @@ else
     echo 2000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
     echo 1024 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
     echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-    
-
-   
-# 1. CPU: comportamento dinâmico e eficiente
-if [ -f /sys/devices/system/cpu/amd_pstate/boost ]; then
-    echo 0 > /sys/devices/system/cpu/amd_pstate/boost 2>/dev/null || true
-fi
-
-
-
-# 4. PCIe / NVMe: economia de energia padrão
-if [ -f /sys/module/pcie_aspm/parameters/policy ]; then
-    echo default > /sys/module/pcie_aspm/parameters/policy 2>/dev/null || true
-fi
-
+       
 
 fi
 EOF
