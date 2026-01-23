@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.8 rev010 - ENDLESS GAME"
+versao="1.7.8 rev011 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -29,7 +29,7 @@ readonly base_sysctl_params=(
     
                
     "vm.dirty_background_ratio=2" 
-    "vm.dirty_ratio=6"            
+    "vm.dirty_ratio=20"            
     "vm.dirty_expire_centisecs=3000"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.min_free_kbytes=131072"
