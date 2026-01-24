@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.9 Rev02 - ENDLESS GAME"
+versao="1.7.9 Rev03 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,7 +27,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     
-    "vm.page_lock_unfairness=8" 
+    "vm.page_lock_unfairness=5" 
     "kernel.sched_migration_cost_ns=5000000"         
     "vm.dirty_background_ratio=3" 
     "vm.dirty_ratio=40"            
@@ -107,8 +107,9 @@ readonly game_env_vars=(
 "WINE_DISABLE_WRITE_WATCH=1"
 "WINEDEBUG=-all" 
 "PROTON_USE_NTSYNC=1"
-"VKD3D_CONFIG=force_host_cached" 
+"VKD3D_CONFIG=no_upload_hvv,force_host_cached"
 "WINEESYNC=0"
+
 )
 
 
