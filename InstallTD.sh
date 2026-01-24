@@ -107,7 +107,7 @@ readonly game_env_vars=(
 "WINE_DISABLE_WRITE_WATCH=1"
 "WINEDEBUG=-all" 
 "PROTON_USE_NTSYNC=1"
-
+"VKD3D_CONFIG=force_host_cached" 
 "WINEESYNC=0"
 )
 
