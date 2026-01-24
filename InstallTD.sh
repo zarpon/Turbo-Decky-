@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.9 - ENDLESS GAME"
+versao="1.7.9 Rev01 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,7 +27,8 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     
-               
+    "vm.page_lock_unfairness=8" 
+    "kernel.sched_migration_cost_ns=5000000"         
     "vm.dirty_background_ratio=3" 
     "vm.dirty_ratio=40"            
     "vm.dirty_expire_centisecs=4500"       
@@ -93,14 +94,14 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-"RADV_PERFTEST=gpl,aco,sam,shader_ballot,nggc"
+"RADV_PERFTEST=sam,shader_ballot,nggc"
 "RADV_DEBUG=novrsflatshading"
 "RADEONSI_SHADER_PRECOMPILE=true"
 "MESA_DISK_CACHE_SINGLE_FILE=1"
 "MESA_DISK_CACHE_COMPRESSION=zstd"
 "MESA_SHADER_CACHE_MAX_SIZE=6G"
 "VKD3D_SHADER_CACHE=1"
-
+"WINE_HEAP_DELAY_FREE=1" 
 "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
 "WINE_DISABLE_PROTOCOL_FORK=1"
 "WINE_DISABLE_WRITE_WATCH=1"
