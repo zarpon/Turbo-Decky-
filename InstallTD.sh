@@ -27,12 +27,12 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     
-    "vm.page_lock_unfairness=5" 
+    "vm.page_lock_unfairness=8" 
     "kernel.sched_migration_cost_ns=5000000"         
     "vm.dirty_background_ratio=3" 
-    "vm.dirty_ratio=20"            
-    "vm.dirty_expire_centisecs=4000"       
-    "vm.dirty_writeback_centisecs=1000"     
+    "vm.dirty_ratio=30"            
+    "vm.dirty_expire_centisecs=4500"       
+    "vm.dirty_writeback_centisecs=1500"     
     "vm.min_free_kbytes=131072"
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=10"     
