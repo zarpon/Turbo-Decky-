@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.9 Rev03 - ENDLESS GAME"
+versao="1.7.9 Rev04 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -37,7 +37,7 @@ readonly base_sysctl_params=(
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=10"     
     "kernel.numa_balancing=0"
-    "vm.watermark_scale_factor=150"
+    "vm.watermark_scale_factor=125"
     "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=1"
     "vm.watermark_boost_factor=0"
@@ -308,20 +308,13 @@ EOF
 
 _configure_irqbalance() {
     _log "configurando irqbalance..."
-    mkdir -p /etc/default
-    _backup_file_once "/etc/default/irqbalance"
 
-    cat << 'EOF' > /etc/default/irqbalance
-# Impede o uso do core 0 para interrupções (ideal para APU do Steam Deck)
-IRQBALANCE_BANNED_CPUS=0x01
+    systemctl stop irqbalance.service 2>/dev/null || true
+    systemctl mask irqbalance.service 2>/dev/null || true
+    
+    
 
-EOF
-
-    systemctl unmask irqbalance.service 2>/dev/null || true
-    systemctl enable irqbalance.service 2>/dev/null || true
-    systemctl restart irqbalance.service 2>/dev/null || true
-
-    _log "irqbalance configurado com política otimizada para o Steam Deck."
+    _log "irqbalance mascarado para não conflitar com scx_lavd"
 }
 
 # --- FUNÇÃO REVISADA: CONFIGURAÇÃO DO LAVD SCHEDULER ---
