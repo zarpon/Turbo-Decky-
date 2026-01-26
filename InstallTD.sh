@@ -3,14 +3,14 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.9 Rev06 - ENDLESS GAME"
+versao="1.7.9 Rev07 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Calcula 75% da RAM total de forma dinâmica
+# Calcula 40 da RAM total de forma dinâmica
 readonly total_mem_gb=$(awk '/MemTotal/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
 readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 40) / 100 ))
 
