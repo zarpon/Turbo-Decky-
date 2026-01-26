@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 - ENDLESS GAME"
+versao="1.8"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
