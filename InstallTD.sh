@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.7.9 Rev09 - ENDLESS GAME"
+versao="1.8 - ENDLESS GAME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -101,11 +101,9 @@ readonly game_env_vars=(
 "MESA_DISK_CACHE_COMPRESSION=zstd"
 "MESA_SHADER_CACHE_MAX_SIZE=6G"
 "VKD3D_SHADER_CACHE=1"
-"WINE_HEAP_DELAY_FREE=1" 
 "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
 "WINE_DISABLE_PROTOCOL_FORK=1"
-"WINE_DISABLE_WRITE_WATCH=1"
-"WINEDEBUG=-all" 
+"WINE_DISABLE_WRITE_WATCH=1" 
 "PROTON_USE_NTSYNC=1"
 "VKD3D_CONFIG=no_upload_hvv,force_host_cached"
 
@@ -1047,8 +1045,8 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-sysctl -w vm.swappiness=20 || true
-sysctl -w vm.vfs_cache_pressure=66 || true
+sysctl -w vm.swappiness=100 || true
+sysctl -w vm.vfs_cache_pressure=150 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
