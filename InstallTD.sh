@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev02"
+versao="1.8 Rev03"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1021,7 +1021,7 @@ aplicar_zswap() {
     _backup_file_once "$grub_config"
     
     # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1038,14 +1038,14 @@ aplicar_zswap() {
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 sysctl -w vm.swappiness=80 || true
-sysctl -w vm.vfs_cache_pressure=50 || true
+sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
@@ -1152,7 +1152,7 @@ while lsmod | grep -q "zram" && [ $count -lt $MAX_RETRY ]; do
     sleep 1
     ((count++))
 done
-modprobe zram num_devices=2 2>/dev/null || true
+modprobe zram num_devices=1 2>/dev/null || true
 if command -v udevadm &>/dev/null; then udevadm settle; else sleep 3; fi
 
 if [ -d "/sys/block/zram0" ]; then
@@ -1161,25 +1161,15 @@ if [ -d "/sys/block/zram0" ]; then
     echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
     echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-    echo 6G > /sys/block/zram0/disksize 2>/dev/null || true
+    echo 16G > /sys/block/zram0/disksize 2>/dev/null || true
     mkswap /dev/zram0 2>/dev/null || true
     swapon /dev/zram0 -p 3000 2>/dev/null || true
 fi
 
-if [ -d "/sys/block/zram1" ]; then
-    echo 1 > /sys/block/zram1/reset 2>/dev/null || true
-    if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
-    echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
-    echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
-    echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
-    echo 10G > /sys/block/zram1/disksize 2>/dev/null || true
-    mkswap /dev/zram1 2>/dev/null || true
-    swapon /dev/zram1 -p 10 2>/dev/null || true
-fi
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=150  || true
+sysctl -w vm.vfs_cache_pressure=66  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
@@ -1200,7 +1190,7 @@ UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zram-config.service || true
     if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
-    _ui_info "sucesso" "ZRAM Dual Layer aplicado."
+    _ui_info "sucesso" "otimizações aplicadas."
 
     echo -e "\n------------------------------------------------------------"
     echo "Deseja otimizar o Shader Cache para jogos instalados no MicroSD?"
