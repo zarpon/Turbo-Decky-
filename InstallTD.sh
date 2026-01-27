@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev02"
+versao="1.8 Rev03"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1021,7 +1021,7 @@ aplicar_zswap() {
     _backup_file_once "$grub_config"
     
     # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1038,8 +1038,8 @@ aplicar_zswap() {
     cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
@@ -1110,10 +1110,10 @@ aplicar_zram() {
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
 
-    # --- CORREÇÃO APLICADA: Mascara o ZRAM padrão do sistema para evitar conflitos ---
+    # --- CORREÇÃO APLICADA: para o ZRAM padrão do sistema para evitar conflitos ---
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
-    systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
-    _log "Serviço systemd-zram-setup@zram0.service mascarado."
+    systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
+    _log "Serviço systemd-zram-setup@zram0.service desmascarado."
 
     # --- TWEAK FSTAB (somente se /home for ext4) ---
     _apply_fstab_tweak_if_ext4
@@ -1138,69 +1138,48 @@ aplicar_zram() {
 
     create_persistent_configs
 
-    cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
-#!/usr/bin/env bash
-CPU_CORES=$(nproc)
-if [[ -z "$CPU_CORES" ]]; then CPU_CORES=4; fi
-MAX_RETRY=10
-count=0
-while lsmod | grep -q "zram" && [ $count -lt $MAX_RETRY ]; do
-    swapoff /dev/zram* 2>/dev/null || true
-    echo 1 > /sys/block/zram0/reset 2>/dev/null || true
-    echo 1 > /sys/block/zram1/reset 2>/dev/null || true
-    modprobe -r zram 2>/dev/null || true
-    sleep 1
-    ((count++))
-done
-modprobe zram num_devices=2 2>/dev/null || true
-if command -v udevadm &>/dev/null; then udevadm settle; else sleep 3; fi
+   local zram_conf="/usr/lib/systemd/zram-generator.conf"
+    
+    _log "Configurando zram-generator em $zram_conf..."
 
-if [ -d "/sys/block/zram0" ]; then
-    echo 1 > /sys/block/zram0/reset 2>/dev/null || true
-    if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
-    echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
-    echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
-    echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-    echo 6G > /sys/block/zram0/disksize 2>/dev/null || true
-    mkswap /dev/zram0 2>/dev/null || true
-    swapon /dev/zram0 -p 3000 2>/dev/null || true
-fi
+    # 1. Garante que o diretório existe
+    if [ ! -d "$(dirname "$zram_conf")" ]; then
+        mkdir -p "$(dirname "$zram_conf")"
+        _log "Diretório criado: $(dirname "$zram_conf")"
+    fi
 
-if [ -d "/sys/block/zram1" ]; then
-    echo 1 > /sys/block/zram1/reset 2>/dev/null || true
-    if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
-    echo zstd > /sys/block/zram1/comp_algorithm 2>/dev/null || true
-    echo "$CPU_CORES" > /sys/block/zram1/max_comp_streams 2>/dev/null || true
-    echo zsmalloc > /sys/block/zram1/zpool 2>/dev/null || true
-    echo 10G > /sys/block/zram1/disksize 2>/dev/null || true
-    mkswap /dev/zram1 2>/dev/null || true
-    swapon /dev/zram1 -p 10 2>/dev/null || true
-fi
+    # 2. Cria backup se o arquivo já existir (segurança padrão do script)
+    if [ -f "$zram_conf" ]; then
+        cp -a "$zram_conf" "${zram_conf}.bak-turbodecky" 2>/dev/null || true
+        _log "Backup do arquivo original criado em ${zram_conf}.bak-turbodecky"
+    fi
+
+    # 3. Reescreve o arquivo com os novos parâmetros
+    cat <<EOF > "$zram_conf"
+[zram0]
+zram-size = ram
+compression-algorithm = lz4
+swap-priority = 1000
+fs-type = swap
+EOF
+
+    _log "Arquivo $zram_conf atualizado com sucesso."
+    
+
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=150  || true
+sysctl -w vm.vfs_cache_pressure=66  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
-ZRAM_SCRIPT
 
-    chmod +x /usr/local/bin/zram-config.sh
-    cat <<UNIT > /etc/systemd/system/zram-config.service
-[Unit]
-Description=ZRAM Dual Layer Setup Persistent
-After=local-fs.target
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/zram-config.sh
-RemainAfterExit=true
-[Install]
-WantedBy=multi-user.target
-UNIT
+
+    
     systemctl daemon-reload || true
-    systemctl enable --now "${otimization_services[@]}" zram-config.service || true
+    systemctl enable --now "${otimization_services[@]}" || true
     if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
-    _ui_info "sucesso" "ZRAM Dual Layer aplicado."
+    _ui_info "sucesso" "Otimizações aplicadas."
 
     echo -e "\n------------------------------------------------------------"
     echo "Deseja otimizar o Shader Cache para jogos instalados no MicroSD?"
