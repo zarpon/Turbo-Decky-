@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev04"
+versao="1.8 Rev05"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,16 +28,15 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     
          
-    "vm.dirty_background_ratio=2" 
-    "vm.dirty_ratio=40"            
-    "vm.dirty_expire_centisecs=4500"       
-    "vm.dirty_writeback_centisecs=1500"     
+    "vm.dirty_background_bytes=134217728" 
+    "vm.dirty_ratio=8"            
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=500"     
     "vm.min_free_kbytes=65536"
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=10"     
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
-    "vm.stat_interval=15"
     "vm.compact_unevictable_allowed=1"
     "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
@@ -1044,7 +1043,7 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-sysctl -w vm.swappiness=80 || true
+sysctl -w vm.swappiness=133 || true
 sysctl -w vm.vfs_cache_pressure=110 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
