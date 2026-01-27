@@ -3,16 +3,16 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8"
+versao="1.8 Rev01"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Calcula 40 da RAM total de forma dinâmica
+# Calcula 75 da RAM total de forma dinâmica
 readonly total_mem_gb=$(awk '/MemTotal/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
-readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 40) / 100 ))
+readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 75) / 100 ))
 
 readonly zram_swapfile_size_gb="2"
 readonly backup_suffix="bak-turbodecky"
@@ -1021,7 +1021,7 @@ aplicar_zswap() {
     _backup_file_once "$grub_config"
     
     # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1039,7 +1039,7 @@ aplicar_zswap() {
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
