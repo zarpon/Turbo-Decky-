@@ -29,7 +29,7 @@ readonly base_sysctl_params=(
     
          
     "vm.dirty_background_bytes=134217728" 
-    "vm.dirty_ratio=8"            
+    "vm.dirty_bytes=402653184"            
     "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=500"     
     "vm.min_free_kbytes=65536"
