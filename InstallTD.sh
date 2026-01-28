@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev06"
+versao="1.8 Rev07"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -37,7 +37,7 @@ readonly base_sysctl_params=(
     "vm.compaction_proactiveness=10"     
     "kernel.numa_balancing=0"
     "vm.watermark_scale_factor=125"
-    "vm.compact_unevictable_allowed=1"
+    "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
     "vm.max_map_count=2147483642"
@@ -1044,7 +1044,7 @@ echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=110 || true
+sysctl -w vm.vfs_cache_pressure=125 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
@@ -1168,7 +1168,7 @@ fi
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=120  || true
+sysctl -w vm.vfs_cache_pressure=150  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
