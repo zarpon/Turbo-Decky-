@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev05"
+versao="1.8 Rev06"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1167,8 +1167,8 @@ fi
 
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=180 || true
-sysctl -w vm.vfs_cache_pressure=150  || true
+sysctl -w vm.swappiness=133 || true
+sysctl -w vm.vfs_cache_pressure=120  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
