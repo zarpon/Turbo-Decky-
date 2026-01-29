@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev09"
+versao="2.0"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -640,7 +640,7 @@ create_common_scripts_and_services() {
     cat <<'IOB' > /usr/local/bin/io-boost.sh
 #!/usr/bin/env bash
 sleep 5
-for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* /sys/block/zram*; do
+for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* ; do
     [ -d "$dev_path" ] || continue
     dev_name=$(basename "$dev_path")
     queue_path="$dev_path/queue"
@@ -1043,8 +1043,8 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=125 || true
+sysctl -w vm.swappiness=70 || true
+sysctl -w vm.vfs_cache_pressure=110 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
 
@@ -1138,8 +1138,8 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=125  || true
+sysctl -w vm.swappiness=100 || true
+sysctl -w vm.vfs_cache_pressure=115  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
