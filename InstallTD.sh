@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev08"
+versao="1.8 Rev09"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1093,7 +1093,7 @@ UNIT
 
 aplicar_zram() {
 
-    _log "Aplicando ZRAM (Híbrido AC/Battery)"
+    _log "Aplicando otimizações"
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
     _setup_dxvk_folder
@@ -1109,10 +1109,7 @@ aplicar_zram() {
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
 
-    # --- CORREÇÃO APLICADA: Mascara o ZRAM padrão do sistema para evitar conflitos ---
-    systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
-    systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
-    _log "Serviço systemd-zram-setup@zram0.service mascarado."
+    
 
     # --- TWEAK FSTAB (somente se /home for ext4) ---
     _apply_fstab_tweak_if_ext4
@@ -1139,36 +1136,10 @@ aplicar_zram() {
 
     cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
 #!/usr/bin/env bash
-CPU_CORES=$(nproc)
-if [[ -z "$CPU_CORES" ]]; then CPU_CORES=4; fi
-MAX_RETRY=10
-count=0
-while lsmod | grep -q "zram" && [ $count -lt $MAX_RETRY ]; do
-    swapoff /dev/zram* 2>/dev/null || true
-    echo 1 > /sys/block/zram0/reset 2>/dev/null || true
-    echo 1 > /sys/block/zram1/reset 2>/dev/null || true
-    modprobe -r zram 2>/dev/null || true
-    sleep 1
-    ((count++))
-done
-modprobe zram num_devices=1 2>/dev/null || true
-if command -v udevadm &>/dev/null; then udevadm settle; else sleep 3; fi
-
-if [ -d "/sys/block/zram0" ]; then
-    echo 1 > /sys/block/zram0/reset 2>/dev/null || true
-    if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
-    echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null || true
-    echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
-    echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
-    echo 16G > /sys/block/zram0/disksize 2>/dev/null || true
-    mkswap /dev/zram0 2>/dev/null || true
-    swapon /dev/zram0 -p 3000 2>/dev/null || true
-fi
-
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=150  || true
+sysctl -w vm.vfs_cache_pressure=125  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
