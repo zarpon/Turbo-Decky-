@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="1.8 Rev07"
+versao="1.8 Rev08"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1020,7 +1020,7 @@ aplicar_zswap() {
     _backup_file_once "$grub_config"
     
     # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1038,7 +1038,7 @@ aplicar_zswap() {
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
@@ -1157,7 +1157,7 @@ if command -v udevadm &>/dev/null; then udevadm settle; else sleep 3; fi
 if [ -d "/sys/block/zram0" ]; then
     echo 1 > /sys/block/zram0/reset 2>/dev/null || true
     if command -v udevadm &>/dev/null; then udevadm settle; else sleep 0.5; fi
-    echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+    echo zstd > /sys/block/zram0/comp_algorithm 2>/dev/null || true
     echo "$CPU_CORES" > /sys/block/zram0/max_comp_streams 2>/dev/null || true
     echo zsmalloc > /sys/block/zram0/zpool 2>/dev/null || true
     echo 16G > /sys/block/zram0/disksize 2>/dev/null || true
