@@ -636,64 +636,162 @@ create_common_scripts_and_services() {
         _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
     fi
 
-    # --- 2. SCRIPT IO-BOOST (ATUALIZADO PARA LATÊNCIA NVME) ---
-    cat <<'IOB' > /usr/local/bin/io-boost.sh
-#!/usr/bin/env bash
-sleep 5
-for dev_path in /sys/block/sd* /sys/block/mmcblk* /sys/block/nvme*n* ; do
-    [ -d "$dev_path" ] || continue
-    dev_name=$(basename "$dev_path")
-    queue_path="$dev_path/queue"
-    echo 0 > "$queue_path/iostats" 2>/dev/null || true
-    echo 0 > "$queue_path/add_random" 2>/dev/null || true
+install_io_boost_uadev() {
+    local script_path="/usr/local/bin/io-boost.sh"
+    local unit_path="/etc/systemd/system/io-boost@.service"
+    local rule_path="/etc/udev/rules.d/99-io-boost.rules"
+    local tmp
 
-    case "$dev_name" in
-    nvme*)
-        if echo "adios" > "$queue_path/scheduler" 2>/dev/null; then :
-        elif echo "kyber" > "$queue_path/scheduler" 2>/dev/null; then :
-        else echo "none" > "$queue_path/scheduler" 2>/dev/null || true; fi
-        
-        # OTIMIZAÇÃO I/O AGRESSIVA (LATÊNCIA)
-        
-        echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true # Força conclusão na mesma CPU
-        ;;
-    mmcblk*|sd*)
-        if grep -q "adios" "$queue_path/scheduler" 2>/dev/null; then
-            echo "adios" > "$queue_path/scheduler" 2>/dev/null || true
-        else
-            echo "bfq" > "$queue_path/scheduler" 2>/dev/null || true
+    # Backup se já existir (usa _backup_file_once se disponível)
+    for f in "$script_path" "$unit_path" "$rule_path"; do
+        if [ -f "$f" ]; then
+            if type _backup_file_once >/dev/null 2>&1; then
+                _backup_file_once "$f"
+            else
+                cp -a "$f" "${f}.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+            fi
+        fi
+    done
+
+    # --- /usr/local/bin/io-boost.sh ---
+    tmp=$(mktemp /tmp/io-boost.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
+    cat > "$tmp" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: io-boost.sh <device-name>
+DEV="$1"
+if [ -z "$DEV" ]; then
+  echo "uso: $0 <device>" >&2
+  exit 2
+fi
+
+# small delay to let sysfs settle (kept from original script)
+sleep 5
+
+# resolve parent block device (e.g. mmcblk0, nvme0n1, sda)
+resolve_parent() {
+  local dev="$1"
+  if [ -d "/sys/block/$dev" ]; then
+    printf '%s' "$dev"
+    return 0
+  fi
+  local path
+  path=$(readlink -f "/sys/class/block/$dev" 2>/dev/null) || return 1
+  while [ -n "$path" ] && [ "$path" != "/" ]; do
+    local name
+    name=$(basename "$path")
+    if [[ "$name" =~ ^sd[a-z]+$ || "$name" =~ ^mmcblk[0-9]+$ || "$name" =~ ^nvme[0-9]+n[0-9]+$ ]]; then
+      printf '%s' "$name"
+      return 0
+    fi
+    path=$(dirname "$path")
+  done
+  printf '%s' "$dev"
+  return 0
+}
+
+DEV_BASE=$(resolve_parent "$DEV") || DEV_BASE="$DEV"
+DEV_PATH="/sys/block/$DEV_BASE"
+QUEUE_PATH="$DEV_PATH/queue"
+
+[ -d "$DEV_PATH" ] || exit 0
+
+# safe write helper (silent)
+safe_write() {
+  local file="$1" val="$2"
+  if [ -w "$file" ] || [ -f "$file" ]; then
+    printf "%s" "$val" > "$file" 2>/dev/null || true
+  fi
+}
+
+safe_write "$QUEUE_PATH/iostats" 0
+safe_write "$QUEUE_PATH/add_random" 0
+
+case "$DEV_BASE" in
+  nvme*)
+    # try 'adios' -> 'kyber' -> 'none'
+    if printf "adios" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
+    elif printf "kyber" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
+    else printf "none" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
+
+    safe_write "$QUEUE_PATH/rq_affinity" 2
+    ;;
+  mmcblk*|sd*)
+    if grep -q "adios" "$QUEUE_PATH/scheduler" 2>/dev/null; then
+      safe_write "$QUEUE_PATH/scheduler" "adios"
+    else
+      safe_write "$QUEUE_PATH/scheduler" "bfq"
+    fi
+
+    safe_write "$QUEUE_PATH/rq_affinity" 2
+
+    for bfq_path in "$QUEUE_PATH/bfq" "$QUEUE_PATH/iosched"; do
+      if [ -d "$bfq_path" ]; then
+        if [ -f "$bfq_path/low_latency" ]; then
+          safe_write "$bfq_path/low_latency" 1
+        elif [ -f "$bfq_path/low_latency_mode" ]; then
+          safe_write "$bfq_path/low_latency_mode" 1
         fi
 
-        # --- AJUSTE DE BAIXA LATÊNCIA PARA BFQ ---
-        
-        echo 2 > "$queue_path/rq_affinity" 2>/dev/null || true
+        safe_write "$bfq_path/back_seek_penalty" 0
+        safe_write "$bfq_path/fifo_expire_async" 50
+        safe_write "$bfq_path/fifo_expire_sync" 50
+        safe_write "$bfq_path/timeout_sync" 100
+        safe_write "$bfq_path/slice_idle" 0
+        safe_write "$bfq_path/slice_idle_us" 0
+        safe_write "$QUEUE_PATH/iosched/strict_guarantees" 0
+      fi
+    done
+    ;;
+esac
 
-        for bfq_path in "$queue_path/bfq" "$queue_path/iosched"; do
-            if [ -d "$bfq_path" ]; then
-                if [ -f "$bfq_path/low_latency" ]; then
-                    echo 1 > "$bfq_path/low_latency" 2>/dev/null || true
-                elif [ -f "$bfq_path/low_latency_mode" ]; then
-                    echo 1 > "$bfq_path/low_latency_mode" 2>/dev/null || true
-                fi
+exit 0
+EOF
 
-                echo 0 > "$bfq_path/back_seek_penalty" 2>/dev/null || true
-                echo 50 > "$bfq_path/fifo_expire_async" 2>/dev/null || true
-                echo 50 > "$bfq_path/fifo_expire_sync" 2>/dev/null || true
-                echo 100 > "$bfq_path/timeout_sync" 2>/dev/null || true
-                echo 0 > "$bfq_path/slice_idle" 2>/dev/null || true
-                echo 0 > "$bfq_path/slice_idle_us" 2>/dev/null || true
-                echo 0 > "$queue_path/iosched/strict_guarantees" 2>/dev/null || true
-            fi
-        done
-        # --- FIM AJUSTE BFQ ---
+    install -m 755 "$tmp" "$script_path" || { (type _log >/dev/null 2>&1 && _log "erro: falha instalando $script_path") || echo "erro: falha instalando $script_path" >&2; rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
 
-        
-        ;;
-    esac
-done
-IOB
+    # --- /etc/systemd/system/io-boost@.service ---
+    tmp=$(mktemp /tmp/io-boost-unit.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
+    cat > "$tmp" <<'EOF'
+[Unit]
+Description=IO Boost for %i
+Requires=systemd-udev-settle.service
+After=systemd-udev-settle.service
 
-    chmod +x /usr/local/bin/io-boost.sh
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/io-boost.sh %i
+TimeoutStartSec=30
+RemainAfterExit=yes
+
+[Install]
+EOF
+
+    install -m 644 "$tmp" "$unit_path" || { (type _log >/dev/null 2>&1 && _log "erro: falha instalando $unit_path") || echo "erro: falha instalando $unit_path" >&2; rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
+
+    # --- /etc/udev/rules.d/99-io-boost.rules ---
+    tmp=$(mktemp /tmp/io-boost-rule.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
+    cat > "$tmp" <<'EOF'
+# Disparar unit systemd io-boost@%k.service para block devices relevantes
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="sd*", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="mmcblk*", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n*", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
+EOF
+
+    install -m 644 "$tmp" "$rule_path" || { (type _log >/dev/null 2>&1 && _log "erro: falha instalando $rule_path") || echo "erro: falha instalando $rule_path" >&2; rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
+
+    # Recarrega systemd e udev (aplica sem reboot)
+    systemctl daemon-reload || true
+    udevadm control --reload-rules || true
+    udevadm trigger --action=change --subsystem-match=block || true
+
+    (type _log >/dev/null 2>&1 && _log "io-boost: instalação concluída") || echo "io-boost: instalação concluída" >&2
+    return 0
+}
 
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > /usr/local/bin/thp-config.sh
@@ -737,7 +835,7 @@ KRT
     chmod +x /usr/local/bin/kernel-tweaks.sh
 
     # --- 7. CRIAÇÃO DOS SERVICES SYSTEMD ---
-    for service_name in thp-config io-boost hugepages ksm-config kernel-tweaks; do
+    for service_name in thp-config hugepages ksm-config kernel-tweaks; do
         cat <<UNIT > /etc/systemd/system/${service_name}.service
 [Unit]
 Description=TurboDecky ${service_name} persistence
