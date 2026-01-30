@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.0.1"
+versao="2.0.01"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -753,19 +753,30 @@ UNIT
     systemctl daemon-reload || true
 }
 
+# --- FUNÇÃO: configurar read_ahead via udev (NVMe e microSD) ---
 configure_read_ahead() {
     local rule="/etc/udev/rules.d/60-read-ahead.rules"
+    local tmp
 
-    cat > "$rule" << 'EOF'
-# NVMe interno
-ACTION=="add|change", KERNEL=="nvme*n1", ATTR{queue/read_ahead_kb}="512"
+    tmp=$(mktemp /tmp/60-read-ahead.XXXXXX) || { _log "erro: falha criando tmpfile"; return 1; }
 
-# microSD
-ACTION=="add|change", KERNEL=="mmcblk*p*", ATTR{queue/read_ahead_kb}="2048"
+    cat > "$tmp" <<'EOF'
+# NVMe interno (disco e partições) - aplica somente a dispositivos block
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n1*", ATTR{queue/read_ahead_kb}="512"
+
+# microSD (mmcblk e partições) - aplica somente a dispositivos block
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="mmcblk*p*", ATTR{queue/read_ahead_kb}="2048"
 EOF
 
-    udevadm control --reload
-    udevadm trigger
+    # Instala de forma atômica e segura
+    install -m 644 "$tmp" "$rule" || { _log "erro: falha instalando $rule"; rm -f "$tmp"; return 1; }
+    rm -f "$tmp"
+
+    # Recarrega apenas as regras e dispara trigger só para dispositivos block
+    udevadm control --reload-rules || _log "aviso: udevadm reload-rules falhou"
+    udevadm trigger --action=change --subsystem-match=block || _log "aviso: udevadm trigger falhou"
+
+    _log "udev rule instalada: $rule"
 }
 
 
