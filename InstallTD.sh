@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.0"
+versao="2.0.1"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -753,6 +753,22 @@ UNIT
     systemctl daemon-reload || true
 }
 
+configure_read_ahead() {
+    local rule="/etc/udev/rules.d/60-read-ahead.rules"
+
+    cat > "$rule" << 'EOF'
+# NVMe interno
+ACTION=="add|change", KERNEL=="nvme*n1", ATTR{queue/read_ahead_kb}="512"
+
+# microSD
+ACTION=="add|change", KERNEL=="mmcblk*p*", ATTR{queue/read_ahead_kb}="2048"
+EOF
+
+    udevadm control --reload
+    udevadm trigger
+}
+
+
 otimizar_sdcard_cache() {
     _log "otimizando microsd..."
     local sdcard_mount_point; sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
@@ -856,6 +872,7 @@ _executar_reversao() {
     # --- 4. REVERSÃO IRQBALANCE ---
     # Restaura o backup do arquivo de configuração ou o remove
     _restore_file /etc/default/irqbalance || rm -f /etc/default/irqbalance
+    systemctl unmask irqbalance.service 2>/dev/null || true
     systemctl restart irqbalance.service 2>/dev/null || true # Reinicia para limpar o IRQBALANCE_BANNED_CPUS
 
     # --- 5. SWAP/FSTAB/SYSCTL/GRUB ---
@@ -983,7 +1000,7 @@ aplicar_zswap() {
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
     _setup_dxvk_folder
-
+    configure_read_ahead
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
@@ -1097,7 +1114,7 @@ aplicar_zram() {
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
     _setup_dxvk_folder
-
+    configure_read_ahead
     _executar_reversao
     _steamos_readonly_disable_if_needed;
     _optimize_gpu
