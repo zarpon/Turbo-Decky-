@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.0.05"
+versao="2.0.06"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -253,7 +253,7 @@ _apply_fstab_tweak_if_ext4() {
     _backup_file_once "$fstab_file"
     if [[ "$fstype" == "ext4" ]]; then
         if grep -q " /home " "$fstab_file" 2>/dev/null; then
-            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=60,data=writeback,x-systemd.growfs|g' "$fstab_file" || true
+            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,data=writeback,x-systemd.growfs|g' "$fstab_file" || true
             _log "tweak FSTAB para /home (ext4) aplicado."
         else
             _log "nenhuma entrada /home encontrada em $fstab_file para ajustar."
