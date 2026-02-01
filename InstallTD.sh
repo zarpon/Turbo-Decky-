@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.0.07"
+versao="2.0.08"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -375,7 +375,7 @@ create_persistent_configs() {
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 500
 EOF
     # THP Shrinker
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
