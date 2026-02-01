@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.0.04"
+versao="2.0.05"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -36,7 +36,6 @@ readonly base_sysctl_params=(
     "vm.page-cluster=0"
     "vm.compaction_proactiveness=10"     
     "kernel.numa_balancing=0"
-    "vm.watermark_scale_factor=125"
     "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
@@ -1165,7 +1164,8 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-sysctl -w vm.swappiness=70 || true
+sysctl -w vm.swappiness=133 || true
+sysctl -w vm.watermark_scale_factor=125 || true
 sysctl -w vm.vfs_cache_pressure=110 || true
 ZSWAP_SCRIPT
     chmod +x /usr/local/bin/zswap-config.sh
@@ -1260,7 +1260,8 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=180 || true || true
+sysctl -w vm.watermark_scale_factor=200 
 sysctl -w vm.vfs_cache_pressure=115  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
