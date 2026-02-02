@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.03"
+versao="2.1.04"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -30,8 +30,6 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    
-         
     "vm.dirty_background_bytes=134217728" 
     "vm.dirty_bytes=402653184"            
     "vm.dirty_expire_centisecs=1500"       
@@ -53,8 +51,7 @@ readonly base_sysctl_params=(
     "fs.pipe-max-size=2097152"
     "fs.pipe-user-pages-soft=65536"
     "fs.file-max=1000000"   
-
-   # --- Scheduler (scx_lavd friendly) ---
+    # --- Scheduler (scx_lavd friendly) ---
     "kernel.sched_autogroup_enabled=0"
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
@@ -68,12 +65,9 @@ readonly base_sysctl_params=(
     "net.ipv4.tcp_congestion_control=bbr"
     "net.core.netdev_max_backlog=16384"
     "net.ipv4.tcp_fastopen=3"  
-   # --- REDE (BAIXA LATÊNCIA / JOGOS ONLINE) ---
-    
+    # --- REDE (BAIXA LATÊNCIA / JOGOS ONLINE) ---
     "net.ipv4.tcp_slow_start_after_idle=0"
     "net.ipv4.tcp_mtu_probing=1" # Ajuda em conexões instáveis
-
-    
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -94,22 +88,17 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-
-
-"RADEONSI_SHADER_PRECOMPILE=true"
-"MESA_DISK_CACHE_SINGLE_FILE=1"
-"MESA_DISK_CACHE_COMPRESSION=zstd"
-"MESA_SHADER_CACHE_MAX_SIZE=6G"
-"VKD3D_SHADER_CACHE=1"
-"PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-"WINE_DISABLE_PROTOCOL_FORK=1"
-"WINE_DISABLE_WRITE_WATCH=1" 
-"PROTON_USE_NTSYNC=1"
-"VKD3D_CONFIG=no_upload_hvv,force_host_cached"
-
-
+    "RADEONSI_SHADER_PRECOMPILE=true"
+    "MESA_DISK_CACHE_SINGLE_FILE=1"
+    "MESA_DISK_CACHE_COMPRESSION=zstd"
+    "MESA_SHADER_CACHE_MAX_SIZE=6G"
+    "VKD3D_SHADER_CACHE=1"
+    "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
+    "WINE_DISABLE_PROTOCOL_FORK=1"
+    "WINE_DISABLE_WRITE_WATCH=1" 
+    "PROTON_USE_NTSYNC=1"
+    "VKD3D_CONFIG=no_upload_hvv,force_host_cached"
 )
-
 
 # --- Funções Utilitárias ---
 _ui_info() {
@@ -267,8 +256,6 @@ _apply_fstab_tweak_if_ext4() {
     fi
 }
 
-# --- RESTANTE DO SCRIPT (sem alterações funcionais fora do solicitado) ---
-
 _setup_dxvk_folder() {
     _log "Configurando pasta DXVK Cache..."
     if [ ! -d "$dxvk_cache_path" ]; then
@@ -276,7 +263,6 @@ _setup_dxvk_folder() {
         _log "Pasta criada: $dxvk_cache_path"
     fi
     # Corrige permissões para o usuário 'deck' (UID 1000)
-    # Isso é crucial pois a pasta foi criada via sudo (root)
     chown -R 1000:1000 "$dxvk_cache_path" 2>/dev/null || chown -R deck:deck "$dxvk_cache_path" 2>/dev/null || true
     chmod 755 "$dxvk_cache_path"
     _log "Permissões da pasta DXVK ajustadas para usuário deck."
@@ -309,9 +295,6 @@ _configure_irqbalance() {
 
     systemctl stop irqbalance.service 2>/dev/null || true
     systemctl mask irqbalance.service 2>/dev/null || true
-    
-    
-
     _log "irqbalance mascarado para não conflitar com scx_lavd"
 }
 
@@ -370,8 +353,6 @@ UNIT
     fi
 }
 
-
-
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
@@ -408,99 +389,13 @@ create_power_rules() {
     _log "configurando regras dinâmicas de energia (AC/Bateria) com detecção híbrida..."
 
     # ------------------------------------------------------------------
-    # --- LÓGICA DE DETECÇÃO HÍBRIDA (SYSFS DINÂMICO + UPOWER FALLBACK NORMALIZADO) ---
-    # ------------------------------------------------------------------
-
-    # detecta AC via sysfs (varre dispositivos)
-    get_ac_state_sysfs() {
-        for ps in /sys/class/power_supply/*; do
-            [ -d "$ps" ] || continue
-            local type_file="$ps/type"
-            local online_file="$ps/online"
-
-            # se não há type, pula (regra obrigatória)
-            [[ -f "$type_file" ]] || continue
-
-            local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null)
-            local online_val=""
-
-            if [[ -f "$online_file" ]]; then
-                online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null)
-            fi
-
-            # 1. Prefer explicit line_power/AC types
-            case "$type_val" in
-            "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
-                # retorna valor de online (pode ser vazio se nao existir)
-                echo "${online_val:-unknown}"
-                return
-                ;;
-            esac
-
-            # 2. Fallback: Catch generic "USB" devices
-            if [[ "$type_val" == "USB" ]]; then
-                # usa online se disponível
-                if [[ -n "$online_val" ]]; then
-                    echo "$online_val"
-                    return
-                # senão, usa present (último recurso; risco em alguns firmwares, mas cobre Steam Deck odd cases)
-                elif [[ -f "$ps/present" ]]; then
-                    local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
-                    echo "$present_val"
-                    return
-                fi
-            fi
-        done
-        echo "unknown"
-    }
-
-    # fallback via upower, se disponível
-    get_ac_state_upower() {
-        if ! command -v upower &>/dev/null; then
-            echo "unknown"
-            return
-        fi
-        # tenta identificar o objeto line_power dinamicamente
-        local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
-        if [[ -z "$lp" ]]; then
-            echo "unknown"
-            return
-        fi
-        # Extrai o estado, normaliza para minúsculas e remove espaços (cobre yes/no, on/off, 1/0)
-        upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
-    }
-
-    # Combina Sysfs e UPower para detecção resiliente
-    is_on_ac() {
-        local sysfs_state; sysfs_state=$(get_ac_state_sysfs)
-
-        if [[ "$sysfs_state" == "1" ]]; then
-            return 0 # AC Detectado via SysFS (1)
-        fi
-
-        if [[ "$sysfs_state" == "0" ]]; then
-            return 1 # Bateria Detectada via SysFS (0)
-        fi
-
-        # Se sysfs falhar (retornar 'unknown' ou vazio), tentamos o UPower (Normalizado)
-        local up_state; up_state=$(get_ac_state_upower)
-
-        # Testa se a string normalizada corresponde a 'yes', 'on' ou '1'
-        if [[ "$up_state" =~ ^(yes|on|1)$ ]]; then
-            return 0 # AC Detectado via UPower
-        fi
-
-        return 1 # Fallback (Bateria ou Falha)
-    }
-
-    # ------------------------------------------------------------------
     # --- SCRIPT DE MONITORAMENTO (EMBUTIDO) ---
     # ------------------------------------------------------------------
     mkdir -p "${turbodecky_bin}"
     cat <<'EOF' > "${turbodecky_bin}/turbodecky-power-monitor.sh"
 #!/usr/bin/env bash
 
-# Funções de Detecção (Inclusas no script para execução standalone - Refatoradas)
+# Funções de Detecção
 get_ac_state_sysfs() {
     for ps in /sys/class/power_supply/*; do
         [ -d "$ps" ] || continue
@@ -568,13 +463,11 @@ if is_on_ac; then
             echo "performance" > "$epp" 2>/dev/null || true
         done
     fi
-
     
     if command -v iw &>/dev/null; then
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
         [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
     fi
-
 
 else
     # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
@@ -586,14 +479,11 @@ else
             echo "balance_performance" > "$epp" 2>/dev/null || true
         done
     fi
-
     
     if command -v iw &>/dev/null; then
         WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
         [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
     fi
-    
-
 fi
 EOF
     chmod +x "${turbodecky_bin}/turbodecky-power-monitor.sh"
@@ -617,13 +507,11 @@ SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB_C", TAG+="systemd"
 SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB-PD", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
 UDEV
 
-    # 6. Ativar imediatamente (usando --no-block para não travar o script principal)
+    # 6. Ativar imediatamente
     if command -v udevadm &>/dev/null; then
         udevadm control --reload-rules 2>/dev/null || true
-        # Também disparamos um evento de mudança para garantir que o estado inicial seja setado.
         udevadm trigger --action=change --subsystem-match=power_supply 2>/dev/null || true
     fi
-    # Executa uma vez via systemd para setar o estado atual
     systemctl start --no-block turbodecky-power-monitor.service || true
     _log "monitoramento de energia configurado (THP Latency Tuned - Híbrido/Systemd)."
 }
@@ -639,28 +527,28 @@ create_common_scripts_and_services() {
         _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
     fi
 
-install_io_boost_uadev() {
-    local script_path="${turbodecky_bin}/io-boost.sh"
-    local unit_path="/etc/systemd/system/io-boost@.service"
-    local rule_path="/etc/udev/rules.d/99-io-boost.rules"
-    local tmp
+    install_io_boost_uadev() {
+        local script_path="${turbodecky_bin}/io-boost.sh"
+        local unit_path="/etc/systemd/system/io-boost@.service"
+        local rule_path="/etc/udev/rules.d/99-io-boost.rules"
+        local tmp
 
-    mkdir -p "${turbodecky_bin}"
+        mkdir -p "${turbodecky_bin}"
 
-    # Backup se já existir (usa _backup_file_once se disponível)
-    for f in "$script_path" "$unit_path" "$rule_path"; do
-        if [ -f "$f" ]; then
-            if type _backup_file_once >/dev/null 2>&1; then
-                _backup_file_once "$f"
-            else
-                cp -a "$f" "${f}.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+        # Backup se já existir
+        for f in "$script_path" "$unit_path" "$rule_path"; do
+            if [ -f "$f" ]; then
+                if type _backup_file_once >/dev/null 2>&1; then
+                    _backup_file_once "$f"
+                else
+                    cp -a "$f" "${f}.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
+                fi
             fi
-        fi
-    done
+        done
 
-    # --- ${turbodecky_bin}/io-boost.sh ---
-    tmp=$(mktemp /tmp/io-boost.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
-    cat > "$tmp" <<'EOF'
+        # --- ${turbodecky_bin}/io-boost.sh ---
+        tmp=$(mktemp /tmp/io-boost.XXXXXX) || { _log "erro: mktemp falhou"; return 1; }
+        cat > "$tmp" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -671,10 +559,8 @@ if [ -z "$DEV" ]; then
   exit 2
 fi
 
-# small delay to let sysfs settle (kept from original script)
 sleep 5
 
-# resolve parent block device (e.g. mmcblk0, nvme0n1, sda)
 resolve_parent() {
   local dev="$1"
   if [ -d "/sys/block/$dev" ]; then
@@ -702,7 +588,6 @@ QUEUE_PATH="$DEV_PATH/queue"
 
 [ -d "$DEV_PATH" ] || exit 0
 
-# safe write helper (silent)
 safe_write() {
   local file="$1" val="$2"
   if [ -w "$file" ] || [ -f "$file" ]; then
@@ -715,7 +600,6 @@ safe_write "$QUEUE_PATH/add_random" 0
 
 case "$DEV_BASE" in
   nvme*)
-    # try 'adios' -> 'kyber' -> 'none'
     if printf "adios" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
     elif printf "kyber" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
     else printf "none" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
@@ -754,12 +638,12 @@ esac
 exit 0
 EOF
 
-    install -m 755 "$tmp" "$script_path" || { (type _log >/dev/null 2>&1 && _log "erro: falha instalando $script_path") || echo "erro: falha instalando $script_path" >&2; rm -f "$tmp"; return 1; }
-    rm -f "$tmp"
+        install -m 755 "$tmp" "$script_path" || { _log "erro: falha instalando $script_path"; rm -f "$tmp"; return 1; }
+        rm -f "$tmp"
 
-    # --- /etc/systemd/system/io-boost@.service ---
-    tmp=$(mktemp /tmp/io-boost-unit.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
-    cat > "$tmp" <<EOF
+        # --- /etc/systemd/system/io-boost@.service ---
+        tmp=$(mktemp /tmp/io-boost-unit.XXXXXX) || { _log "erro: mktemp falhou"; return 1; }
+        cat > "$tmp" <<EOF
 [Unit]
 Description=IO Boost for %i
 Requires=systemd-udev-settle.service
@@ -773,30 +657,30 @@ RemainAfterExit=yes
 
 [Install]
 EOF
+        install -m 644 "$tmp" "$unit_path" || { _log "erro: falha instalando $unit_path"; rm -f "$tmp"; return 1; }
+        rm -f "$tmp"
 
-    install -m 644 "$tmp" "$unit_path" || { (type _log >/dev/null 2>&1 && _log "erro: falha instalando $unit_path") || echo "erro: falha instalando $unit_path" >&2; rm -f "$tmp"; return 1; }
-    rm -f "$tmp"
-
-    # --- /etc/udev/rules.d/99-io-boost.rules ---
-    tmp=$(mktemp /tmp/io-boost-rule.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
-    cat > "$tmp" <<'EOF'
+        # --- /etc/udev/rules.d/99-io-boost.rules ---
+        tmp=$(mktemp /tmp/io-boost-rule.XXXXXX) || { _log "erro: mktemp falhou"; return 1; }
+        cat > "$tmp" <<'EOF'
 # Disparar unit systemd io-boost@%k.service para block devices relevantes
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="sd*", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="mmcblk*", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n*", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
 EOF
+        install -m 644 "$tmp" "$rule_path" || { _log "erro: falha instalando $rule_path"; rm -f "$tmp"; return 1; }
+        rm -f "$tmp"
 
-    install -m 644 "$tmp" "$rule_path" || { (type _log >/dev/null 2>&1 && _log "erro: falha instalando $rule_path") || echo "erro: falha instalando $rule_path" >&2; rm -f "$tmp"; return 1; }
-    rm -f "$tmp"
+        # Recarrega systemd e udev
+        systemctl daemon-reload || true
+        udevadm control --reload-rules || true
+        udevadm trigger --action=change --subsystem-match=block || true
+        _log "io-boost: instalação concluída"
+        return 0
+    }
 
-    # Recarrega systemd e udev (aplica sem reboot)
-    systemctl daemon-reload || true
-    udevadm control --reload-rules || true
-    udevadm trigger --action=change --subsystem-match=block || true
-
-    (type _log >/dev/null 2>&1 && _log "io-boost: instalação concluída") || echo "io-boost: instalação concluída" >&2
-    return 0
-}
+    # === CORREÇÃO CRÍTICA: Chamada da função de instalação do IO Boost ===
+    install_io_boost_uadev
 
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
@@ -879,7 +763,6 @@ EOF
     _log "udev rule instalada: $rule"
 }
 
-
 otimizar_sdcard_cache() {
     _log "otimizando microsd..."
     local sdcard_mount_point; sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
@@ -924,10 +807,6 @@ reverter_sdcard_cache() {
     _ui_info "sucesso" "reversão microsd concluída."
 }
 
-# ----------------------------------------------------------------------------------
-# --- FUNÇÃO DE REVERSÃO ATUALIZADA (COM SEGURANÇA DO KERNEL)
-# --- Agora remove os novos caminhos persistentes em /var/lib/turbodecky/bin
-# ----------------------------------------------------------------------------------
 _executar_reversao() {
     _steamos_readonly_disable_if_needed
     _log "executando reversão geral"
@@ -935,12 +814,10 @@ _executar_reversao() {
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
     rm -f /etc/environment.d/turbodecky*.conf
     rm -f /etc/security/limits.d/99-game-limits.conf
-    # Arquivos que foram criados em /etc/modprobe.d e /etc/tmpfiles.d
     rm -f /etc/modprobe.d/99-amdgpu-tuning.conf
     rm -f /etc/tmpfiles.d/mglru.conf
     rm -f /etc/tmpfiles.d/thp_shrinker.conf
     rm -f /etc/tmpfiles.d/custom-timers.conf
-    # Remove configuração persistente do ntsync
     rm -f /etc/modules-load.d/ntsync.conf
 
     # --- REVERSÃO LAVD (ADICIONADO) ---
@@ -952,7 +829,6 @@ _executar_reversao() {
     systemctl stop turbodecky-power-monitor.service 2>/dev/null || true
     systemctl disable turbodecky-power-monitor.service 2>/dev/null || true
     rm -f /etc/systemd/system/turbodecky-power-monitor.service
-    # Remove ambos: novo local persistente e legado /usr/local/bin
     rm -f "${turbodecky_bin}/turbodecky-power-monitor.sh"
     rm -f /usr/local/bin/turbodecky-power-monitor.sh
     rm -f /etc/udev/rules.d/99-turbodecky-power.rules
@@ -975,7 +851,7 @@ _executar_reversao() {
         rm -f "/usr/local/bin/${script_svc%%.service}.sh"
     done
 
-    # Remover io-boost scripts e regras (novos e antigos locais)
+    # Remover io-boost scripts e regras
     rm -f "${turbodecky_bin}/io-boost.sh" /usr/local/bin/io-boost.sh
     rm -f /etc/systemd/system/io-boost@.service
     rm -f /etc/udev/rules.d/99-io-boost.rules
@@ -984,25 +860,24 @@ _executar_reversao() {
     systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service desmascarado e iniciado."
-
-    # --- 3. REVERSÃO KERNEL (Reinstalação automática removida) ---
-    # Observação: a reinstalação automática do kernel padrão (linux-neptune)
-    # foi removida conforme solicitado para evitar alterações automáticas do kernel.
-    # (Nenhuma ação de pacman relacionada a kernel é executada aqui.)
-
-    # --- FIM REVERSÃO KERNEL ---
+    
+    # Remover override de ZRAM em /etc (Caminho persistente)
+    rm -f /etc/systemd/zram-generator.conf
+    # Remover override legado em /usr (se existir por versões anteriores)
+    rm -f /usr/lib/systemd/zram-generator.conf
+    if [ -f /usr/lib/systemd/zram-generator.conf.bak ]; then
+         mv /usr/lib/systemd/zram-generator.conf.bak /usr/lib/systemd/zram-generator.conf
+    fi
 
     # --- 4. REVERSÃO IRQBALANCE ---
-    # Restaura o backup do arquivo de configuração ou o remove
     _restore_file /etc/default/irqbalance || rm -f /etc/default/irqbalance
     systemctl unmask irqbalance.service 2>/dev/null || true
-    systemctl restart irqbalance.service 2>/dev/null || true # Reinicia para limpar o IRQBALANCE_BANNED_CPUS
+    systemctl restart irqbalance.service 2>/dev/null || true 
 
     # --- 5. SWAP/FSTAB/SYSCTL/GRUB ---
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
-    # A reversão do tweak do /home e do swapfile é feita aqui
     _restore_file /etc/fstab || true
-    swapon -a 2>/dev/null || true # Ativa o swap padrão do sistema (se houver)
+    swapon -a 2>/dev/null || true 
 
     _restore_file /etc/sysctl.d/99-sdweak-performance.conf || rm -f /etc/sysctl.d/99-sdweak-performance.conf
     _restore_file "$grub_config" || true
@@ -1011,19 +886,15 @@ _executar_reversao() {
     mkinitcpio -P &>/dev/null || true
 
     # --- 6. APLICAÇÃO FINAL ---
-    sysctl --system || true # Recarrega sysctl sem o 99-sdweak-performance.conf
+    sysctl --system || true 
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
 
-    # Remove diretório persistente criado (se estiver vazio)
     rm -rf "${turbodecky_bin}" 2>/dev/null || true
     rm -rf "${turbodecky_dir}" 2>/dev/null || true
 
     _log "reversão concluída."
 }
-# ----------------------------------------------------------------------------------
-# --- FIM FUNÇÃO DE REVERSÃO ATUALIZADA ---
-# ----------------------------------------------------------------------------------
 
 _instalar_kernel_customizado() {
     local install_msg="NOVIDADE: Instalação de Kernel Customizado.\n\nAtenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.7.*\n\nBenefícios:\n * Freq. 1000Hz (Menor Latência)\n * NTSYNC (Melhor sincronização Wine/Proton)\n * Otimizações Zen 2\n\n⚠️ O instalador irá substituir o kernel padrão. Você deve aceitar a remoção do 'linux-neptune' quando solicitado."
@@ -1032,14 +903,12 @@ _instalar_kernel_customizado() {
 
     # --- INTEGRAÇÃO ZENITY ---
     if command -v zenity &>/dev/null; then
-        # Exibe informação primeiro
         if zenity --question --title="Kernel Customizado" --text="$install_msg\n\nDeseja instalar o Kernel Customizado agora? (Compatível apenas com 3.7.*)" --width=500; then
             resp_kernel="s"
         else
             resp_kernel="n"
         fi
     else
-        # Fallback Texto Original
         echo -e "\n------------------------------------------------------------"
         echo -e "$install_msg"
         echo "------------------------------------------------------------"
@@ -1048,21 +917,15 @@ _instalar_kernel_customizado() {
     fi
 
     if [[ "$resp_kernel" =~ ^[Ss]$ ]]; then
-        # --- NEW DOWNLOAD LOGIC START ---
         local REPO="V10lator/linux-charcoal"
         local DEST_DIR="./kernel"
 
         _log "Preparando diretório de download do Kernel..."
-        # Limpa versões antigas para evitar conflitos
         if [ -d "$DEST_DIR" ]; then rm -rf "$DEST_DIR"; fi
         mkdir -p "$DEST_DIR"
-        # Adição solicitada: Mudar a propriedade da pasta para o usuário deck
         chown -R deck:deck "$DEST_DIR" 2>/dev/null || true
 
         _log "Buscando o último release de $REPO..."
-        echo "Consultando API do GitHub..."
-
-        # Busca URLs e filtra apenas arquivos .pkg.tar.zst (pacotes instaláveis)
         local DOWNLOAD_URLS
         DOWNLOAD_URLS=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" \
             | grep "browser_download_url" \
@@ -1074,7 +937,6 @@ _instalar_kernel_customizado() {
             return 1
         fi
 
-        # Download loop
         for url in $DOWNLOAD_URLS; do
             local filename
             filename=$(basename "$url")
@@ -1086,35 +948,16 @@ _instalar_kernel_customizado() {
             fi
         done
         _log "Download do Kernel concluído."
-        # --- NEW DOWNLOAD LOGIC END ---
 
         _log "Iniciando instalação do kernel customizado..."
         _steamos_readonly_disable_if_needed
-
-        # Ajuste de configuração do pacman para pacotes locais não assinados
-       # sed -i "s/Required DatabaseOptional/TrustAll/g" /etc/pacman.conf &>/dev/null
-
-        # Limpeza de chaves e cache para evitar conflitos
-       # rm -rf /home/.steamos/offload/var/cache/pacman/pkg/{*,.*} &>/dev/null
-        # rm -rf /etc/pacman.d/gnupg &>/dev/null
-
-        # Inicialização do chaveiro
-       # echo "Inicializando chaves do pacman..."
-       # pacman-key --init
-       # pacman-key --populate
         steamos-devmode enable --no-prompt
-
         echo "Instalando Kernel (linux-charcoal)..." 
 
-        # Instalação interativa (o usuário precisa confirmar a substituição)
-        # O wildcard agora aponta para a pasta onde baixamos os arquivos   
-
         if pacman -U --noconfirm "$DEST_DIR"/*.pkg.tar.zst; then
-        pacman -R --noconfirm linux-neptune-611 || true
-        pacman -R --noconfirm linux-neptune-611-headers || true
+             pacman -R --noconfirm linux-neptune-611 || true
+             pacman -R --noconfirm linux-neptune-611-headers || true
              _log "Kernel customizado instalado com sucesso."
-
-         # Garante atualização do GRUB após a troca do kernel
              update-grub &>/dev/null || true
         else
              _ui_info "erro" "Falha na instalação do Kernel."
@@ -1123,44 +966,49 @@ _instalar_kernel_customizado() {
 }
 
 optimize_zram() {
-    local config_file="/usr/lib/systemd/zram-generator.conf"
+    # CORREÇÃO DE PERSISTÊNCIA: Usar /etc em vez de /usr/lib. 
+    # /etc tem precedência e sobrevive a atualizações de imagem do SteamOS.
+    local config_file="/etc/systemd/zram-generator.conf"
+    local source_file="/usr/lib/systemd/zram-generator.conf"
     
-    echo "Iniciando otimização do zRAM..."
+    echo "Iniciando otimização do zRAM (Persistente em /etc)..."
 
+    # Se não existir arquivo em /etc, copia do modelo em /usr ou cria novo
+    if [ ! -f "$config_file" ]; then
+        if [ -f "$source_file" ]; then
+            cp "$source_file" "$config_file"
+        else
+             touch "$config_file"
+        fi
+    fi
 
-    # 2. Criar backup por segurança
-    sudo cp "$config_file" "${config_file}.bak"
-
-    # 3. Aplicar as alterações usando sed
-    # Alterar ou adicionar o algoritmo de compressão
+    # Aplica as alterações no arquivo em /etc
     if grep -q "compression_algorithm" "$config_file"; then
-        sudo sed -i 's/compression_algorithm.*/compression_algorithm = lz4/' "$config_file"
+        sed -i 's/compression_algorithm.*/compression_algorithm = lz4/' "$config_file"
     else
-        echo "compression_algorithm = lz4" | sudo tee -a "$config_file" > /dev/null
+        echo "compression_algorithm = lz4" | tee -a "$config_file" > /dev/null
     fi
 
-    # Alterar ou adicionar a prioridade
     if grep -q "zram-priority" "$config_file"; then
-        sudo sed -i 's/zram-priority.*/zram-priority = 1000/' "$config_file"
+        sed -i 's/zram-priority.*/zram-priority = 1000/' "$config_file"
     else
-        echo "zram-priority = 1000" | sudo tee -a "$config_file" > /dev/null
+        echo "zram-priority = 1000" | tee -a "$config_file" > /dev/null
+    fi
+    
+    # Garante seção [zram0]
+    if ! grep -q "\[zram0\]" "$config_file"; then
+        sed -i '1i[zram0]' "$config_file"
     fi
 
-    # 4. Recarregar o daemon e aplicar as mudanças
-    sudo systemctl daemon-reload
-    sudo systemctl stop /dev/zram0 2>/dev/null
-    sudo systemctl start /usr/lib/systemd/zram-generator 2>/dev/null
+    systemctl daemon-reload
+    systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || true
 
-
-    echo "Otimização concluída! Algoritmo: lz4 | Prioridade: 1000"
+    echo "Otimização concluída! Configuração salva em $config_file"
 }
 
-
 aplicar_zswap() {
-
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
-    # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
     _steamos_readonly_disable_if_needed
     _setup_dxvk_folder
     configure_read_ahead
@@ -1172,25 +1020,19 @@ aplicar_zswap() {
     create_power_rules 
     _configure_irqbalance
     
-    # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
 
-    # Mascara o ZRAM padrão do sistema para evitar conflitos (Correto e Necessário)
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
 
-    # --- TWEAK FSTAB (somente se /home for ext4) ---
     _apply_fstab_tweak_if_ext4
-    # --- FIM TWEAK FSTAB ---
 
     local free_space_gb; free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
     if (( free_space_gb < zswap_swapfile_size_gb )); then _ui_info "erro" "espaço insuficiente"; exit 1; fi
 
-    # Cria swapfile corretamente considerando possíveis btrfs em /home
     _create_swapfile "$swapfile_path" "$zswap_swapfile_size_gb"
 
-    # Garante entrada única em /etc/fstab apontando para $swapfile_path (pode ser symlink para local btrfs-safe)
     sed -i "\|${swapfile_path}|d" /etc/fstab 2>/dev/null || true; echo "$swapfile_path none swap sw,pri=-2 0 0" >> /etc/fstab
     swapon --priority -2 "$swapfile_path" || true
 
@@ -1199,7 +1041,6 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
     local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
@@ -1265,7 +1106,6 @@ UNIT
         otimizar_sdcard_cache
     fi
 
-    # --- OFERTA DE KERNEL CUSTOMIZADO ---
     _instalar_kernel_customizado
 
     _ui_info "aviso" "Dica extra: Configure o UMA Buffer Size para 4GB na BIOS para máximo desempenho."
@@ -1273,11 +1113,9 @@ UNIT
 }
 
 aplicar_zram() {
+    _log "Aplicando otimizações (ZRAM)"
 
-    _log "Aplicando otimizações"
-
-    # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
-     _steamos_readonly_disable_if_needed
+    _steamos_readonly_disable_if_needed
     _setup_dxvk_folder
     configure_read_ahead
     _executar_reversao
@@ -1285,24 +1123,18 @@ aplicar_zram() {
     _optimize_gpu
     _configure_ulimits
     create_common_scripts_and_services
-    create_power_rules # Ativa monitoramento de energia com lógica híbrida
+    create_power_rules 
     _configure_irqbalance
    
-    # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
 
-    
-
-    # --- TWEAK FSTAB (somente se /home for ext4) ---
     _apply_fstab_tweak_if_ext4
-    # --- FIM TWEAK FSTAB ---
 
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${base_sysctl_params[@]}"
     sysctl --system || true
 
     _backup_file_once "$grub_config"
     
-    # ATUALIZAÇÃO KERNEL PARAMS: Adicionado audit=0, nowatchdog e nmi_watchdog=0
     local kernel_params=("zswap.enabled=0" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
@@ -1320,7 +1152,7 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true || true
+sysctl -w vm.swappiness=100 || true
 sysctl -w vm.watermark_scale_factor=200 
 sysctl -w vm.vfs_cache_pressure=125  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
@@ -1365,9 +1197,9 @@ UNIT
         otimizar_sdcard_cache
     fi
 
-    # --- OFERTA DE KERNEL CUSTOMIZADO ---
     _instalar_kernel_customizado
-     optimize_zram
+    # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
+    optimize_zram
   
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
@@ -1377,11 +1209,8 @@ reverter_alteracoes() {
     _ui_info "sucesso" "Reversão completa. Reinicie."
 }
 
-# --- NOVA FUNÇÃO: Remover kernel customizado e reinstalar linux-neptune ---
 _restore_kernel_to_neptune() {
-
-steamos-devmode enable --no-prompt
-
+    steamos-devmode enable --no-prompt
     _log "Iniciando restauração do kernel padrão (linux-neptune)"
 
     if ! command -v pacman &>/dev/null; then
@@ -1389,7 +1218,6 @@ steamos-devmode enable --no-prompt
         return 1
     fi
 
-    # Remove linux-charcoal-611 se instalado
     if pacman -Q linux-charcoal-611 &>/dev/null; then
         _log "linux-charcoal-611 detectado. Removendo..."
         _steamos_readonly_disable_if_needed
@@ -1404,11 +1232,9 @@ steamos-devmode enable --no-prompt
         _ui_info "info" "Kernel customizado não encontrado instalado."
     fi
 
-    # Instala linux-neptune-611
     _log "Instalando linux-neptune-611..."
     if pacman -S --noconfirm linux-neptune-611; then
         _log "linux-neptune-611 instalado com sucesso."
-        # Atualiza GRUB/initramfs onde aplicável
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
         mkinitcpio -P &>/dev/null || true
         _ui_info "sucesso" "Kernel padrão (linux-neptune-611) reinstalado. Reinicie o sistema para completar."
@@ -1417,7 +1243,6 @@ steamos-devmode enable --no-prompt
         _ui_info "erro" "Falha ao instalar linux-neptune-611"
         return 1
     fi
-    
 }
 
 main() {
@@ -1426,7 +1251,6 @@ main() {
     echo "Todas as otimizações são seguras e podem ser revertidas."
 
     if command -v zenity &>/dev/null; then
-        # Opção Zenity
         local z_escolha
         z_escolha=$(zenity --list --title="Turbo Decky - $versao" \
             --text="Escolha a opção desejada:" \
@@ -1440,11 +1264,9 @@ main() {
             FALSE "6" "Sair" \
             --height 350 --width 500 --hide-column=2 --print-column=2 || echo "6")
 
-        # Tratamento se o usuário cancelar (z_escolha vazio)
         if [ -z "$z_escolha" ]; then z_escolha="6"; fi
         escolha="$z_escolha"
     else
-        # Opção Legado Texto
         echo "1) Aplicar Otimizações Recomendadas (ZSWAP + Tuning)"
         echo "2) Aplicar Otimizações (ZRAM + Tuning - Alternativa para pouco espaço)"
         echo "3) Reverter Tudo"
