@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.04"
+versao="2.1.05"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -966,45 +966,44 @@ _instalar_kernel_customizado() {
 }
 
 optimize_zram() {
-    # CORREÇÃO DE PERSISTÊNCIA: Usar /etc em vez de /usr/lib. 
-    # /etc tem precedência e sobrevive a atualizações de imagem do SteamOS.
-    local config_file="/etc/systemd/zram-generator.conf"
-    local source_file="/usr/lib/systemd/zram-generator.conf"
+    local config_file="/usr/lib/systemd/zram-generator.conf"
     
-    echo "Iniciando otimização do zRAM (Persistente em /etc)..."
+    echo "Iniciando otimização do zRAM no arquivo base do sistema ($config_file)..."
 
-    # Se não existir arquivo em /etc, copia do modelo em /usr ou cria novo
-    if [ ! -f "$config_file" ]; then
-        if [ -f "$source_file" ]; then
-            cp "$source_file" "$config_file"
-        else
-             touch "$config_file"
-        fi
+    # Garante que o sistema de arquivos permita escrita em /usr/lib
+    # Isso é necessário pois o SteamOS bloqueia essa pasta por padrão
+    if command -v steamos-readonly &>/dev/null; then
+        steamos-readonly disable 2>/dev/null || true
     fi
 
-    # Aplica as alterações no arquivo em /etc
-    if grep -q "compression_algorithm" "$config_file"; then
-        sed -i 's/compression_algorithm.*/compression_algorithm = lz4/' "$config_file"
-    else
-        echo "compression_algorithm = lz4" | tee -a "$config_file" > /dev/null
+    # Aplica a configuração limpa e direta solicitada:
+    # 1. zram-size = ram / 2 (Exatamente 50% da RAM)
+    # 2. compression-algorithm = lz4
+    # 3. zram-priority = 1000
+    cat <<EOF > "$config_file"
+[zram0]
+zram-size = ram / 2
+compression-algorithm = lz4
+zram-priority = 1000
+fs-type = swap
+EOF
+
+    # CRÍTICO: Remove o override em /etc se existir.
+    # Se não deletar este arquivo, o sistema IGNORARÁ a alteração feita acima em /usr/lib.
+    if [ -f "/etc/systemd/zram-generator.conf" ]; then
+        rm -f "/etc/systemd/zram-generator.conf"
+        _log "Arquivo de override em /etc removido para garantir leitura do /usr/lib."
     fi
 
-    if grep -q "zram-priority" "$config_file"; then
-        sed -i 's/zram-priority.*/zram-priority = 1000/' "$config_file"
-    else
-        echo "zram-priority = 1000" | tee -a "$config_file" > /dev/null
-    fi
-    
-    # Garante seção [zram0]
-    if ! grep -q "\[zram0\]" "$config_file"; then
-        sed -i '1i[zram0]' "$config_file"
-    fi
-
+    # Aplica as mudanças
     systemctl daemon-reload
     systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || true
 
-    echo "Otimização concluída! Configuração salva em $config_file"
+    echo "Otimização concluída! Configuração aplicada em $config_file"
+    _log "zram status após aplicar:"
+    zramctl >> "$logfile"
 }
+
 
 aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
