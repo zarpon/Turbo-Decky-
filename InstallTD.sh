@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.01"
+versao="2.1.02"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1365,8 +1365,8 @@ UNIT
 
     # --- OFERTA DE KERNEL CUSTOMIZADO ---
     _instalar_kernel_customizado
-
-    _ui_info "aviso" "Dica extra: Configure o UMA Buffer Size para 4GB na BIOS para máximo desempenho."
+     optimize_zram
+  
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
 
@@ -1415,7 +1415,7 @@ steamos-devmode enable --no-prompt
         _ui_info "erro" "Falha ao instalar linux-neptune-611"
         return 1
     fi
-     optimize_zram
+    
 }
 
 main() {
