@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.02"
+versao="2.1.03"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -929,7 +929,7 @@ reverter_sdcard_cache() {
 # --- Agora remove os novos caminhos persistentes em /var/lib/turbodecky/bin
 # ----------------------------------------------------------------------------------
 _executar_reversao() {
-    _steamos_readonly_disable_if_needed;
+    _steamos_readonly_disable_if_needed
     _log "executando reversão geral"
 
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
@@ -1161,14 +1161,15 @@ aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
+    _steamos_readonly_disable_if_needed
     _setup_dxvk_folder
     configure_read_ahead
     _executar_reversao
-    _steamos_readonly_disable_if_needed;
+    
     _optimize_gpu
     _configure_ulimits
     create_common_scripts_and_services
-    create_power_rules # Ativa monitoramento de energia com lógica híbrida
+    create_power_rules 
     _configure_irqbalance
     
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
@@ -1276,10 +1277,11 @@ aplicar_zram() {
     _log "Aplicando otimizações"
 
     # --- CORREÇÃO: Cria e ajusta permissões da pasta DXVK ---
+     _steamos_readonly_disable_if_needed
     _setup_dxvk_folder
     configure_read_ahead
     _executar_reversao
-    _steamos_readonly_disable_if_needed;
+   
     _optimize_gpu
     _configure_ulimits
     create_common_scripts_and_services
