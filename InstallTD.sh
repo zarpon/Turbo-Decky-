@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.0.08"
+versao="2.0.09"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -17,6 +17,10 @@ readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 75) / 100 ))
 readonly zram_swapfile_size_gb="2"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
+
+# --- Diretórios persistentes (resistem a atualizações do SteamOS) ---
+readonly turbodecky_dir="/var/lib/turbodecky"
+readonly turbodecky_bin="${turbodecky_dir}/bin"
 
 # --- Constantes para otimização do MicroSD ---
 readonly sdcard_device="/dev/mmcblk0p1"
@@ -492,7 +496,8 @@ create_power_rules() {
     # ------------------------------------------------------------------
     # --- SCRIPT DE MONITORAMENTO (EMBUTIDO) ---
     # ------------------------------------------------------------------
-    cat <<'EOF' > /usr/local/bin/turbodecky-power-monitor.sh
+    mkdir -p "${turbodecky_bin}"
+    cat <<'EOF' > "${turbodecky_bin}/turbodecky-power-monitor.sh"
 #!/usr/bin/env bash
 
 # Funções de Detecção (Inclusas no script para execução standalone - Refatoradas)
@@ -591,7 +596,7 @@ else
 
 fi
 EOF
-    chmod +x /usr/local/bin/turbodecky-power-monitor.sh
+    chmod +x "${turbodecky_bin}/turbodecky-power-monitor.sh"
 
     # 4. CRIAÇÃO DO SERVICE (Para ser acionado pelo UDEV/SYSTEMD)
     cat <<UNIT > /etc/systemd/system/turbodecky-power-monitor.service
@@ -600,7 +605,7 @@ Description=TurboDecky Power Monitor (oneshot udev-triggered)
 Wants=sys-devices-virtual-power_supply-*/device
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/turbodecky-power-monitor.sh
+ExecStart=${turbodecky_bin}/turbodecky-power-monitor.sh
 UNIT
     systemctl daemon-reload || true
 
@@ -625,7 +630,7 @@ UDEV
 
 create_common_scripts_and_services() {
     _log "criando scripts e services comuns"
-    mkdir -p /usr/local/bin /etc/systemd/system /etc/environment.d
+    mkdir -p "${turbodecky_bin}" /etc/systemd/system /etc/environment.d
 
     # --- 1. APLICAÇÃO DE VARIÁVEIS DE AMBIENTE ---
     if [ ${#game_env_vars[@]} -gt 0 ]; then
@@ -635,10 +640,12 @@ create_common_scripts_and_services() {
     fi
 
 install_io_boost_uadev() {
-    local script_path="/usr/local/bin/io-boost.sh"
+    local script_path="${turbodecky_bin}/io-boost.sh"
     local unit_path="/etc/systemd/system/io-boost@.service"
     local rule_path="/etc/udev/rules.d/99-io-boost.rules"
     local tmp
+
+    mkdir -p "${turbodecky_bin}"
 
     # Backup se já existir (usa _backup_file_once se disponível)
     for f in "$script_path" "$unit_path" "$rule_path"; do
@@ -651,7 +658,7 @@ install_io_boost_uadev() {
         fi
     done
 
-    # --- /usr/local/bin/io-boost.sh ---
+    # --- ${turbodecky_bin}/io-boost.sh ---
     tmp=$(mktemp /tmp/io-boost.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
     cat > "$tmp" <<'EOF'
 #!/usr/bin/env bash
@@ -752,7 +759,7 @@ EOF
 
     # --- /etc/systemd/system/io-boost@.service ---
     tmp=$(mktemp /tmp/io-boost-unit.XXXXXX) || { (type _log >/dev/null 2>&1 && _log "erro: mktemp falhou") || echo "erro: mktemp falhou" >&2; return 1; }
-    cat > "$tmp" <<'EOF'
+    cat > "$tmp" <<EOF
 [Unit]
 Description=IO Boost for %i
 Requires=systemd-udev-settle.service
@@ -760,7 +767,7 @@ After=systemd-udev-settle.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/io-boost.sh %i
+ExecStart=${turbodecky_bin}/io-boost.sh %i
 TimeoutStartSec=30
 RemainAfterExit=yes
 
@@ -792,7 +799,7 @@ EOF
 }
 
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
-    cat <<'THP' > /usr/local/bin/thp-config.sh
+    cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
 #!/usr/bin/env bash
 echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
@@ -805,24 +812,24 @@ echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/n
 echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 THP
-    chmod +x /usr/local/bin/thp-config.sh
+    chmod +x "${turbodecky_bin}/thp-config.sh"
 
     # --- 4. SCRIPT HUGEPAGES ---
-    cat <<'HPS' > /usr/local/bin/hugepages.sh
+    cat <<'HPS' > "${turbodecky_bin}/hugepages.sh"
 #!/usr/bin/env bash
 echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
 HPS
-    chmod +x /usr/local/bin/hugepages.sh
+    chmod +x "${turbodecky_bin}/hugepages.sh"
 
     # --- 5. SCRIPT KSM ---
-    cat <<'KSM' > /usr/local/bin/ksm-config.sh
+    cat <<'KSM' > "${turbodecky_bin}/ksm-config.sh"
 #!/usr/bin/env bash
 echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
 KSM
-    chmod +x /usr/local/bin/ksm-config.sh
+    chmod +x "${turbodecky_bin}/ksm-config.sh"
 
     # --- 6. SCRIPT KERNEL TWEAKS ---
-    cat <<'KRT' > /usr/local/bin/kernel-tweaks.sh
+    cat <<'KRT' > "${turbodecky_bin}/kernel-tweaks.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/multi_queue/parameters/multi_queue_alloc 2>/dev/null || true
 echo 1 > /sys/module/multi_queue/parameters/multi_queue_reclaim 2>/dev/null || true
@@ -830,7 +837,7 @@ if [ -w /sys/module/rcu/parameters/rcu_normal_after_boot ]; then
     echo 0 > /sys/module/rcu/parameters/rcu_normal_after_boot 2>/dev/null || true
 fi
 KRT
-    chmod +x /usr/local/bin/kernel-tweaks.sh
+    chmod +x "${turbodecky_bin}/kernel-tweaks.sh"
 
     # --- 7. CRIAÇÃO DOS SERVICES SYSTEMD ---
     for service_name in thp-config hugepages ksm-config kernel-tweaks; do
@@ -840,7 +847,7 @@ Description=TurboDecky ${service_name} persistence
 After=local-fs.target
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/${service_name}.sh
+ExecStart=${turbodecky_bin}/${service_name}.sh
 RemainAfterExit=true
 [Install]
 WantedBy=multi-user.target
@@ -918,7 +925,8 @@ reverter_sdcard_cache() {
 }
 
 # ----------------------------------------------------------------------------------
-# --- FUNÇÃO DE REVERSÃO ATUALIZADA (COM SEGURANÇA DO KERNEL) ---
+# --- FUNÇÃO DE REVERSÃO ATUALIZADA (COM SEGURANÇA DO KERNEL)
+# --- Agora remove os novos caminhos persistentes em /var/lib/turbodecky/bin
 # ----------------------------------------------------------------------------------
 _executar_reversao() {
     _steamos_readonly_disable_if_needed;
@@ -944,6 +952,8 @@ _executar_reversao() {
     systemctl stop turbodecky-power-monitor.service 2>/dev/null || true
     systemctl disable turbodecky-power-monitor.service 2>/dev/null || true
     rm -f /etc/systemd/system/turbodecky-power-monitor.service
+    # Remove ambos: novo local persistente e legado /usr/local/bin
+    rm -f "${turbodecky_bin}/turbodecky-power-monitor.sh"
     rm -f /usr/local/bin/turbodecky-power-monitor.sh
     rm -f /etc/udev/rules.d/99-turbodecky-power.rules
     if command -v udevadm &>/dev/null; then udevadm control --reload-rules; fi
@@ -956,10 +966,19 @@ _executar_reversao() {
         rm -f "/etc/systemd/system/$svc"
     done
 
+    # Remove scripts nos novos e antigos caminhos
+    rm -f "${turbodecky_bin}/zswap-config.sh" "${turbodecky_bin}/zram-config.sh"
     rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh
+
     for script_svc in "${otimization_services[@]}"; do
+        rm -f "${turbodecky_bin}/${script_svc%%.service}.sh"
         rm -f "/usr/local/bin/${script_svc%%.service}.sh"
     done
+
+    # Remover io-boost scripts e regras (novos e antigos locais)
+    rm -f "${turbodecky_bin}/io-boost.sh" /usr/local/bin/io-boost.sh
+    rm -f /etc/systemd/system/io-boost@.service
+    rm -f /etc/udev/rules.d/99-io-boost.rules
 
     # Desmascara e (re)inicia o ZRAM padrão do sistema (Restaurando o ZRAM original)
     systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
@@ -995,6 +1014,11 @@ _executar_reversao() {
     sysctl --system || true # Recarrega sysctl sem o 99-sdweak-performance.conf
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
+
+    # Remove diretório persistente criado (se estiver vazio)
+    rm -rf "${turbodecky_bin}" 2>/dev/null || true
+    rm -rf "${turbodecky_dir}" 2>/dev/null || true
+
     _log "reversão concluída."
 }
 # ----------------------------------------------------------------------------------
@@ -1155,7 +1179,7 @@ aplicar_zswap() {
 
     create_persistent_configs
 
-    cat <<'ZSWAP_SCRIPT' > /usr/local/bin/zswap-config.sh
+    cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
@@ -1168,7 +1192,7 @@ sysctl -w vm.swappiness=66 || true
 sysctl -w vm.watermark_scale_factor=125 || true
 sysctl -w vm.vfs_cache_pressure=105 || true
 ZSWAP_SCRIPT
-    chmod +x /usr/local/bin/zswap-config.sh
+    chmod +x "${turbodecky_bin}/zswap-config.sh"
 
     cat <<UNIT > /etc/systemd/system/zswap-config.service
 [Unit]
@@ -1176,7 +1200,7 @@ Description=Configuracao ZSWAP Persistent
 After=local-fs.target
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/zswap-config.sh
+ExecStart=${turbodecky_bin}/zswap-config.sh
 RemainAfterExit=true
 [Install]
 WantedBy=multi-user.target
@@ -1256,7 +1280,7 @@ aplicar_zram() {
 
     create_persistent_configs
 
-    cat <<'ZRAM_SCRIPT' > /usr/local/bin/zram-config.sh
+    cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
@@ -1268,14 +1292,14 @@ echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
 ZRAM_SCRIPT
 
-    chmod +x /usr/local/bin/zram-config.sh
+    chmod +x "${turbodecky_bin}/zram-config.sh"
     cat <<UNIT > /etc/systemd/system/zram-config.service
 [Unit]
 Description=ZRAM Dual Layer Setup Persistent
 After=local-fs.target
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/zram-config.sh
+ExecStart=${turbodecky_bin}/zram-config.sh
 RemainAfterExit=true
 [Install]
 WantedBy=multi-user.target
