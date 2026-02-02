@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.0.09"
+versao="2.1"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1122,6 +1122,40 @@ _instalar_kernel_customizado() {
     fi
 }
 
+optimize_zram() {
+    local config_file="/usr/lib/systemd/zram-generator.conf"
+    
+    echo "Iniciando otimização do zRAM..."
+
+
+    # 2. Criar backup por segurança
+    sudo cp "$config_file" "${config_file}.bak"
+
+    # 3. Aplicar as alterações usando sed
+    # Alterar ou adicionar o algoritmo de compressão
+    if grep -q "compression_algorithm" "$config_file"; then
+        sudo sed -i 's/compression_algorithm.*/compression_algorithm = lz4/' "$config_file"
+    else
+        echo "compression_algorithm = lz4" | sudo tee -a "$config_file" > /dev/null
+    fi
+
+    # Alterar ou adicionar a prioridade
+    if grep -q "zram-priority" "$config_file"; then
+        sudo sed -i 's/zram-priority.*/zram-priority = 1000/' "$config_file"
+    else
+        echo "zram-priority = 1000" | sudo tee -a "$config_file" > /dev/null
+    fi
+
+    # 4. Recarregar o daemon e aplicar as mudanças
+    sudo systemctl daemon-reload
+    sudo systemctl stop /dev/zram0 2>/dev/null
+    sudo systemctl start /usr/lib/systemd/zram-generator 2>/dev/null
+
+
+    echo "Otimização concluída! Algoritmo: lz4 | Prioridade: 1000"
+}
+
+
 aplicar_zswap() {
 
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
@@ -1251,7 +1285,7 @@ aplicar_zram() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
-    
+    optimize_zram
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
 
