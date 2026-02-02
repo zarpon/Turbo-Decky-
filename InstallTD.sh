@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.06"
+versao="2.1.07"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -965,44 +965,57 @@ _instalar_kernel_customizado() {
     fi
 }
 
-optimize_zram() {
-    local config_file="/usr/lib/systemd/zram-generator.conf"
-    
-    echo "Iniciando otimização do zRAM no arquivo base do sistema ($config_file)..."
 
-    # Garante que o sistema de arquivos permita escrita em /usr/lib
-    # Isso é necessário pois o SteamOS bloqueia essa pasta por padrão
-    if command -v steamos-readonly &>/dev/null; then
-        steamos-readonly disable 2>/dev/null || true
+optimize_zram() {
+    # --- CORREÇÃO DE PERSISTÊNCIA ---
+    # O arquivo deve ficar em /etc para sobreviver a atualizações do SteamOS.
+    # /usr/lib é somente leitura em atualizações e será sobrescrito.
+    local config_file="/etc/systemd/zram-generator.conf"
+    local legacy_volatile_file="/usr/lib/systemd/zram-generator.conf"
+    
+    _log "Iniciando otimização do zRAM (Modo Persistente)..."
+
+    # 1. Garante permissão de escrita (necessário para limpar o arquivo legado em /usr se existir)
+    _steamos_readonly_disable_if_needed
+
+    # 2. Limpeza: Remove a configuração incorreta em /usr/lib se ela existir de versões anteriores
+    if [ -f "$legacy_volatile_file" ]; then
+        # Verifica se o arquivo foi criado pelo script (contém [zram0]) para não deletar arquivos do sistema base por engano
+        if grep -q "\[zram0\]" "$legacy_volatile_file"; then
+            rm -f "$legacy_volatile_file"
+            _log "Arquivo de configuração volátil antigo removido de $legacy_volatile_file"
+        fi
     fi
 
-    # Aplica a configuração limpa e direta solicitada:
-    # 1. zram-size = ram / 2 (Exatamente 50% da RAM)
-    # 2. compression-algorithm = lz4
-    # 3. zram-priority = 1000
+    # 3. Cria a configuração persistente em /etc
+    # Configuração: 40% da RAM, Algoritmo LZ4 (Rápido), Prioridade alta
     cat <<EOF > "$config_file"
+# Configuração gerada pelo Turbo Decky
 [zram0]
-zram-size = ram / 2
+zram-size = ram * 0.4
 compression-algorithm = lz4
 zram-priority = 1000
 fs-type = swap
 EOF
+    _log "Nova configuração persistente escrita em: $config_file"
 
-    # CRÍTICO: Remove o override em /etc se existir.
-    # Se não deletar este arquivo, o sistema IGNORARÁ a alteração feita acima em /usr/lib.
-    if [ -f "/etc/systemd/zram-generator.conf" ]; then
-        rm -f "/etc/systemd/zram-generator.conf"
-        _log "Arquivo de override em /etc removido para garantir leitura do /usr/lib."
+    # 4. Aplica as mudanças
+    # Recarrega o daemon para o gerador criar as units
+    systemctl daemon-reload
+    
+    # Reinicia o serviço específico do zram0 para aplicar o novo tamanho/algoritmo
+    if systemctl restart systemd-zram-setup@zram0.service; then
+        _log "Serviço zRAM reiniciado com sucesso."
+    else
+        _log "Aviso: Falha ao reiniciar systemd-zram-setup@zram0. Tentando iniciar..."
+        systemctl start systemd-zram-setup@zram0.service 2>/dev/null || true
     fi
 
-    # Aplica as mudanças
-    systemctl daemon-reload
-    systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || true
-
-    echo "Otimização concluída! Configuração aplicada em $config_file"
-    _log "zram status após aplicar:"
-    zramctl >> "$logfile"
+    # 5. Validação e Log
+    echo "Otimização concluída! Status atual:"
+    zramctl | tee -a "$logfile"
 }
+
 
 
 aplicar_zswap() {
