@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.0"
+versao="2.1.01"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1285,7 +1285,7 @@ aplicar_zram() {
     create_common_scripts_and_services
     create_power_rules # Ativa monitoramento de energia com lógica híbrida
     _configure_irqbalance
-    optimize_zram
+   
     # --- ADIÇÃO: Configuração do LAVD Scheduler ---
     _setup_lavd_scheduler
 
@@ -1415,6 +1415,7 @@ steamos-devmode enable --no-prompt
         _ui_info "erro" "Falha ao instalar linux-neptune-611"
         return 1
     fi
+     optimize_zram
 }
 
 main() {
