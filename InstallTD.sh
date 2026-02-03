@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.10"
+versao="2.1.11"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1076,7 +1076,7 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-sysctl -w vm.swappiness=80 || true
+sysctl -w vm.swappiness=10 || true
 sysctl -w vm.watermark_scale_factor=125 || true
 sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
@@ -1164,7 +1164,7 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=40 || true
 sysctl -w vm.watermark_scale_factor=125 
 sysctl -w vm.vfs_cache_pressure=66  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
