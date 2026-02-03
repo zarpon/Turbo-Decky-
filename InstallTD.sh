@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.08"
+versao="2.1.09"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -41,7 +41,7 @@ readonly base_sysctl_params=(
     "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
-    "vm.max_map_count=2147483642"
+    "vm.max_map_count=1048576"
     "vm.mmap_rnd_compat_bits=16"
     "vm.unprivileged_userfaultfd=1"
     "vm.hugetlb_optimize_vmemmap=0"
@@ -1076,9 +1076,9 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=80 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=105 || true
+sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1165,8 +1165,8 @@ aplicar_zram() {
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=100 || true
-sysctl -w vm.watermark_scale_factor=200 
-sysctl -w vm.vfs_cache_pressure=125  || true
+sysctl -w vm.watermark_scale_factor=125 
+sysctl -w vm.vfs_cache_pressure=66  || true
 sysctl -w vm.fault_around_bytes=32 2>/dev/null || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
