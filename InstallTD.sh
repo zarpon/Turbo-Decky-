@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.02"
+versao="2.2.03"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -966,7 +966,7 @@ _instalar_kernel_customizado() {
 }
 
 
-optimize_zram() {
+
 optimize_zram() {
     local config_file="/etc/systemd/zram-generator.conf"
     local legacy_volatile_file="/usr/lib/systemd/zram-generator.conf"
