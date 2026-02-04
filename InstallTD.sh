@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2"
+versao="2.2.01"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1070,7 +1070,7 @@ aplicar_zswap() {
     cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lzo-rle /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo lzo-rle > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
