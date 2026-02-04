@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.1.12"
+versao="2.1.13"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -604,7 +604,7 @@ case "$DEV_BASE" in
     elif printf "kyber" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
     else printf "none" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
 
-    safe_write "$QUEUE_PATH/rq_affinity" 2
+    safe_write "$QUEUE_PATH/rq_affinity" 1
     ;;
   mmcblk*|sd*)
     if grep -q "adios" "$QUEUE_PATH/scheduler" 2>/dev/null; then
@@ -613,7 +613,7 @@ case "$DEV_BASE" in
       safe_write "$QUEUE_PATH/scheduler" "bfq"
     fi
 
-    safe_write "$QUEUE_PATH/rq_affinity" 2
+    safe_write "$QUEUE_PATH/rq_affinity" 1
 
     for bfq_path in "$QUEUE_PATH/bfq" "$QUEUE_PATH/iosched"; do
       if [ -d "$bfq_path" ]; then
