@@ -698,13 +698,7 @@ echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/n
 THP
     chmod +x "${turbodecky_bin}/thp-config.sh"
 
-    # --- 4. SCRIPT HUGEPAGES ---
-    cat <<'HPS' > "${turbodecky_bin}/hugepages.sh"
-#!/usr/bin/env bash
-echo 0 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages 2>/dev/null || true
-HPS
-    chmod +x "${turbodecky_bin}/hugepages.sh"
-
+    
     # --- 5. SCRIPT KSM ---
     cat <<'KSM' > "${turbodecky_bin}/ksm-config.sh"
 #!/usr/bin/env bash
@@ -717,14 +711,12 @@ KSM
 #!/usr/bin/env bash
 echo 1 > /sys/module/multi_queue/parameters/multi_queue_alloc 2>/dev/null || true
 echo 1 > /sys/module/multi_queue/parameters/multi_queue_reclaim 2>/dev/null || true
-if [ -w /sys/module/rcu/parameters/rcu_normal_after_boot ]; then
-    echo 0 > /sys/module/rcu/parameters/rcu_normal_after_boot 2>/dev/null || true
-fi
+
 KRT
     chmod +x "${turbodecky_bin}/kernel-tweaks.sh"
 
     # --- 7. CRIAÇÃO DOS SERVICES SYSTEMD ---
-    for service_name in thp-config hugepages ksm-config kernel-tweaks; do
+    for service_name in thp-config ksm-config kernel-tweaks; do
         cat <<UNIT > /etc/systemd/system/${service_name}.service
 [Unit]
 Description=TurboDecky ${service_name} persistence
@@ -1031,7 +1023,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1125,7 +1117,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "psi=1" "rcutree.enable_rcu_lazy=1" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
