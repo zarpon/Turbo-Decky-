@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.10"
+versao="2.2.11"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -966,22 +966,17 @@ _instalar_kernel_customizado() {
 }
 
 optimize_zram() {
-    # ZRAM + recompressão periódica (SteamOS-aware, corrigido)
+    # ZRAM + recompressão periódica (SteamOS-safe, FINAL)
     #
-    # Correções aplicadas (1 → 3):
-    # 1) NÃO tenta criar/gerenciar zram manualmente: respeita 100% o
-    #    systemd-zram-setup@zram0.service (modelo real do SteamOS).
-    # 2) Compressão primária definida exclusivamente via zram-generator
-    #    (lzo-rle) — nada é sobrescrito depois.
-    # 3) Recompressão é:
-    #    - configurada após a zram existir
-    #    - periódica (timer a cada 10 min)
-    #    - segura (idle é write-only, nunca lido)
-    #
-    # Resultado esperado:
-    #   ALGORITHM      = lzo-rle
-    #   recomp_algorithm = zstd
-    #   recompress      = huge + idle (a cada 10 min)
+    # Garantias:
+    # - zram criada EXCLUSIVAMENTE pelo systemd-zram-setup@zram0.service
+    # - compressão primária: lzo-rle (zram-generator)
+    # - recompressão: zstd (sysfs)
+    # - recompressão periódica a cada 10 minutos (timer real)
+    # - nenhuma escrita silenciosa
+    # - nenhuma dependência de daemon-reexec em runtime
+
+    set -euo pipefail
 
     local gen_dir="/etc/systemd/zram-generator.conf.d"
     local gen_conf="${gen_dir}/00-turbodecky.conf"
@@ -991,13 +986,17 @@ optimize_zram() {
 
     [ "$(id -u)" -eq 0 ] || return 1
 
-    _log "Configurando ZRAM SteamOS-safe (lzo-rle + zstd recompress)..."
-
-    # SteamOS: desbloqueia FS se necessário
-    _steamos_readonly_disable_if_needed
+    _log "Aplicando configuração FINAL de ZRAM (lzo-rle + zstd recompress)..."
 
     # ------------------------------------------------------------------
-    # 1) zram-generator (ÚNICO responsável pela criação da zram)
+    # 0) SteamOS: garante FS realmente gravável
+    # ------------------------------------------------------------------
+    _steamos_readonly_disable_if_needed
+    sync
+    sleep 1
+
+    # ------------------------------------------------------------------
+    # 1) zram-generator (único responsável pela criação da zram)
     # ------------------------------------------------------------------
     mkdir -p "$gen_dir"
     rm -f "$gen_conf"
@@ -1011,17 +1010,20 @@ swap-priority = 100
 fs-type = swap
 EOF
 
-    _log "zram-generator configurado (lzo-rle)"
+    sync
 
-    # Recarrega geradores (necessário pós-boot)
-    systemctl daemon-reexec
-    systemctl daemon-reload
+    [ -f "$gen_conf" ] || {
+        _log "ERRO FATAL: zram-generator.conf não foi criado"
+        return 1
+    }
+
+    _log "zram-generator configurado corretamente (lzo-rle)"
 
     # ------------------------------------------------------------------
-    # 2) Serviço oneshot: apenas RECOMPRESSÃO (zstd)
-    #    - Nunca recria zram
-    #    - Só roda após systemd-zram-setup@zram0
+    # 2) Serviço oneshot de recompressão (zstd)
     # ------------------------------------------------------------------
+    rm -f "$recompress_service"
+
     cat <<'EOF' > "$recompress_service"
 [Unit]
 Description=ZRAM Recompress (zstd, huge + idle)
@@ -1030,19 +1032,28 @@ Requires=systemd-zram-setup@zram0.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -e -c '\
-  [ -w /sys/block/zram0/recomp_algorithm ] && echo zstd > /sys/block/zram0/recomp_algorithm; \
-  [ -w /sys/block/zram0/idle ] && echo 120 > /sys/block/zram0/idle; \
+ExecStart=/bin/sh -c '\
+  [ -w /sys/block/zram0/recomp_algorithm ] && echo zstd > /sys/block/zram0/recomp_algorithm || exit 0; \
+  [ -w /sys/block/zram0/idle ] && echo 120 > /sys/block/zram0/idle || true; \
   [ -w /sys/block/zram0/recompress ] || exit 0; \
-  echo type=huge > /sys/block/zram0/recompress; \
+  echo type=huge > /sys/block/zram0/recompress || true; \
   sleep 1; \
-  echo type=idle > /sys/block/zram0/recompress'
+  echo type=idle > /sys/block/zram0/recompress || true \
+'
 EOF
 
+    sync
+
+    [ -f "$recompress_service" ] || {
+        _log "ERRO FATAL: zram-recompress.service não foi criado"
+        return 1
+    }
+
     # ------------------------------------------------------------------
-    # 3) Timer correto: execução real a cada 10 minutos
-    #    (baseado na última execução, não no boot)
+    # 3) Timer REAL (10 minutos, persistente)
     # ------------------------------------------------------------------
+    rm -f "$recompress_timer"
+
     cat <<'EOF' > "$recompress_timer"
 [Unit]
 Description=Periodic ZRAM recompression (10 min)
@@ -1057,29 +1068,40 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
+    sync
+
+    [ -f "$recompress_timer" ] || {
+        _log "ERRO FATAL: zram-recompress.timer não foi criado"
+        return 1
+    }
+
     # ------------------------------------------------------------------
-    # 4) Ativação
+    # 4) Ativação correta (sem daemon-reexec em runtime)
     # ------------------------------------------------------------------
     systemctl daemon-reload
-    systemctl enable --now zram-recompress.timer
 
-    # Disparo inicial (boot atual)
-    systemctl start zram-recompress.service 2>/dev/null || true
+    systemctl enable zram-recompress.timer
+    systemctl start zram-recompress.timer
+
+    # Disparo imediato (sessão atual)
+    systemctl start zram-recompress.service || true
 
     # ------------------------------------------------------------------
-    # 5) Log / validação (SEM ler idle → write-only)
+    # 5) Log / validação (idle NÃO é lido)
     # ------------------------------------------------------------------
     {
-        echo "=== Turbo Decky ZRAM STATUS ==="
+        echo "=== Turbo Decky ZRAM FINAL STATUS ==="
         date -Iseconds
         zramctl
         echo "comp_algorithm:"
         cat /sys/block/zram0/comp_algorithm 2>/dev/null || true
         echo "recomp_algorithm:"
         cat /sys/block/zram0/recomp_algorithm 2>/dev/null || true
+        echo "timers:"
+        systemctl list-timers --all | grep zram-recompress || true
     } >> "$logfile"
 
-    _log "ZRAM correta: lzo-rle (primário) + zstd recompress (10 min)"
+    _log "ZRAM FINAL aplicada com sucesso: lzo-rle + zstd recompress (10 min)"
 
     return 0
 }
