@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.04"
+versao="2.2.05"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -965,10 +965,8 @@ _instalar_kernel_customizado() {
     fi
 }
 
-
-
 optimize_zram() {
-    # --- CORREÇÃO DE PERSISTÊNCIA (SteamOS: conf.d) ---
+    # --- CORREÇÃO DE PERSISTÊNCIA (SteamOS: conf.d) + garantia de LZO-RLE em runtime ---
     local config_dir="/etc/systemd/zram-generator.conf.d"
     local config_file="${config_dir}/00-turbodecky.conf"
     local legacy_volatile_file="/usr/lib/systemd/zram-generator.conf"
@@ -977,15 +975,16 @@ optimize_zram() {
     local timestamp
     local backup_file
     local logfile="${logfile:-/var/log/zram-optimize.log}"
+    local want_algo="lzo-rle"
+    local current_algo
 
-    _log "Iniciando otimização do zRAM (Modo Persistente - conf.d)..."
+    _log "Iniciando otimização do zRAM (Persistente + forçar ${want_algo})..."
 
     if [ "$(id -u)" -ne 0 ]; then
         _log "Erro: esta função precisa ser executada como root."
         return 1
     fi
 
-    # Permite escrita em overlays readonly do SteamOS, se necessário
     _steamos_readonly_disable_if_needed || true
 
     # Limpeza segura do arquivo legado em /usr/lib (somente se for nosso marcador)
@@ -997,11 +996,10 @@ optimize_zram() {
         fi
     fi
 
-    # Cria o diretório conf.d se necessário
+    # Cria conf.d e escreve configuração com LZO-RLE
     mkdir -p "$config_dir"
     chmod 755 "$config_dir"
 
-    # Backup do arquivo existente em conf.d (se houver)
     if [ -f "$config_file" ]; then
         timestamp=$(date +%Y%m%d_%H%M%S)
         backup_file="${config_file}.bak.${timestamp}"
@@ -1010,32 +1008,112 @@ optimize_zram() {
         _log "Backup do config existente salvo em: $backup_file"
     fi
 
-    # Escreve a configuração com LZO-RLE 
     cat > "$config_file" <<'EOF'
 # Configuração gerada pelo Turbo Decky
 [zram0]
 zram-size = ram * 0.4
 compression-algorithm = lzo-rle
-swap-priority = 1000
+swap-priority = 100
 fs-type = swap
 EOF
     chmod 644 "$config_file"
     _log "Nova configuração persistente escrita em: $config_file"
 
-    # Recarrega systemd e tenta aplicar
+    # Recarrega systemd e tenta aplicar via systemd-zram-generator (bom caminho preferível)
     systemctl daemon-reload
+    systemctl restart systemd-zram-setup@zram0.service 2>>"$logfile" || true
+    sleep 1
 
-    if systemctl restart systemd-zram-setup@zram0.service 2>>"$logfile"; then
-        _log "Serviço systemd-zram-setup@zram0 reiniciado com sucesso."
-    else
-        _log "Aviso: não foi possível reiniciar systemd-zram-setup@zram0.service. Tentando start..."
-        systemctl start systemd-zram-setup@zram0.service 2>>"$logfile" || _log "Falha ao iniciar systemd-zram-setup@zram0.service (continuando)."
+    # Função auxiliar: lê algoritmo atual do sysfs (se disponível)
+    get_current_algo() {
+        if [ -r /sys/block/zram0/comp_algorithm ]; then
+            # extrai o nome entre colchetes: ex: "lzo [lz4]" -> lz4
+            sed -n 's/.*\[\(.*\)\].*/\1/p' /sys/block/zram0/comp_algorithm 2>/dev/null || true
+        else
+            # fallback via zramctl (parceiro)
+            zramctl --noheadings --raw 2>/dev/null | awk 'NR==1 {print $2}' || true
+        fi
+    }
+
+    current_algo=$(get_current_algo)
+    _log "Algoritmo atual detectado em /sys/block/zram0/comp_algorithm (ou zramctl): ${current_algo:-<nenhum>}"
+
+    # Se o device não existe ou algoritmo já é o desejado, fim.
+    if [ -z "$current_algo" ]; then
+        _log "zram0 não encontrado após tentativa via systemd generator. Pode ser necessário reboot se falhar."
     fi
 
-    # Recompactação inteligente (se suportado)
+    if [ "$current_algo" = "$want_algo" ]; then
+        _log "Algoritmo já é ${want_algo}. Sem alterações adicionais."
+    else
+        _log "Algoritmo ≠ ${want_algo}. Tentando correção em runtime (reset + recriação com zramctl)..."
+
+        # 1) tenta carregar módulos de compressão que podem ser necessários (tolerante se não existirem)
+        for m in lzo lzo_compress lzo-rle lzo_rle; do
+            modprobe "$m" >/dev/null 2>&1 || true
+        done
+
+        # 2) se existir swap no zram0, desativa
+        swapoff /dev/zram0 2>/dev/null || true
+
+        # 3) reset do device para permitir escolher algoritmo (doc: não dá para trocar sem reset). Veja docs do kernel. :contentReference[oaicite:1]{index=1}
+        if command -v zramctl >/dev/null 2>&1; then
+            zramctl --reset /dev/zram0 2>>"$logfile" || true
+        else
+            # fallback: tenta escrever reset via sysfs se disponível
+            if [ -w /sys/block/zram0/reset ]; then
+                echo 1 > /sys/block/zram0/reset 2>>"$logfile" || true
+            fi
+        fi
+
+        # 4) recalcula o tamanho (40% da RAM) para recriar o device de forma consistente
+        mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+        if [ -n "$mem_kb" ] && [ "$mem_kb" -gt 0 ]; then
+            # usa KB para ser seguro
+            size_kb=$((mem_kb * 40 / 100))
+            size="${size_kb}K"
+        else
+            # fallback razoável
+            size="1G"
+        fi
+
+        # 5) recria usando zramctl com -a (algoritmo) — manpage zramctl tem a opção -a/--algorithm. :contentReference[oaicite:2]{index=2}
+        if command -v zramctl >/dev/null 2>&1; then
+            if zramctl -f -s "$size" -a "$want_algo" /dev/zram0 2>>"$logfile"; then
+                _log "Recriado /dev/zram0 com algoritmo ${want_algo} e tamanho ${size}."
+                # prepara e ativa swap
+                mkswap -f /dev/zram0 >/dev/null 2>&1 || true
+                swapon -p 100 /dev/zram0 >/dev/null 2>&1 || true
+            else
+                _log "zramctl -a ${want_algo} falhou. Tentando método alternativo (echo em comp_algorithm antes de disksize)."
+                # método alternativo: tenta setar comp_algorithm diretamente se o node existir (após reset)
+                if [ -w /sys/block/zram0/comp_algorithm ]; then
+                    echo "$want_algo" > /sys/block/zram0/comp_algorithm 2>>"$logfile" || true
+                    echo "$size" > /sys/block/zram0/disksize 2>>"$logfile" || true
+                    mkswap -f /dev/zram0 >/dev/null 2>&1 || true
+                    swapon -p 100 /dev/zram0 >/dev/null 2>&1 || true
+                    _log "Tentativa alternativa aplicada (escrevendo comp_algorithm/disksize)."
+                else
+                    _log "Métodos de recolocação de algoritmo falharam (comp_algorithm ausente ou sem permissão). Verificar logs: $logfile"
+                fi
+            fi
+        else
+            _log "zramctl ausente; impossibilitado de recriar em runtime. Verifique instalação do util-linux."
+        fi
+
+        # recheca
+        sleep 1
+        current_algo=$(get_current_algo)
+        _log "Algoritmo após tentativa de correção: ${current_algo:-<nenhum>}"
+
+        if [ "$current_algo" != "$want_algo" ]; then
+            _log "Aviso: não foi possível forçar ${want_algo} em runtime. Pode ser necessário ajustar módulos carregados no boot (ex: /etc/modules-load.d) ou reiniciar para que systemd-generator aplique corretamente."
+        fi
+    fi
+
+    # (o restante da função de recompactação e logs permanece inalterado)
     if [ -w "/sys/block/zram0/recomp_algorithm" ] || [ -w "/sys/block/zram0/recompress" ]; then
         _log "Configurando recompactação automática (multi-comp) via Systemd Timer..."
-
         cat > "$service_file" <<EOF
 [Unit]
 Description=Otimizar zRAM (Recompactar Huge/Idle com ZSTD)
@@ -1066,7 +1144,6 @@ EOF
         systemctl daemon-reload
         systemctl enable --now zram-recompress.timer 2>>"$logfile" || systemctl start zram-recompress.timer 2>>"$logfile" || _log "Aviso: não foi possível ativar o timer de recompactação."
 
-        # Aplicação imediata apenas para huge pages
         echo "algo=zstd priority=1" > /sys/block/zram0/recomp_algorithm 2>/dev/null || true
         echo "type=huge" > /sys/block/zram0/recompress 2>/dev/null || true
         _log "Recompactação inicial de Huge Pages aplicada (se suportado)."
@@ -1074,7 +1151,6 @@ EOF
         _log "Recompactação não suportada neste kernel/dispositivo (recomp_algorithm ausente ou sem permissão)."
     fi
 
-    # Validação e log do status atual
     _log "Otimização concluída. Status atual de zram:"
     if command -v zramctl >/dev/null 2>&1; then
         zramctl | tee -a "$logfile"
@@ -1084,6 +1160,7 @@ EOF
 
     return 0
 }
+
 
 aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
