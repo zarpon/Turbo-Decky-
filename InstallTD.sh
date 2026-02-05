@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.11"
+versao="2.2.12"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1005,8 +1005,8 @@ optimize_zram() {
 # Turbo Decky - SteamOS ZRAM Generator
 [zram0]
 zram-size = ram * 0.4
-compression-algorithm = lzo-rle
-swap-priority = 100
+compression-algorithm = lzo-rle zstd(level=3) (type=idle) (type=huge)
+swap-priority = 1000
 fs-type = swap
 EOF
 
