@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.15"
+versao="2.2.16"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -965,27 +965,24 @@ _instalar_kernel_customizado() {
     fi
 }
 optimize_zram() {
-    # ZRAM + recompressão periódica (SteamOS-safe, corrigido e funcional)
-    #
-    # Garantias:
-    # - Criação da zram: EXCLUSIVA do systemd-zram-setup@zram0.service
-    # - Compressão primária: lzo-rle (via zram-generator)
-    # - Recompressão: zstd (via sysfs)
-    # - Recompressão periódica: timer systemd a cada 10 minutos
-    # - Sintaxe 100% compatível com kernel SteamOS (sem Invalid argument)
+    # ZRAM SteamOS-safe (FINAL)
+    # - criação: zram-generator (SteamOS)
+    # - compressão: lzo-rle
+    # - recompressão: zstd
+    # - timer: 10 minutos
+    # - kernel-safe sysfs writes
 
     local gen_dir="/etc/systemd/zram-generator.conf.d"
     local gen_conf="${gen_dir}/00-turbodecky.conf"
-    local recompress_service="/etc/systemd/system/zram-recompress.service"
-    local recompress_timer="/etc/systemd/system/zram-recompress.timer"
+    local svc="/etc/systemd/system/zram-recompress.service"
+    local timer="/etc/systemd/system/zram-recompress.timer"
 
     [ "$(id -u)" -eq 0 ] || return 1
-
     _steamos_readonly_disable_if_needed
 
-    # ------------------------------------------------------------------
-    # 1) zram-generator (define APENAS compressão primária)
-    # ------------------------------------------------------------------
+    # -------------------------------------------------
+    # 1) zram-generator (único criador da zram)
+    # -------------------------------------------------
     mkdir -p "$gen_dir"
     rm -f "$gen_conf"
 
@@ -1000,10 +997,10 @@ EOF
     systemctl daemon-reexec
     systemctl daemon-reload
 
-    # ------------------------------------------------------------------
-    # 2) Serviço oneshot de recompressão (SteamOS-kernel correto)
-    # ------------------------------------------------------------------
-    cat <<'EOF' > "$recompress_service"
+    # -------------------------------------------------
+    # 2) Serviço de recompressão (kernel-correct)
+    # -------------------------------------------------
+    cat <<'EOF' > "$svc"
 [Unit]
 Description=ZRAM Recompress (zstd, huge + idle)
 After=systemd-zram-setup@zram0.service
@@ -1011,19 +1008,20 @@ Requires=systemd-zram-setup@zram0.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c '\
-  [ -w /sys/block/zram0/recomp_algorithm ] && echo zstd > /sys/block/zram0/recomp_algorithm || true; \
+ExecStart=/bin/sh -e -c '\
+  [ -w /sys/block/zram0/recomp_algorithm ] && echo zstd > /sys/block/zram0/recomp_algorithm; \
+  [ -w /sys/block/zram0/idle ] && echo 120 > /sys/block/zram0/idle; \
   [ -w /sys/block/zram0/recompress ] || exit 0; \
-  echo huge > /sys/block/zram0/recompress || true; \
+  echo type=huge > /sys/block/zram0/recompress; \
   sleep 1; \
-  echo idle > /sys/block/zram0/recompress || true \
+  echo type=idle > /sys/block/zram0/recompress \
 '
 EOF
 
-    # ------------------------------------------------------------------
-    # 3) Timer: execução real a cada 10 minutos
-    # ------------------------------------------------------------------
-    cat <<'EOF' > "$recompress_timer"
+    # -------------------------------------------------
+    # 3) Timer real (10 minutos)
+    # -------------------------------------------------
+    cat <<'EOF' > "$timer"
 [Unit]
 Description=Periodic ZRAM recompression (10 min)
 
@@ -1037,15 +1035,16 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-    # ------------------------------------------------------------------
-    # 4) Ativação correta
-    # ------------------------------------------------------------------
+    # -------------------------------------------------
+    # 4) Ativação
+    # -------------------------------------------------
     systemctl daemon-reload
     systemctl enable --now zram-recompress.timer
     systemctl start zram-recompress.service 2>/dev/null || true
 
     return 0
 }
+
 aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
