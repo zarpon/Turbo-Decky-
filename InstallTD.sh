@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.18"
+versao="2.2.2"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -965,18 +965,11 @@ _instalar_kernel_customizado() {
     fi
 }
 optimize_zram() {
-    # ZRAM SteamOS-safe (FINAL)
-    # - criação: zram-generator (SteamOS)
-    # - compressão: lzo-rle
-    # - recompressão: zstd
-    # - timer: 10 minutos
-    # - kernel-safe sysfs writes
-
+    # ZRAM SteamOS-safe 
+   
     local gen_dir="/etc/systemd/zram-generator.conf.d"
     local gen_conf="${gen_dir}/00-turbodecky.conf"
-    local svc="/etc/systemd/system/zram-recompress.service"
-    local timer="/etc/systemd/system/zram-recompress.timer"
-
+    
     [ "$(id -u)" -eq 0 ] || return 1
     _steamos_readonly_disable_if_needed
 
@@ -985,11 +978,12 @@ optimize_zram() {
     # -------------------------------------------------
     mkdir -p "$gen_dir"
     rm -f "$gen_conf"
-
+rm -f /etc/systemd/system/zram-recompress.timer 
+rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
-zram-size = ram * 0.4
-compression-algorithm = lzo-rle zstd(level=3) (type=idle) (type=huge) 
+zram-size = ram * 1.5
+compression-algorithm = lzo-rle zstd(level=3) (type=idle)
 swap-priority = 1000
 fs-type = swap
 EOF
@@ -997,50 +991,7 @@ EOF
     systemctl daemon-reexec
     systemctl daemon-reload
 
-    # -------------------------------------------------
-    # 2) Serviço de recompressão (kernel-correct)
-    # -------------------------------------------------
-    cat <<'EOF' > "$svc"
-[Unit]
-Description=ZRAM Recompress (zstd, huge + idle)
-After=systemd-zram-setup@zram0.service
-Requires=systemd-zram-setup@zram0.service
-
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -e -c '\
-  [ -w /sys/block/zram0/recomp_algorithm ] && echo zstd > /sys/block/zram0/recomp_algorithm; \
-  [ -w /sys/block/zram0/idle ] && echo 120 > /sys/block/zram0/idle; \
-  [ -w /sys/block/zram0/recompress ] || exit 0; \
-  echo type=huge > /sys/block/zram0/recompress; \
-  sleep 1; \
-  echo type=idle > /sys/block/zram0/recompress \
-'
-EOF
-
-    # -------------------------------------------------
-    # 3) Timer real (10 minutos)
-    # -------------------------------------------------
-    cat <<'EOF' > "$timer"
-[Unit]
-Description=Periodic ZRAM recompression (10 min)
-
-[Timer]
-OnBootSec=3min
-OnUnitActiveSec=10min
-AccuracySec=30s
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    # -------------------------------------------------
-    # 4) Ativação
-    # -------------------------------------------------
-    systemctl daemon-reload
-    systemctl enable --now zram-recompress.timer
-    systemctl start zram-recompress.service 2>/dev/null || true
+   
 
     return 0
 }
