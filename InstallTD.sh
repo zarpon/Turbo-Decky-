@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.05"
+versao="2.2.06"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -966,48 +966,38 @@ _instalar_kernel_customizado() {
 }
 
 optimize_zram() {
-    # --- CORREÇÃO DE PERSISTÊNCIA (SteamOS: conf.d) + garantia de LZO-RLE em runtime ---
     local config_dir="/etc/systemd/zram-generator.conf.d"
     local config_file="${config_dir}/00-turbodecky.conf"
     local legacy_volatile_file="/usr/lib/systemd/zram-generator.conf"
-    local service_file="/etc/systemd/system/zram-recompress.service"
-    local timer_file="/etc/systemd/system/zram-recompress.timer"
-    local timestamp
-    local backup_file
     local logfile="${logfile:-/var/log/zram-optimize.log}"
     local want_algo="lzo-rle"
     local current_algo
-
-    _log "Iniciando otimização do zRAM (Persistente + forçar ${want_algo})..."
-
-    if [ "$(id -u)" -ne 0 ]; then
-        _log "Erro: esta função precisa ser executada como root."
-        return 1
-    fi
-
-    _steamos_readonly_disable_if_needed || true
-
-    # Limpeza segura do arquivo legado em /usr/lib (somente se for nosso marcador)
-    if [ -f "$legacy_volatile_file" ]; then
-        if grep -q "Configuração gerada pelo Turbo Decky" "$legacy_volatile_file"; then
-            rm -f "$legacy_volatile_file" && _log "Arquivo volátil antigo removido: $legacy_volatile_file"
-        else
-            _log "Arquivo em $legacy_volatile_file existe, mas sem marcador. Não será removido."
-        fi
-    fi
-
-    # Cria conf.d e escreve configuração com LZO-RLE
+    local timestamp backup_file
+    local modules_file="/etc/modules-load.d/00-zram-compress.conf"
     mkdir -p "$config_dir"
     chmod 755 "$config_dir"
 
+    [ "$(id -u)" -eq 0 ] || { echo "Erro: executar como root"; return 1; }
+
+    _steamos_readonly_disable_if_needed || true
+
+    # Não remove arquivos em /usr/lib a menos que contenham nosso marcador
+    if [ -f "$legacy_volatile_file" ]; then
+        if grep -q "Configuração gerada pelo Turbo Decky" "$legacy_volatile_file"; then
+            rm -f "$legacy_volatile_file" && echo "removido legado $legacy_volatile_file" >> "$logfile"
+        else
+            echo "legado $legacy_volatile_file preservado (sem marcador)" >> "$logfile"
+        fi
+    fi
+
+    # escreve config com LZO-RLE
     if [ -f "$config_file" ]; then
         timestamp=$(date +%Y%m%d_%H%M%S)
         backup_file="${config_file}.bak.${timestamp}"
         cp -a "$config_file" "$backup_file"
         chmod 600 "$backup_file"
-        _log "Backup do config existente salvo em: $backup_file"
+        echo "backup $backup_file" >> "$logfile"
     fi
-
     cat > "$config_file" <<'EOF'
 # Configuração gerada pelo Turbo Decky
 [zram0]
@@ -1017,151 +1007,131 @@ swap-priority = 100
 fs-type = swap
 EOF
     chmod 644 "$config_file"
-    _log "Nova configuração persistente escrita em: $config_file"
+    echo "$(date -Iseconds) escrito $config_file" >> "$logfile"
 
-    # Recarrega systemd e tenta aplicar via systemd-zram-generator (bom caminho preferível)
     systemctl daemon-reload
     systemctl restart systemd-zram-setup@zram0.service 2>>"$logfile" || true
     sleep 1
 
-    # Função auxiliar: lê algoritmo atual do sysfs (se disponível)
+    # Função para ler algoritmo atual de forma robusta
     get_current_algo() {
         if [ -r /sys/block/zram0/comp_algorithm ]; then
-            # extrai o nome entre colchetes: ex: "lzo [lz4]" -> lz4
-            sed -n 's/.*\[\(.*\)\].*/\1/p' /sys/block/zram0/comp_algorithm 2>/dev/null || true
+            # linha ex: "lzo lzo-rle [lz4] lz4hc zstd" -> extract between []
+            sed -n 's/.*\[\([^]]*\)\].*/\1/p' /sys/block/zram0/comp_algorithm 2>/dev/null || true
         else
-            # fallback via zramctl (parceiro)
-            zramctl --noheadings --raw 2>/dev/null | awk 'NR==1 {print $2}' || true
+            # fallback via zramctl (coluna ALGORITHM)
+            zramctl 2>/dev/null | awk 'NR==1 {print $2}' || true
         fi
     }
 
     current_algo=$(get_current_algo)
-    _log "Algoritmo atual detectado em /sys/block/zram0/comp_algorithm (ou zramctl): ${current_algo:-<nenhum>}"
-
-    # Se o device não existe ou algoritmo já é o desejado, fim.
-    if [ -z "$current_algo" ]; then
-        _log "zram0 não encontrado após tentativa via systemd generator. Pode ser necessário reboot se falhar."
-    fi
+    echo "$(date -Iseconds) algoritmo atual: ${current_algo:-<nenhum>}" >> "$logfile"
 
     if [ "$current_algo" = "$want_algo" ]; then
-        _log "Algoritmo já é ${want_algo}. Sem alterações adicionais."
+        echo "Algoritmo já é ${want_algo}" >> "$logfile"
     else
-        _log "Algoritmo ≠ ${want_algo}. Tentando correção em runtime (reset + recriação com zramctl)..."
+        echo "Algoritmo != ${want_algo}. Iniciando tentativa ativa de correção..." >> "$logfile"
 
-        # 1) tenta carregar módulos de compressão que podem ser necessários (tolerante se não existirem)
-        for m in lzo lzo_compress lzo-rle lzo_rle; do
-            modprobe "$m" >/dev/null 2>&1 || true
+        # 1) buscar módulos relacionados a LZO no tree de módulos
+        uname_r=$(uname -r)
+        mapfile -t found_mods < <(find /lib/modules/"$uname_r" -type f -iname "*lzo*" -printf '%f\n' 2>/dev/null | sed -E 's/\.ko(.xz)?$//' | sort -u)
+        # também procurar por nomes comuns
+        for name in lzo lzo_compress lzo-rle lzo_rle; do
+            if [ -f "/lib/modules/$uname_r/kernel/$name.ko" ]; then
+                found_mods+=("$name")
+            fi
         done
+        # dedupe
+        IFS=$'\n' read -r -d '' -a found_mods < <(printf '%s\n' "${found_mods[@]}" | awk '!x[$0]++' && printf '\0')
 
-        # 2) se existir swap no zram0, desativa
-        swapoff /dev/zram0 2>/dev/null || true
+        if [ "${#found_mods[@]}" -eq 0 ]; then
+            echo "Nenhum módulo LZO encontrado em /lib/modules/$uname_r — provavelmente não disponível no kernel." >> "$logfile"
+        else
+            echo "Módulos LZO detectados: ${found_mods[*]}" >> "$logfile"
+            # tentar modprobe em cada
+            for m in "${found_mods[@]}"; do
+                modprobe "$m" >/dev/null 2>>"$logfile" || echo "modprobe $m falhou" >> "$logfile"
+            done
+            sleep 1
 
-        # 3) reset do device para permitir escolher algoritmo (doc: não dá para trocar sem reset). Veja docs do kernel. :contentReference[oaicite:1]{index=1}
+            # se /etc/modules-load.d não tem entry, cria-la (apenas se não existir)
+            if [ ! -f "$modules_file" ]; then
+                # escolhe módulos simples (remove sufixos estranhos)
+                printf "%s\n" "${found_mods[@]}" > "${modules_file}.tmp"
+                # filtra linhas vazias e deixa apenas nomes simples (sem caminho)
+                awk -F'/' '{print $NF}' "${modules_file}.tmp" | sed '/^\s*$/d' > "$modules_file"
+                chmod 644 "$modules_file"
+                rm -f "${modules_file}.tmp"
+                echo "Criado $modules_file para carregar módulos LZO no boot: $(cat $modules_file)" >> "$logfile"
+            else
+                echo "$modules_file já existe — não sobrescrevendo" >> "$logfile"
+            fi
+        fi
+
+        # 2) reset e recriação do device em runtime com zramctl -a lzo-rle
+        # desativa swap se estiver ativo
+        if swapon --show=NAME | grep -q '/dev/zram0'; then
+            swapoff /dev/zram0 2>>"$logfile" || true
+            echo "swapoff /dev/zram0" >> "$logfile"
+        fi
+
+        # reset do device
         if command -v zramctl >/dev/null 2>&1; then
             zramctl --reset /dev/zram0 2>>"$logfile" || true
         else
-            # fallback: tenta escrever reset via sysfs se disponível
             if [ -w /sys/block/zram0/reset ]; then
                 echo 1 > /sys/block/zram0/reset 2>>"$logfile" || true
             fi
         fi
 
-        # 4) recalcula o tamanho (40% da RAM) para recriar o device de forma consistente
+        # calcula size = 40% RAM
         mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
         if [ -n "$mem_kb" ] && [ "$mem_kb" -gt 0 ]; then
-            # usa KB para ser seguro
             size_kb=$((mem_kb * 40 / 100))
             size="${size_kb}K"
         else
-            # fallback razoável
             size="1G"
         fi
 
-        # 5) recria usando zramctl com -a (algoritmo) — manpage zramctl tem a opção -a/--algorithm. :contentReference[oaicite:2]{index=2}
+        # tenta criar com zramctl -a
         if command -v zramctl >/dev/null 2>&1; then
             if zramctl -f -s "$size" -a "$want_algo" /dev/zram0 2>>"$logfile"; then
-                _log "Recriado /dev/zram0 com algoritmo ${want_algo} e tamanho ${size}."
-                # prepara e ativa swap
-                mkswap -f /dev/zram0 >/dev/null 2>&1 || true
-                swapon -p 100 /dev/zram0 >/dev/null 2>&1 || true
+                echo "zramctl recriado com ${want_algo} (${size})" >> "$logfile"
+                mkswap -f /dev/zram0 2>>"$logfile" || true
+                swapon -p 100 /dev/zram0 2>>"$logfile" || true
             else
-                _log "zramctl -a ${want_algo} falhou. Tentando método alternativo (echo em comp_algorithm antes de disksize)."
-                # método alternativo: tenta setar comp_algorithm diretamente se o node existir (após reset)
-                if [ -w /sys/block/zram0/comp_algorithm ]; then
-                    echo "$want_algo" > /sys/block/zram0/comp_algorithm 2>>"$logfile" || true
-                    echo "$size" > /sys/block/zram0/disksize 2>>"$logfile" || true
-                    mkswap -f /dev/zram0 >/dev/null 2>&1 || true
-                    swapon -p 100 /dev/zram0 >/dev/null 2>&1 || true
-                    _log "Tentativa alternativa aplicada (escrevendo comp_algorithm/disksize)."
-                else
-                    _log "Métodos de recolocação de algoritmo falharam (comp_algorithm ausente ou sem permissão). Verificar logs: $logfile"
-                fi
+                echo "zramctl -a ${want_algo} falhou. Registrando diagnostico..." >> "$logfile"
+                # diagnostico: mostrar comp_algorithm e conteúdo /lib/modules
+                echo "=== comp_algorithm ===" >> "$logfile"
+                cat /sys/block/zram0/comp_algorithm 2>>"$logfile" || true
+                echo "=== lsmod | grep lzo ===" >> "$logfile"
+                lsmod | grep -i lzo 2>>"$logfile" || true
+                echo "=== módulos encontrados (detalhe) ===" >> "$logfile"
+                for f in "${found_mods[@]}"; do
+                    modinfo "$f" 2>>"$logfile" || true
+                done
             fi
         else
-            _log "zramctl ausente; impossibilitado de recriar em runtime. Verifique instalação do util-linux."
+            echo "zramctl não disponível — impossível recriar em runtime" >> "$logfile"
         fi
 
-        # recheca
         sleep 1
         current_algo=$(get_current_algo)
-        _log "Algoritmo após tentativa de correção: ${current_algo:-<nenhum>}"
-
+        echo "$(date -Iseconds) algoritmo após tentativa: ${current_algo:-<nenhum>}" >> "$logfile"
         if [ "$current_algo" != "$want_algo" ]; then
-            _log "Aviso: não foi possível forçar ${want_algo} em runtime. Pode ser necessário ajustar módulos carregados no boot (ex: /etc/modules-load.d) ou reiniciar para que systemd-generator aplique corretamente."
+            echo "Falha em forçar ${want_algo}. Veja $logfile e /sys/block/zram0/comp_algorithm. Possíveis causas: módulo LZO não disponível no kernel, kernel força algoritmo diferente, ou falta de permissão de escrita em sysfs." >> "$logfile"
         fi
     fi
 
-    # (o restante da função de recompactação e logs permanece inalterado)
-    if [ -w "/sys/block/zram0/recomp_algorithm" ] || [ -w "/sys/block/zram0/recompress" ]; then
-        _log "Configurando recompactação automática (multi-comp) via Systemd Timer..."
-        cat > "$service_file" <<EOF
-[Unit]
-Description=Otimizar zRAM (Recompactar Huge/Idle com ZSTD)
-After=systemd-zram-setup@zram0.service
-
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -c 'echo "algo=zstd priority=1" > /sys/block/zram0/recomp_algorithm 2>/dev/null || true; \
-                      echo "type=huge" > /sys/block/zram0/recompress 2>/dev/null || true; \
-                      echo 120 > /sys/block/zram0/idle 2>/dev/null || true; \
-                      echo "type=idle" > /sys/block/zram0/recompress 2>/dev/null || true'
-EOF
-        chmod 644 "$service_file"
-
-        cat > "$timer_file" <<EOF
-[Unit]
-Description=Timer para recompactação zRAM
-
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=10min
-
-[Install]
-WantedBy=timers.target
-EOF
-        chmod 644 "$timer_file"
-
-        systemctl daemon-reload
-        systemctl enable --now zram-recompress.timer 2>>"$logfile" || systemctl start zram-recompress.timer 2>>"$logfile" || _log "Aviso: não foi possível ativar o timer de recompactação."
-
-        echo "algo=zstd priority=1" > /sys/block/zram0/recomp_algorithm 2>/dev/null || true
-        echo "type=huge" > /sys/block/zram0/recompress 2>/dev/null || true
-        _log "Recompactação inicial de Huge Pages aplicada (se suportado)."
-    else
-        _log "Recompactação não suportada neste kernel/dispositivo (recomp_algorithm ausente ou sem permissão)."
-    fi
-
-    _log "Otimização concluída. Status atual de zram:"
+    # resumo final
     if command -v zramctl >/dev/null 2>&1; then
         zramctl | tee -a "$logfile"
     else
-        _log "zramctl não encontrado; verifique se systemd-zram-generator e utilitários estão instalados."
+        echo "zramctl ausente" >> "$logfile"
     fi
 
     return 0
 }
-
-
 aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
