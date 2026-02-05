@@ -1015,7 +1015,7 @@ optimize_zram() {
 [zram0]
 zram-size = ram * 0.4
 compression-algorithm = lzo-rle
-swap-priority = 100
+swap-priority = 1000
 fs-type = swap
 EOF
     if [ $? -ne 0 ]; then
