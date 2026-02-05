@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.09"
+versao="2.2.10"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -966,11 +966,22 @@ _instalar_kernel_customizado() {
 }
 
 optimize_zram() {
-    # ZRAM + recompressão periódica (SteamOS-safe)
-    # - Compressão primária: lzo-rle (definida pelo zram-generator)
-    # - Recompressão: zstd (via sysfs)
-    # - Recompressão periódica a cada 10 minutos (systemd timer)
-    # - Não interfere no systemd-zram-setup@zram0.service
+    # ZRAM + recompressão periódica (SteamOS-aware, corrigido)
+    #
+    # Correções aplicadas (1 → 3):
+    # 1) NÃO tenta criar/gerenciar zram manualmente: respeita 100% o
+    #    systemd-zram-setup@zram0.service (modelo real do SteamOS).
+    # 2) Compressão primária definida exclusivamente via zram-generator
+    #    (lzo-rle) — nada é sobrescrito depois.
+    # 3) Recompressão é:
+    #    - configurada após a zram existir
+    #    - periódica (timer a cada 10 min)
+    #    - segura (idle é write-only, nunca lido)
+    #
+    # Resultado esperado:
+    #   ALGORITHM      = lzo-rle
+    #   recomp_algorithm = zstd
+    #   recompress      = huge + idle (a cada 10 min)
 
     local gen_dir="/etc/systemd/zram-generator.conf.d"
     local gen_conf="${gen_dir}/00-turbodecky.conf"
@@ -980,21 +991,19 @@ optimize_zram() {
 
     [ "$(id -u)" -eq 0 ] || return 1
 
-    _log "Configurando zRAM (lzo-rle) + recompressão periódica (zstd)..."
+    _log "Configurando ZRAM SteamOS-safe (lzo-rle + zstd recompress)..."
 
-    # SteamOS: garante FS gravável
+    # SteamOS: desbloqueia FS se necessário
     _steamos_readonly_disable_if_needed
 
     # ------------------------------------------------------------------
-    # 1. Garante criação correta da zram pelo zram-generator (persistente)
+    # 1) zram-generator (ÚNICO responsável pela criação da zram)
     # ------------------------------------------------------------------
     mkdir -p "$gen_dir"
-
-    # Remove qualquer configuração anterior para evitar override silencioso
     rm -f "$gen_conf"
 
     cat <<'EOF' > "$gen_conf"
-# Turbo Decky - ZRAM Generator (SteamOS)
+# Turbo Decky - SteamOS ZRAM Generator
 [zram0]
 zram-size = ram * 0.4
 compression-algorithm = lzo-rle
@@ -1002,41 +1011,44 @@ swap-priority = 100
 fs-type = swap
 EOF
 
-    _log "zram-generator configurado em $gen_conf"
+    _log "zram-generator configurado (lzo-rle)"
 
-    # Recarrega geradores (necessário apenas se rodar pós-boot)
+    # Recarrega geradores (necessário pós-boot)
     systemctl daemon-reexec
     systemctl daemon-reload
 
     # ------------------------------------------------------------------
-    # 2. Serviço oneshot para recompressão (zstd, huge + idle)
+    # 2) Serviço oneshot: apenas RECOMPRESSÃO (zstd)
+    #    - Nunca recria zram
+    #    - Só roda após systemd-zram-setup@zram0
     # ------------------------------------------------------------------
     cat <<'EOF' > "$recompress_service"
 [Unit]
-Description=ZRAM Recompress (huge + idle, zstd)
+Description=ZRAM Recompress (zstd, huge + idle)
 After=systemd-zram-setup@zram0.service
 Requires=systemd-zram-setup@zram0.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c '\
-  [ -w /sys/block/zram0/recomp_algorithm ] && echo zstd > /sys/block/zram0/recomp_algorithm || true; \
-  [ -w /sys/block/zram0/idle ] && echo 120 > /sys/block/zram0/idle || true; \
-  [ -w /sys/block/zram0/recompress ] && echo type=huge > /sys/block/zram0/recompress || true; \
+ExecStart=/bin/sh -e -c '\
+  [ -w /sys/block/zram0/recomp_algorithm ] && echo zstd > /sys/block/zram0/recomp_algorithm; \
+  [ -w /sys/block/zram0/idle ] && echo 120 > /sys/block/zram0/idle; \
+  [ -w /sys/block/zram0/recompress ] || exit 0; \
+  echo type=huge > /sys/block/zram0/recompress; \
   sleep 1; \
-  [ -w /sys/block/zram0/recompress ] && echo type=idle > /sys/block/zram0/recompress || true \
-'
+  echo type=idle > /sys/block/zram0/recompress'
 EOF
 
     # ------------------------------------------------------------------
-    # 3. Timer: dispara recompressão a cada 10 minutos
+    # 3) Timer correto: execução real a cada 10 minutos
+    #    (baseado na última execução, não no boot)
     # ------------------------------------------------------------------
     cat <<'EOF' > "$recompress_timer"
 [Unit]
 Description=Periodic ZRAM recompression (10 min)
 
 [Timer]
-OnBootSec=5min
+OnBootSec=3min
 OnUnitActiveSec=10min
 AccuracySec=30s
 Persistent=true
@@ -1046,16 +1058,16 @@ WantedBy=timers.target
 EOF
 
     # ------------------------------------------------------------------
-    # 4. Ativação
+    # 4) Ativação
     # ------------------------------------------------------------------
     systemctl daemon-reload
     systemctl enable --now zram-recompress.timer
 
-    # Disparo imediato (não espera 10 min)
+    # Disparo inicial (boot atual)
     systemctl start zram-recompress.service 2>/dev/null || true
 
     # ------------------------------------------------------------------
-    # 5. Log / Validação
+    # 5) Log / validação (SEM ler idle → write-only)
     # ------------------------------------------------------------------
     {
         echo "=== Turbo Decky ZRAM STATUS ==="
@@ -1065,11 +1077,9 @@ EOF
         cat /sys/block/zram0/comp_algorithm 2>/dev/null || true
         echo "recomp_algorithm:"
         cat /sys/block/zram0/recomp_algorithm 2>/dev/null || true
-        echo "idle:"
-        cat /sys/block/zram0/idle 2>/dev/null || true
     } >> "$logfile"
 
-    _log "zRAM configurado: lzo-rle (primário) + zstd (recompressão a cada 10 min)"
+    _log "ZRAM correta: lzo-rle (primário) + zstd recompress (10 min)"
 
     return 0
 }
