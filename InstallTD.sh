@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.2.1"
+versao="2.2. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
