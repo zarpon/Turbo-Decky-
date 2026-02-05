@@ -990,8 +990,8 @@ optimize_zram() {
     cat > "$gen_conf" <<'EOF'
 [zram0]
 zram-size = ram * 0.4
-compression-algorithm = lzo-rle
-swap-priority = 100
+compression-algorithm = lzo-rle zstd(level=3) (type=idle) (type=huge)
+swap-priority = 1000
 fs-type = swap
 EOF
 
