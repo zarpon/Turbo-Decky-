@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.03"
+versao="2.2.04"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -968,49 +968,75 @@ _instalar_kernel_customizado() {
 
 
 optimize_zram() {
-    local config_file="/etc/systemd/zram-generator.conf"
+    # --- CORREÇÃO DE PERSISTÊNCIA (SteamOS: conf.d) ---
+    local config_dir="/etc/systemd/zram-generator.conf.d"
+    local config_file="${config_dir}/00-turbodecky.conf"
     local legacy_volatile_file="/usr/lib/systemd/zram-generator.conf"
     local service_file="/etc/systemd/system/zram-recompress.service"
     local timer_file="/etc/systemd/system/zram-recompress.timer"
-    local logfile="${logfile:-/tmp/zram-optimize.log}"
+    local timestamp
+    local backup_file
+    local logfile="${logfile:-/var/log/zram-optimize.log}"
 
-    _log "Iniciando otimização do zRAM (Modo Persistente + ZSTD)..."
+    _log "Iniciando otimização do zRAM (Modo Persistente - conf.d)..."
 
-    # Verificação de privilégios
     if [ "$(id -u)" -ne 0 ]; then
-        _log "Erro: Esta função precisa de privilégios root."
+        _log "Erro: esta função precisa ser executada como root."
         return 1
     fi
 
-    # 1. Preparação do sistema
+    # Permite escrita em overlays readonly do SteamOS, se necessário
     _steamos_readonly_disable_if_needed || true
 
-    # 2. Limpeza de resquícios de versões anteriores
-    if [ -f "$legacy_volatile_file" ] && grep -q "\[zram0\]" "$legacy_volatile_file"; then
-        rm -f "$legacy_volatile_file"
-        _log "Configuração antiga em /usr removida."
+    # Limpeza segura do arquivo legado em /usr/lib (somente se for nosso marcador)
+    if [ -f "$legacy_volatile_file" ]; then
+        if grep -q "Configuração gerada pelo Turbo Decky" "$legacy_volatile_file"; then
+            rm -f "$legacy_volatile_file" && _log "Arquivo volátil antigo removido: $legacy_volatile_file"
+        else
+            _log "Arquivo em $legacy_volatile_file existe, mas sem marcador. Não será removido."
+        fi
     fi
 
-    # 3. Escrita da configuração (Mantendo LZO-RLE e Prioridade 1000 para Jogos)
-    cat <<EOF > "$config_file"
+    # Cria o diretório conf.d se necessário
+    mkdir -p "$config_dir"
+    chmod 755 "$config_dir"
+
+    # Backup do arquivo existente em conf.d (se houver)
+    if [ -f "$config_file" ]; then
+        timestamp=$(date +%Y%m%d_%H%M%S)
+        backup_file="${config_file}.bak.${timestamp}"
+        cp -a "$config_file" "$backup_file"
+        chmod 600 "$backup_file"
+        _log "Backup do config existente salvo em: $backup_file"
+    fi
+
+    # Escreve a configuração com LZO-RLE 
+    cat > "$config_file" <<'EOF'
 # Configuração gerada pelo Turbo Decky
 [zram0]
 zram-size = ram * 0.4
 compression-algorithm = lzo-rle
-zram-priority = 1000
+swap-priority = 1000
 fs-type = swap
 EOF
     chmod 644 "$config_file"
+    _log "Nova configuração persistente escrita em: $config_file"
 
-    # 4. Aplica mudanças no daemon
+    # Recarrega systemd e tenta aplicar
     systemctl daemon-reload
-    systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || systemctl start systemd-zram-setup@zram0.service
 
-    #  10 min/2min
-    if [ -f "/sys/block/zram0/recomp_algorithm" ]; then
-        _log "Configurando recompactação (ZSTD: 10min/2min)..."
+    if systemctl restart systemd-zram-setup@zram0.service 2>>"$logfile"; then
+        _log "Serviço systemd-zram-setup@zram0 reiniciado com sucesso."
+    else
+        _log "Aviso: não foi possível reiniciar systemd-zram-setup@zram0.service. Tentando start..."
+        systemctl start systemd-zram-setup@zram0.service 2>>"$logfile" || _log "Falha ao iniciar systemd-zram-setup@zram0.service (continuando)."
+    fi
 
-        cat <<EOF > "$service_file"
+    # Recompactação inteligente (se suportado)
+    if [ -w "/sys/block/zram0/recomp_algorithm" ] || [ -w "/sys/block/zram0/recompress" ]; then
+        _log "Configurando recompactação automática (multi-comp) via Systemd Timer..."
+
+        cat > "$service_file" <<EOF
 [Unit]
 Description=Otimizar zRAM (Recompactar Huge/Idle com ZSTD)
 After=systemd-zram-setup@zram0.service
@@ -1024,7 +1050,7 @@ ExecStart=/bin/sh -c 'echo "algo=zstd priority=1" > /sys/block/zram0/recomp_algo
 EOF
         chmod 644 "$service_file"
 
-        cat <<EOF > "$timer_file"
+        cat > "$timer_file" <<EOF
 [Unit]
 Description=Timer para recompactação zRAM
 
@@ -1038,20 +1064,26 @@ EOF
         chmod 644 "$timer_file"
 
         systemctl daemon-reload
-        systemctl enable --now zram-recompress.timer 2>/dev/null
-        
-        # Execução imediata de Huge Pages
+        systemctl enable --now zram-recompress.timer 2>>"$logfile" || systemctl start zram-recompress.timer 2>>"$logfile" || _log "Aviso: não foi possível ativar o timer de recompactação."
+
+        # Aplicação imediata apenas para huge pages
         echo "algo=zstd priority=1" > /sys/block/zram0/recomp_algorithm 2>/dev/null || true
         echo "type=huge" > /sys/block/zram0/recompress 2>/dev/null || true
+        _log "Recompactação inicial de Huge Pages aplicada (se suportado)."
+    else
+        _log "Recompactação não suportada neste kernel/dispositivo (recomp_algorithm ausente ou sem permissão)."
     fi
 
-    # 5. Finalização
-    _log "Otimização concluída!"
-    zramctl | tee -a "$logfile"
+    # Validação e log do status atual
+    _log "Otimização concluída. Status atual de zram:"
+    if command -v zramctl >/dev/null 2>&1; then
+        zramctl | tee -a "$logfile"
+    else
+        _log "zramctl não encontrado; verifique se systemd-zram-generator e utilitários estão instalados."
+    fi
+
+    return 0
 }
-
-
-
 
 aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
