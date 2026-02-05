@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2.16"
+versao="2.2.17"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -989,7 +989,7 @@ optimize_zram() {
     cat <<'EOF' > "$gen_conf"
 [zram0]
 zram-size = ram * 0.4
-compression-algorithm = lzo-rle
+compression-algorithm = lzo-rle zstd(level=3) (type=idle) (type=huge) 
 swap-priority = 1000
 fs-type = swap
 EOF
