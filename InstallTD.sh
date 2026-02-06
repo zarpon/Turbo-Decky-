@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2 - Rev04 - PRIME"
+versao="2.2 - Rev05 - PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -40,7 +40,6 @@ readonly base_sysctl_params=(
     "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
     "vm.zone_reclaim_mode=0"
-    "vm.max_map_count=1048576"
     "vm.mmap_rnd_compat_bits=16"
     "vm.unprivileged_userfaultfd=1"
     "vm.hugetlb_optimize_vmemmap=0"
@@ -1021,7 +1020,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1038,7 +1037,7 @@ aplicar_zswap() {
     cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lzo-rle > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
@@ -1114,7 +1113,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
