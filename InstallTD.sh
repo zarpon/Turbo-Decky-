@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2. PRIME"
+versao="2.2 Rev01. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -73,7 +73,6 @@ readonly base_sysctl_params=(
 # --- listas de serviços para ativar/monitorar ---
 readonly otimization_services=(
     "thp-config.service"
-    "hugepages.service"
     "ksm-config.service"
     "kernel-tweaks.service"
 )
