@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2 - Rev06 - PRIME"
+versao="2.2 - Rev07 - PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -33,10 +33,9 @@ readonly base_sysctl_params=(
     "vm.dirty_background_bytes=134217728" 
     "vm.dirty_bytes=402653184"            
     "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=1500"     
+    "vm.dirty_writeback_centisecs=500"     
     "vm.min_free_kbytes=65536"
-    "vm.max_map_count=524288" 
-    "vm.page-cluster=1"     
+    "vm.page-cluster=0"     
     "kernel.numa_balancing=0"
     "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
@@ -282,8 +281,7 @@ _configure_ulimits() {
 * hard nofile 1048576
 root soft nofile 1048576
 root hard nofile 1048576
-* hard memlock 2147483648
-* soft memlock 2147483648
+
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
