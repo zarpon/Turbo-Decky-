@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2 - Rev10 - PRIME"
+versao="2.2 - Rev11- PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -95,6 +95,13 @@ readonly game_env_vars=(
     "WINE_DISABLE_WRITE_WATCH=1" 
     "PROTON_USE_NTSYNC=1"
     "VKD3D_CONFIG=no_upload_hvv,force_host_cached"
+    # --- Otimização de Memória Glibc (Equilíbrio Performance/Estabilidade) ---
+    # Trim de 4MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
+    "MALLOC_TRIM_THRESHOLD_=4194304"
+    # MMAP em 1MB: Tira o overhead de alocações frequentes, mas deixa as grandes para o mmap.
+    "MALLOC_MMAP_THRESHOLD_=1048576"
+    # Pad de 256KB: Dobro do padrão, reduzindo churn de sbrk sem desperdício.
+    "MALLOC_TOP_PAD_=262144"   
 )
 
 # --- Funções Utilitárias ---
