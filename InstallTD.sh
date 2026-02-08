@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2 - Rev11- PRIME"
+versao="2.2 - Rev12- PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -35,6 +35,7 @@ readonly base_sysctl_params=(
     "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=500"     
     "vm.page-cluster=0" 
+    "vm.page_lock_unfairness=1"
     "vm.compaction_proactiveness=0"
     "kernel.numa_balancing=0"
     "vm.compact_unevictable_allowed=0"
