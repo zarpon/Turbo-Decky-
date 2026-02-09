@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2 - Rev12- PRIME"
+versao="2.2 - Rev13- PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -604,17 +604,17 @@ safe_write "$QUEUE_PATH/add_random" 0
 
 case "$DEV_BASE" in
   nvme*)
-    if printf "adios" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
+    if printf "none" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
     elif printf "kyber" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
-    else printf "none" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
+    else printf "mq-deadline" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
 
     safe_write "$QUEUE_PATH/rq_affinity" 1
     ;;
   mmcblk*|sd*)
-    if grep -q "adios" "$QUEUE_PATH/scheduler" 2>/dev/null; then
-      safe_write "$QUEUE_PATH/scheduler" "adios"
-    else
+    if grep -q "bfq" "$QUEUE_PATH/scheduler" 2>/dev/null; then
       safe_write "$QUEUE_PATH/scheduler" "bfq"
+    else
+      safe_write "$QUEUE_PATH/scheduler" "mq-deadline"
     fi
 
     safe_write "$QUEUE_PATH/rq_affinity" 1
