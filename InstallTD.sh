@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2 - Rev13- PRIME"
+versao="2.2 - Rev14- PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -610,33 +610,34 @@ case "$DEV_BASE" in
 
     safe_write "$QUEUE_PATH/rq_affinity" 1
     ;;
+  
   mmcblk*|sd*)
-    if grep -q "bfq" "$QUEUE_PATH/scheduler" 2>/dev/null; then
-      safe_write "$QUEUE_PATH/scheduler" "bfq"
-    else
+    # 1. Força o mq-deadline. Em SSDs NVMe usamos 'none', mas no SD ele é o equilíbrio ideal.
+    if grep -q "mq-deadline" "$QUEUE_PATH/scheduler" 2>/dev/null; then
       safe_write "$QUEUE_PATH/scheduler" "mq-deadline"
     fi
 
+    # 2. rq_affinity=1: Entrega a conclusão do I/O para o mesmo core que a solicitou.
+    # Melhora a localidade de cache, vital para o framepacing em emuladores.
     safe_write "$QUEUE_PATH/rq_affinity" 1
 
-    for bfq_path in "$QUEUE_PATH/bfq" "$QUEUE_PATH/iosched"; do
-      if [ -d "$bfq_path" ]; then
-        if [ -f "$bfq_path/low_latency" ]; then
-          safe_write "$bfq_path/low_latency" 1
-        elif [ -f "$bfq_path/low_latency_mode" ]; then
-          safe_write "$bfq_path/low_latency_mode" 1
-        fi
-
-        safe_write "$bfq_path/back_seek_penalty" 0
-        safe_write "$bfq_path/fifo_expire_async" 50
-        safe_write "$bfq_path/fifo_expire_sync" 50
-        safe_write "$bfq_path/timeout_sync" 100
-        safe_write "$bfq_path/slice_idle" 0
-        safe_write "$bfq_path/slice_idle_us" 0
-        safe_write "$QUEUE_PATH/iosched/strict_guarantees" 0
-      fi
-    done
+    # 3. Aplicação de parâmetros de baixa latência para o escalonador
+    local deadline_path="$QUEUE_PATH/iosched"
+    if [ -d "$deadline_path" ]; then
+        # Prioriza leituras (essencial para carregar mapas sem queda de FPS)
+        safe_write "$deadline_path/read_expire" 150
+        
+        # Permite que escritas esperem mais tempo antes de interromperem as leituras
+        safe_write "$deadline_path/write_expire" 1500
+        
+        # Garante que leituras sejam processadas 4x mais que as escritas em caso de conflito
+        safe_write "$deadline_path/writes_starved" 4
+        
+        # Envia uma requisição por vez ao controlador do SD (evita congestionamento no barramento UHS-I)
+        safe_write "$deadline_path/fifo_batch" 1
+    fi
     ;;
+
 esac
 
 exit 0
