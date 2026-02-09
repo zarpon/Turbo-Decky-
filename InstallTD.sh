@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.2 - Rev14- PRIME"
+versao="2.3 PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -87,15 +87,14 @@ readonly unnecessary_services=(
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
     "RADEONSI_SHADER_PRECOMPILE=true"
-    "MESA_DISK_CACHE_SINGLE_FILE=1"
     "MESA_DISK_CACHE_COMPRESSION=zstd"
-    "MESA_SHADER_CACHE_MAX_SIZE=6G"
+    "MESA_SHADER_CACHE_MAX_SIZE=2G"
     "VKD3D_SHADER_CACHE=1"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "WINE_DISABLE_PROTOCOL_FORK=1"
     "WINE_DISABLE_WRITE_WATCH=1" 
     "PROTON_USE_NTSYNC=1"
-    "VKD3D_CONFIG=no_upload_hvv,force_host_cached"
+    "VKD3D_CONFIG=force_host_cached"
     # --- Otimização de Memória Glibc (Equilíbrio Performance/Estabilidade) ---
     # Trim de 4MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
     "MALLOC_TRIM_THRESHOLD_=4194304"
@@ -271,14 +270,6 @@ _setup_dxvk_folder() {
     chown -R 1000:1000 "$dxvk_cache_path" 2>/dev/null || chown -R deck:deck "$dxvk_cache_path" 2>/dev/null || true
     chmod 755 "$dxvk_cache_path"
     _log "Permissões da pasta DXVK ajustadas para usuário deck."
-}
-
-_optimize_gpu() {
-    _log "aplicando otimizações amdgpu..."
-    mkdir -p /etc/modprobe.d
-    # Cria o arquivo que será removido na reversão
-    echo "options amdgpu moverate=128" > /etc/modprobe.d/99-amdgpu-tuning.conf
-    _log "arquivo /etc/modprobe.d/99-amdgpu-tuning.conf criado."
 }
 
 _configure_ulimits() {
@@ -1000,8 +991,6 @@ aplicar_zswap() {
     _setup_dxvk_folder
     configure_read_ahead
     _executar_reversao
-    
-    _optimize_gpu
     _configure_ulimits
     create_common_scripts_and_services
     create_power_rules 
@@ -1105,8 +1094,6 @@ aplicar_zram() {
     _setup_dxvk_folder
     configure_read_ahead
     _executar_reversao
-   
-    _optimize_gpu
     _configure_ulimits
     create_common_scripts_and_services
     create_power_rules 
