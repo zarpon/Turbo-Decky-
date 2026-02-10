@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.3. Rev05. PRIME"
+versao="2.3. Rev06. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -599,7 +599,7 @@ case "$DEV_BASE" in
     elif printf "kyber" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
     else printf "mq-deadline" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
 
-    safe_write "$QUEUE_PATH/rq_affinity" 1
+    safe_write "$QUEUE_PATH/rq_affinity" 2
     ;;
   
   mmcblk*|sd*)
@@ -610,7 +610,7 @@ case "$DEV_BASE" in
 
     # 2. rq_affinity=1: Entrega a conclusão do I/O para o mesmo core que a solicitou.
     # Melhora a localidade de cache, vital para o framepacing em emuladores.
-    safe_write "$QUEUE_PATH/rq_affinity" 1
+    safe_write "$QUEUE_PATH/rq_affinity" 2
 
     # 3. Aplicação de parâmetros de baixa latência para o escalonador
     local deadline_path="$QUEUE_PATH/iosched"
@@ -734,7 +734,7 @@ configure_read_ahead() {
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0"
 
 # NVMe interno (disco e partições)
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n1*", ATTR{queue/read_ahead_kb}="256"
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n1*", ATTR{queue/read_ahead_kb}="1024"
 
 # microSD (disco e partições)
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="mmcblk*", ATTR{queue/read_ahead_kb}="1024"
