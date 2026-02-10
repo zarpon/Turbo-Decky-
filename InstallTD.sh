@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.3. Rev02. PRIME"
+versao="2.3. Rev03. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -88,7 +88,7 @@ readonly unnecessary_services=(
 readonly game_env_vars=(
     "RADEONSI_SHADER_PRECOMPILE=true"
     "MESA_DISK_CACHE_COMPRESSION=zstd"
-    "MESA_SHADER_CACHE_MAX_SIZE=2G"
+    "MESA_SHADER_CACHE_MAX_SIZE=4G"
     "VKD3D_SHADER_CACHE=1"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "WINE_DISABLE_PROTOCOL_FORK=1"
@@ -684,12 +684,7 @@ EOF
 echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
-echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
-# Segurança para evitar loop em falha de alocação (Fix Geral)
-echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-# Valores base (Bateria) - Serão sobrescritos dinamicamente pelo monitor de energia
-echo 512 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-echo 1000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
+echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 THP
     chmod +x "${turbodecky_bin}/thp-config.sh"
