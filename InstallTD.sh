@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.3. Rev07. PRIME"
+versao="2.3. Rev08. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -30,9 +30,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.dirty_background_bytes=104857600" 
-    "vm.dirty_bytes=1717986918"         
-    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_background_bytes=209715200" 
+    "vm.dirty_bytes=419430400"     
+    "vm.dirty_expire_centisecs=3000"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.page-cluster=0" 
     "vm.page_lock_unfairness=1"
@@ -1038,9 +1038,9 @@ echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=133 || true
+sysctl -w vm.swappiness=70 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=75 || true
+sysctl -w vm.vfs_cache_pressure=50 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1124,7 +1124,7 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=180 || true
+sysctl -w vm.swappiness=100 || true
 sysctl -w vm.watermark_scale_factor=125 
 sysctl -w vm.vfs_cache_pressure=50  || true
 
