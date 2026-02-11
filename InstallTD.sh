@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.3. Rev08. PRIME"
+versao="2.3. Rev09. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -36,7 +36,7 @@ readonly base_sysctl_params=(
     "vm.dirty_writeback_centisecs=1500"     
     "vm.page-cluster=0" 
     "vm.page_lock_unfairness=1"
-    "vm.compaction_proactiveness=0"
+    "vm.compaction_proactiveness=8"
     "kernel.numa_balancing=0"
     "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
@@ -734,7 +734,7 @@ configure_read_ahead() {
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0"
 
 # NVMe interno (disco e partições)
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n1*", ATTR{queue/read_ahead_kb}="1024"
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n1*", ATTR{queue/read_ahead_kb}="512"
 
 # microSD (disco e partições)
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="mmcblk*", ATTR{queue/read_ahead_kb}="1024"
@@ -969,7 +969,7 @@ rm -f /etc/systemd/system/zram-recompress.timer
 rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
-zram-size = ram * 0.5
+zram-size = ram * 0.35
 compression-algorithm = zstd(level=1) zstd(level=3)
 swap-priority = 1000
 fs-type = swap
@@ -1016,7 +1016,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1034,13 +1034,13 @@ aplicar_zswap() {
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=70 || true
+sysctl -w vm.swappiness=40 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=50 || true
+sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1124,9 +1124,9 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=80 || true
 sysctl -w vm.watermark_scale_factor=125 
-sysctl -w vm.vfs_cache_pressure=50  || true
+sysctl -w vm.vfs_cache_pressure=66  || true
 
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
@@ -1135,7 +1135,7 @@ ZRAM_SCRIPT
     chmod +x "${turbodecky_bin}/zram-config.sh"
     cat <<UNIT > /etc/systemd/system/zram-config.service
 [Unit]
-Description=ZRAM Dual Layer Setup Persistent
+Description=ZRAM Setup Persistent
 After=local-fs.target
 [Service]
 Type=oneshot
