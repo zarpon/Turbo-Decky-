@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.3. Rev09. PRIME"
+versao="2.3. Rev10. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -289,8 +289,9 @@ _configure_irqbalance() {
     _log "configurando irqbalance..."
 
     systemctl stop irqbalance.service 2>/dev/null || true
-    systemctl mask irqbalance.service 2>/dev/null || true
-    _log "irqbalance mascarado para não conflitar com scx_lavd"
+    systemctl unmask irqbalance.service 2>/dev/null || true
+    systemctl start irqbalance.service 2>/dev/null || true
+    _log "irqbalance configurado com sucesso"
 }
 
 # --- FUNÇÃO REVISADA: CONFIGURAÇÃO DO LAVD SCHEDULER ---
@@ -970,7 +971,7 @@ rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
 zram-size = ram * 0.35
-compression-algorithm = zstd(level=1) zstd(level=3)
+compression-algorithm = zstd(level=1)
 swap-priority = 1000
 fs-type = swap
 EOF
@@ -1038,7 +1039,7 @@ echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=40 || true
+sysctl -w vm.swappiness=30 || true
 sysctl -w vm.watermark_scale_factor=125 || true
 sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
@@ -1124,7 +1125,7 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=80 || true
+sysctl -w vm.swappiness=40 || true
 sysctl -w vm.watermark_scale_factor=125 
 sysctl -w vm.vfs_cache_pressure=66  || true
 
