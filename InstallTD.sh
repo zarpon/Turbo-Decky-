@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.4.r1 PRIME"
+versao="2.4.r2 PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -995,7 +995,7 @@ rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
 zram-size = ram * 0.35
-compression-algorithm = zstd(level=1)
+compression-algorithm = lzo-rle
 swap-priority = 1000
 fs-type = swap
 EOF
