@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.4. PRIME"
+versao="2.4.r1 PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -609,6 +609,9 @@ case "$DEV_BASE" in
 
     # NVMe se beneficia de completar requisições na CPU que iniciou (cache locality)
     safe_write "$QUEUE_PATH/rq_affinity" 2
+        # Adicionar: Desativar merges para reduzir latência de CPU em NVMe rápido
+    safe_write "$QUEUE_PATH/nomerges" 2
+
     ;;
    
  mmcblk*|sd*)
@@ -1038,7 +1041,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1055,14 +1058,14 @@ aplicar_zswap() {
     cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo lzo-rle > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=30 || true
+sysctl -w vm.swappiness=80 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=66 || true
+sysctl -w vm.vfs_cache_pressure=50 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1146,9 +1149,9 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=40 || true
+sysctl -w vm.swappiness=100 || true
 sysctl -w vm.watermark_scale_factor=125 
-sysctl -w vm.vfs_cache_pressure=66  || true
+sysctl -w vm.vfs_cache_pressure=50  || true
 
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
