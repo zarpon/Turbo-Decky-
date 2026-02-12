@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.3. Rev10. PRIME"
+versao="2.4. PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -596,20 +596,28 @@ safe_write "$QUEUE_PATH/add_random" 0
 
 case "$DEV_BASE" in
   nvme*)
-    if printf "none" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
+    if printf "adios" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
     elif printf "kyber" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1; then :; \
-    else printf "mq-deadline" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
+    else printf "none" | tee "$QUEUE_PATH/scheduler" >/dev/null 2>&1 || true; fi
 
     safe_write "$QUEUE_PATH/rq_affinity" 2
     ;;
   
   mmcblk*|sd*)
-    # 1. Força o mq-deadline. Em SSDs NVMe usamos 'none', mas no SD ele é o equilíbrio ideal.
-    if grep -q "mq-deadline" "$QUEUE_PATH/scheduler" 2>/dev/null; then
-      safe_write "$QUEUE_PATH/scheduler" "mq-deadline"
+    
+    if grep -q "adios" "$QUEUE_PATH/scheduler" 2>/dev/null; then
+      safe_write "$QUEUE_PATH/scheduler" "adios"
+      # 2. rq_affinity=2: Entrega a conclusão do I/O para o mesmo core que a solicitou.
+    # Melhora a localidade de cache, vital para o framepacing em emuladores.
+    safe_write "$QUEUE_PATH/rq_affinity" 2
     fi
 
-    # 2. rq_affinity=1: Entrega a conclusão do I/O para o mesmo core que a solicitou.
+elif grep -q "mq-deadline" "$QUEUE_PATH/scheduler" 2>/dev/null; then
+      safe_write "$QUEUE_PATH/scheduler" "mq-deadline"
+  
+ fi   
+    
+    # 2. rq_affinity=2: Entrega a conclusão do I/O para o mesmo core que a solicitou.
     # Melhora a localidade de cache, vital para o framepacing em emuladores.
     safe_write "$QUEUE_PATH/rq_affinity" 2
 
