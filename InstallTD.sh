@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.4.r5 PRIME"
+versao="2.4.r6 PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -280,6 +280,8 @@ _configure_ulimits() {
 * hard nofile 1048576
 root soft nofile 1048576
 root hard nofile 1048576
+* hard memlock 2147484
+* soft memlock 2147484
 
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
