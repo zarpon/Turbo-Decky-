@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.4.r9 PRIME"
+versao="2.5.PRIME"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -12,7 +12,7 @@ readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
 # Calcula 35 da RAM total de forma dinâmica
 readonly total_mem_gb=$(awk '/MemTotal/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
-readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 37) / 100 ))
+readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 30) / 100 ))
 
 readonly zram_swapfile_size_gb="2"
 readonly backup_suffix="bak-turbodecky"
@@ -358,7 +358,7 @@ create_persistent_configs() {
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 500
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 350
 EOF
     # THP Shrinker
     cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
@@ -996,7 +996,7 @@ rm -f /etc/systemd/system/zram-recompress.timer
 rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
-zram-size = ram * 0.35
+zram-size = ram / 2
 compression-algorithm = lzo-rle
 swap-priority = 1000
 fs-type = swap
@@ -1043,7 +1043,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1061,7 +1061,7 @@ aplicar_zswap() {
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo lzo-rle > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
