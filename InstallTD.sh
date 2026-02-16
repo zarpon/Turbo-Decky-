@@ -31,7 +31,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.dirty_background_bytes=264857600"
-    "vm.dirty_bytes=2147483648"
+    "vm.dirty_bytes=1073741824"
     "vm.dirty_expire_centisecs=4500"       
     "vm.dirty_writeback_centisecs=2000"     
     "vm.page-cluster=0" 
@@ -97,7 +97,7 @@ readonly game_env_vars=(
     "VKD3D_CONFIG=force_host_cached"
     # --- Otimização de Memória Glibc (Equilíbrio Performance/Estabilidade) ---
     # Trim de 4MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
-    "MALLOC_TRIM_THRESHOLD_=4194304"
+    "MALLOC_TRIM_THRESHOLD_=2097152"
     # MMAP em 1MB: Tira o overhead de alocações frequentes, mas deixa as grandes para o mmap.
     "MALLOC_MMAP_THRESHOLD_=1048576"
     # Pad de 256KB: Dobro do padrão, reduzindo churn de sbrk sem desperdício.
@@ -1151,7 +1151,7 @@ aplicar_zram() {
 #!/usr/bin/env bash
 
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=150 || true
 sysctl -w vm.watermark_scale_factor=125 
 sysctl -w vm.vfs_cache_pressure=75  || true
 
