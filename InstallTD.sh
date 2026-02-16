@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.5.rev05-Timeless Child"
+versao="2.5.rev06-Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -12,7 +12,7 @@ readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
 # Calcula 35 da RAM total de forma dinâmica
 readonly total_mem_gb=$(awk '/MemTotal/ {printf "%.0f", $2/1024/1024}' /proc/meminfo)
-readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 30) / 100 ))
+readonly zswap_swapfile_size_gb=$(( (total_mem_gb * 50) / 100 ))
 
 readonly zram_swapfile_size_gb="2"
 readonly backup_suffix="bak-turbodecky"
