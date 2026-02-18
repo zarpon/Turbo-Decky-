@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.5.rev14 - Timeless Child"
+versao="2.6- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -616,48 +616,25 @@ case "$DEV_BASE" in
 
     ;;
    
- mmcblk*|sd*)
+  mmcblk*|sd*)
     # SD/SATA: Prioridade BFQ -> MQ-Deadline
     if printf "bfq" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-     bfq_path="$QUEUE_PATH/iosched"
-        if [ -d "$bfq_path" ]; then
-            # 'low_latency' em 1 é vital para o Deck não travar enquanto baixa jogos
-            safe_write "$bfq_path/low_latency" 1
-            
-            # Como o barramento UHS-I é lento, reduzimos o timeout para o scheduler 
-            # não "prender" o disco por muito tempo em um único processo.
-            safe_write "$bfq_path/timeout_sync" 200
-            
-            # Reduz o 'strict_priority'. Em cartões SD, ser estrito demais 
-            # causa engasgos em leituras paralelas (OS + Jogo).
-            safe_write "$bfq_path/strict_priority" 0
-            
-            # Aumenta o peso das leituras interativas.
-            safe_write "$bfq_path/interactive" 1
-        fi
-         
-        : 
-    elif printf "bfq" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        # --- OTIMIZAÇÕES BFQ PARA STEAM DECK (MicroSD UHS-I) ---
         bfq_path="$QUEUE_PATH/iosched"
         if [ -d "$bfq_path" ]; then
             # 'low_latency' em 1 é vital para o Deck não travar enquanto baixa jogos
             safe_write "$bfq_path/low_latency" 1
             
-            # Como o barramento UHS-I é lento, reduzimos o timeout para o scheduler 
-            # não "prender" o disco por muito tempo em um único processo.
+            # Como o barramento UHS-I é lento, reduzimos o timeout
             safe_write "$bfq_path/timeout_sync" 200
             
-            # Reduz o 'strict_priority'. Em cartões SD, ser estrito demais 
-            # causa engasgos em leituras paralelas (OS + Jogo).
+            # Reduz o 'strict_priority' para evitar engasgos em multitarefa
             safe_write "$bfq_path/strict_priority" 0
             
             # Aumenta o peso das leituras interativas.
             safe_write "$bfq_path/interactive" 1
         fi
-        
     else 
-        # Fallback MQ-Deadline (mantendo sua lógica anterior)
+        # Fallback MQ-Deadline
         printf "mq-deadline" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
         current_sched=$(cat "$QUEUE_PATH/scheduler" 2>/dev/null || true)
         if [[ "$current_sched" == *"deadline"* ]]; then
@@ -673,9 +650,8 @@ case "$DEV_BASE" in
 
     # Crucial para o Deck: Força o processamento do IO no core que o solicitou
     safe_write "$QUEUE_PATH/rq_affinity" 2
-    
-    
     ;;
+
 esac
 
 exit 0
