@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.5.rev13 - Timeless Child"
+versao="2.5.rev14 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -31,9 +31,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.dirty_background_bytes=164857600"
-    "vm.dirty_bytes=3073741824"
-    "vm.dirty_expire_centisecs=4500"       
-    "vm.dirty_writeback_centisecs=500"     
+    "vm.dirty_bytes=1073741824"
+    "vm.dirty_expire_centisecs=3500"       
+    "vm.dirty_writeback_centisecs=750"     
     "vm.page-cluster=0" 
     "vm.page_lock_unfairness=1"
     "vm.compaction_proactiveness=8"
@@ -617,8 +617,25 @@ case "$DEV_BASE" in
     ;;
    
  mmcblk*|sd*)
-    # SD/SATA: Prioridade Adios -> BFQ -> MQ-Deadline
-    if printf "adios" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+    # SD/SATA: Prioridade BFQ -> MQ-Deadline
+    if printf "bfq" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+     bfq_path="$QUEUE_PATH/iosched"
+        if [ -d "$bfq_path" ]; then
+            # 'low_latency' em 1 é vital para o Deck não travar enquanto baixa jogos
+            safe_write "$bfq_path/low_latency" 1
+            
+            # Como o barramento UHS-I é lento, reduzimos o timeout para o scheduler 
+            # não "prender" o disco por muito tempo em um único processo.
+            safe_write "$bfq_path/timeout_sync" 200
+            
+            # Reduz o 'strict_priority'. Em cartões SD, ser estrito demais 
+            # causa engasgos em leituras paralelas (OS + Jogo).
+            safe_write "$bfq_path/strict_priority" 0
+            
+            # Aumenta o peso das leituras interativas.
+            safe_write "$bfq_path/interactive" 1
+        fi
+         
         : 
     elif printf "bfq" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
         # --- OTIMIZAÇÕES BFQ PARA STEAM DECK (MicroSD UHS-I) ---
