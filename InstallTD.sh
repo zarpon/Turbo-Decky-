@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.6.r3- Timeless Child"
+versao="2.6.r4- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -30,10 +30,10 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.dirty_background_bytes=244857600"
-    "vm.dirty_bytes=2276870912"
+    "vm.dirty_background_bytes=67108864"
+    "vm.dirty_bytes=402653184"
     "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=500"     
+    "vm.dirty_writeback_centisecs=300"     
     "vm.page-cluster=0" 
     "vm.page_lock_unfairness=1"
     "vm.compaction_proactiveness=8"
