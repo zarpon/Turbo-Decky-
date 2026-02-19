@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.6.r2- Timeless Child"
+versao="2.6.r3- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -600,13 +600,13 @@ safe_write "$QUEUE_PATH/add_random" 0
 
 case "$DEV_BASE" in
   nvme*)
-    # NVMe: Prioridade Adios -> Kyber -> None
-    if printf "adios" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # Adios aplicado com sucesso
-    elif printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # Fallback para Kyber
+    # NVMe: Prioridade  Kyber -> None
+    if printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+        : # kyber aplicado com sucesso
+    elif printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+        : # Fallback para none
     else
-        printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
+        printf "mq-deadline" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
     fi
 
     # NVMe se beneficia de completar requisições na CPU que iniciou (cache locality)
