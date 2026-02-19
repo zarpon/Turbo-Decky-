@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.6.r7- Timeless Child"
+versao="2.6.r9- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -31,9 +31,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.dirty_background_bytes=167001600"
-    "vm.dirty_bytes=3422653184"
-    "vm.dirty_expire_centisecs=2000"       
-    "vm.dirty_writeback_centisecs=500"     
+    "vm.dirty_bytes=556531840"
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=1500"     
     "vm.page-cluster=0" 
     "vm.compaction_proactiveness=10"
     "kernel.numa_balancing=0"
@@ -87,7 +87,7 @@ readonly unnecessary_services=(
 readonly game_env_vars=(
     "RADEONSI_SHADER_PRECOMPILE=true"
     "MESA_DISK_CACHE_COMPRESSION=zstd"
-    "MESA_SHADER_CACHE_MAX_SIZE=4G"
+    "MESA_SHADER_CACHE_MAX_SIZE=10G"
     "VKD3D_SHADER_CACHE=1"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
     "WINE_DISABLE_PROTOCOL_FORK=1"
@@ -1057,9 +1057,9 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=150 || true
+sysctl -w vm.swappiness=100 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=50 || true
+sysctl -w vm.vfs_cache_pressure=100 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1145,7 +1145,7 @@ aplicar_zram() {
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=150 || true
 sysctl -w vm.watermark_scale_factor=125 
-sysctl -w vm.vfs_cache_pressure=50  || true
+sysctl -w vm.vfs_cache_pressure=100  || true
 
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
