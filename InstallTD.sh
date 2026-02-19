@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.6.r10- Timeless Child"
+versao="2.7 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -359,10 +359,7 @@ create_persistent_configs() {
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
 w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 0
 EOF
-    # THP Shrinker
-    cat << EOF > /etc/tmpfiles.d/thp_shrinker.conf
-w /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
-EOF
+    
 
     # NTSYNC - Carregamento Persistente do Módulo
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -1057,9 +1054,9 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=133 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=100 || true
+sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1145,7 +1142,7 @@ aplicar_zram() {
 echo 1 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=150 || true
 sysctl -w vm.watermark_scale_factor=125 
-sysctl -w vm.vfs_cache_pressure=100  || true
+sysctl -w vm.vfs_cache_pressure=66  || true
 
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
