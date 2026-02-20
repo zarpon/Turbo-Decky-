@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.7.r4- Timeless Child"
+versao="2.7.r5- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -32,7 +32,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.dirty_background_bytes=167001600"
     "vm.dirty_bytes=556531840"
-    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_expire_centisecs=4500"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.page-cluster=0" 
     "vm.compaction_proactiveness=10"
@@ -698,7 +698,7 @@ EOF
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
 #!/usr/bin/env bash
 echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
-echo "never" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
+echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 
@@ -1055,8 +1055,8 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.watermark_scale_factor=50 || true
-sysctl -w vm.vfs_cache_pressure=125 || true
+sysctl -w vm.watermark_scale_factor=125 || true
+sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1141,8 +1141,8 @@ aplicar_zram() {
 
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=150 || true
-sysctl -w vm.watermark_scale_factor=50 || true
-sysctl -w vm.vfs_cache_pressure=125  || true
+sysctl -w vm.watermark_scale_factor=125 || true
+sysctl -w vm.vfs_cache_pressure=66  || true
 
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
