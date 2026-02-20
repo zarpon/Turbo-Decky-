@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.7.r5- Timeless Child"
+versao="2.7.r6- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -30,9 +30,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.dirty_background_bytes=167001600"
+    "vm.dirty_background_bytes=227001600"
     "vm.dirty_bytes=556531840"
-    "vm.dirty_expire_centisecs=4500"       
+    "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=1500"     
     "vm.page-cluster=0" 
     "vm.compaction_proactiveness=10"
@@ -357,7 +357,7 @@ create_persistent_configs() {
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 0
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
 EOF
     
 
@@ -365,7 +365,7 @@ EOF
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
     _log "configuração ntsync criada em /etc/modules-load.d/ntsync.conf"
 
-    _log "configurações mglru, thp_shrinker e ntsync criadas."
+    _log "configurações mglru e ntsync criadas."
 }
 
 manage_unnecessary_services() {
@@ -1054,9 +1054,9 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=133 || true
+sysctl -w vm.swappiness=100 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=66 || true
+sysctl -w vm.vfs_cache_pressure=125 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1142,7 +1142,7 @@ aplicar_zram() {
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=150 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=66  || true
+sysctl -w vm.vfs_cache_pressure=125  || true
 
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
