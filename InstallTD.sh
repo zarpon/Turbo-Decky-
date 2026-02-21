@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.7.r8- Timeless Child"
+versao="2.7.r1- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -595,11 +595,11 @@ safe_write "$QUEUE_PATH/add_random" 0
 
 case "$DEV_BASE" in
   nvme*)
-    # NVMe: Prioridade  Kyber -> None
-    if printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # kyber aplicado com sucesso
-    elif printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # Fallback para none
+    # NVMe: Prioridade  none -> kyber
+    if printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+        : # none aplicado com sucesso
+    elif printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+        : # Fallback para kyber
     else
         printf "mq-deadline" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
     fi
