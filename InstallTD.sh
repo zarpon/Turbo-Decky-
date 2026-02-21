@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.7.r6- Timeless Child"
+versao="2.7.r7- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1054,9 +1054,9 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=133 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=125 || true
+sysctl -w vm.vfs_cache_pressure=50 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -1142,7 +1142,7 @@ aplicar_zram() {
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 sysctl -w vm.swappiness=150 || true
 sysctl -w vm.watermark_scale_factor=125 || true
-sysctl -w vm.vfs_cache_pressure=125  || true
+sysctl -w vm.vfs_cache_pressure=50  || true
 
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
