@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.7.r6- Timeless Child"
+versao="2.7.r7- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -357,7 +357,7 @@ create_persistent_configs() {
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 250
 EOF
     
 
