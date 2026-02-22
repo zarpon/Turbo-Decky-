@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.8 - Timeless Child"
+versao="2.8. R01- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -30,6 +30,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
+    "vm.workingset_protection=0"
     "vm.dirty_background_bytes=227001600"
     "vm.dirty_bytes=556531840"
     "vm.dirty_expire_centisecs=1500"       
@@ -94,7 +95,7 @@ readonly game_env_vars=(
     "PROTON_USE_NTSYNC=1"
     "VKD3D_CONFIG=force_host_cached"
     # --- Otimização de Memória Glibc (Equilíbrio Performance/Estabilidade) ---
-    # Trim de 4MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
+    # Trim de 2MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
     "MALLOC_TRIM_THRESHOLD_=2097152"
     # MMAP em 1MB: Tira o overhead de alocações frequentes, mas deixa as grandes para o mmap.
     "MALLOC_MMAP_THRESHOLD_=1048576"
