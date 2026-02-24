@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.04- Timeless Child"
+versao="2.9.05- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1090,7 +1090,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "zswap.same_filled_pages_enabled=1" "zswap.non_same_filled_pages_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1112,6 +1112,8 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
+echo 1 > /sys/module/zswap/parameters/same_filled_pages_enabled 2>/dev/null || true
+echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=1 || true
 sysctl -w vm.swappiness=133 || true
 sysctl -w vm.watermark_scale_factor=125 || true
