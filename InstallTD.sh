@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9 - Timeless Child"
+versao="2.9.01- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -295,47 +295,64 @@ _configure_irqbalance() {
     _log "irqbalance configurado com sucesso"
 }
 
-# --- FUNÇÃO REVISADA: CONFIGURAÇÃO DO LAVD SCHEDULER ---
+# --- FUNÇÃO ATUALIZADA: CONFIGURAÇÃO DO LAVD SCHEDULER VIA CACHYOS ---
 _setup_lavd_scheduler() {
-    _log "Configurando LAVD Scheduler (scx)..."
+    _log "Configurando LAVD Scheduler (scx) via Repositório CachyOS..."
     
-    # 1. Instalação Segura com verificação de DevMode
-    if ! command -v scx_lavd &>/dev/null; then
-        _log "scx_lavd não encontrado. Preparando ambiente..."
+    # 1. Preparação do Ambiente e Escrita
+    steamos-devmode enable --no-prompt
+    _steamos_readonly_disable_if_needed
+
+    # 2. Adição do Repositório CachyOS (se não existir)
+    if ! grep -q "\[cachyos\]" /etc/pacman.conf; then
+        _log "Adicionando chaves e repositório CachyOS para pacotes atualizados..."
         
-        # Garante que o modo desenvolvedor e escrita estejam ativos para o pacman
-        steamos-devmode enable --no-prompt
-        _steamos_readonly_disable_if_needed
-
-        # Inicializa chaves para evitar erros de assinatura
+        # Inicializa e popula chaves básicas se necessário
         pacman-key --init 2>/dev/null || true
-        pacman-key --populate archlinux holo 2>/dev/null || true
-
-        _log "Instalando scx-scheds via pacman..."
-        if ! pacman -Sy --noconfirm scx-scheds; then
-            _log "AVISO: Falha ao instalar scx-scheds. O scheduler padrão (CFS) será mantido."
-            return 1
+        
+        # Adiciona a chave do CachyOS
+        if ! pacman-key --recv-keys F3B607488DB35989 &>/dev/null || \
+           ! pacman-key --lsign-key F3B607488DB35989 &>/dev/null; then
+            _log "Falha ao importar chaves via keyserver, tentando via download direto..."
+            wget https://mirror.cachyos.org/cachyos-repo.tar.gz -O /tmp/cachyos-repo.tar.gz
+            tar -xvf /tmp/cachyos-repo.tar.gz -C /tmp/
+            # Nota: O comando abaixo assume a estrutura padrão do instalador de repo deles
+            /tmp/cachyos-repo/cachyos-repo.sh 2>/dev/null || true
         fi
+
+        # Adiciona o repositório ao pacman.conf manualmente para garantir persistência
+        cat <<EOF >> /etc/pacman.conf
+
+[cachyos]
+SigLevel = PackageOptional
+Server = https://mirror.cachyos.org/repo/\$arch/\$repo
+EOF
     fi
 
-    # 2. Criação do Serviço Systemd
+    # 3. Instalação/Atualização do scx-scheds
+    _log "Sincronizando e instalando scx-scheds do CachyOS..."
+    # Forçamos a atualização da base de dados para pegar a versão nova
+    if ! pacman -Sy --noconfirm scx-scheds; then
+        _log "AVISO: Falha ao instalar via CachyOS. Tentando fallback para repositório padrão..."
+        pacman -S --noconfirm scx-scheds || { _log "Erro crítico: scx-scheds não encontrado."; return 1; }
+    fi
+
+    # 4. Criação/Atualização do Serviço Systemd
     if command -v scx_lavd &>/dev/null; then
         local lavd_path; lavd_path=$(command -v scx_lavd)
         
         cat <<UNIT > /etc/systemd/system/scx_lavd.service
 [Unit]
-Description=LAVD Scheduler (Latency-criticality Aware Virtual Deadline)
-# Garante que inicie após o sistema base estar pronto
+Description=LAVD Scheduler (CachyOS scx_scheds)
 After=multi-user.target
 ConditionPathExists=${lavd_path}
 
 [Service]
 Type=simple
-# ExecStart com flags otimizadas para o Steam Deck
+# Flags otimizadas para o kernel e scheduler mais recentes
 ExecStart=${lavd_path} --performance
 Restart=always
 RestartSec=5
-# Garante prioridade de execução do próprio processo do scheduler
 Nice=-20
 
 [Install]
@@ -344,11 +361,13 @@ UNIT
         
         systemctl daemon-reload
         systemctl enable --now scx_lavd.service
-        _log "LAVD Scheduler ativado com sucesso como escalonador padrão."
+        _log "LAVD Scheduler (CachyOS) ativado com sucesso."
     else
-        _log "Erro: scx_lavd não disponível após instalação."
+        _log "Erro: Binário scx_lavd não encontrado após instalação."
+        return 1
     fi
 }
+
 
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
