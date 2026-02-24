@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.8. R01- Timeless Child"
+versao="2.8. R02- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -956,14 +956,21 @@ _instalar_kernel_customizado() {
         _steamos_readonly_disable_if_needed
         steamos-devmode enable --no-prompt
         echo "Instalando Kernel (linux-charcoal)..." 
-
-        if pacman -U --noconfirm "$DEST_DIR"/*.pkg.tar.zst; then
              pacman -R --noconfirm linux-neptune-611 || true
              pacman -R --noconfirm linux-neptune-611-headers || true
+        if pacman -U --noconfirm "$DEST_DIR"/*.pkg.tar.zst; then
+             
              _log "Kernel customizado instalado com sucesso."
              update-grub &>/dev/null || true
+             mkinitcpio -P &>/dev/null || true
         else
-             _ui_info "erro" "Falha na instalação do Kernel."
+             _ui_info "erro" "Falha na instalação do Kernel customizado, reinstalando kernel padrão."
+        if pacman -S --noconfirm linux-neptune-611; then
+        _log "linux-neptune-611 instalado com sucesso."
+        if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
+        mkinitcpio -P &>/dev/null || true
+        _ui_info "sucesso" "Kernel padrão (linux-neptune-611) reinstalado. Reinicie o sistema para completar."
+             
         fi
     fi
 }
