@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.8. R03- Timeless Child"
+versao="2.9 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -766,19 +766,49 @@ EOF
 }
 
 
+
 otimizar_sdcard_cache() {
     _log "otimizando microsd..."
+    
+    # 1. Busca o ponto de montagem real do SD
     local sdcard_mount_point; sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
-    if [[ -z "$sdcard_mount_point" ]]; then _ui_info "erro" "microsd não montado"; return 1; fi
+    
+    if [[ -z "$sdcard_mount_point" ]]; then 
+        _ui_info "erro" "microsd não montado ou não encontrado em $sdcard_device"
+        return 1 
+    fi
+
+    # 2. Caminhos normalizados para o cache
     local sdcard_steamapps_path="${sdcard_mount_point}/steamapps"
     local sdcard_shadercache_path="${sdcard_steamapps_path}/shadercache"
-    if ! [ -d "$sdcard_steamapps_path" ]; then _ui_info "erro" "steamapps não encontrado"; return 1; fi
-    if [ -L "$sdcard_shadercache_path" ]; then _ui_info "info" "já otimizado"; return 0; fi
+
+    # 3. VERIFICAÇÃO ROBUSTA:
+    # Verifica se já é um link e se aponta para o destino correto no NVMe
+    if [ -L "$sdcard_shadercache_path" ]; then
+        local link_target; link_target=$(readlink -f "$sdcard_shadercache_path")
+        if [[ "$link_target" == "$nvme_shadercache_target_path" ]]; then
+            _ui_info "info" "O MicroSD já está otimizado para o SSD interno."
+            return 0
+        else
+            _log "Link simbólico detectado, mas aponta para local diferente. Recriando..."
+            rm "$sdcard_shadercache_path" 2>/dev/null || true
+        fi
+    fi
+
+    # 4. Verifica a existência da pasta steamapps antes de prosseguir
+    if ! [ -d "$sdcard_steamapps_path" ]; then 
+        _ui_info "erro" "Pasta steamapps não encontrada no MicroSD."
+        return 1 
+    fi
+
+    # 5. Prepara o diretório de destino no NVMe (SSD interno)
     mkdir -p "$nvme_shadercache_target_path"
     local deck_user; deck_user=$(stat -c '%U' /home/deck 2>/dev/null || echo "deck")
     local deck_group; deck_group=$(stat -c '%G' /home/deck 2>/dev/null || echo "deck")
     chown "${deck_user}:${deck_group}" "$nvme_shadercache_target_path" 2>/dev/null || true
-    if [ -d "$sdcard_shadercache_path" ]; then
+
+    # 6. Move o conteúdo existente apenas se for um diretório real (não link)
+    if [ -d "$sdcard_shadercache_path" ] && [ ! -L "$sdcard_shadercache_path" ]; then
         if command -v rsync &>/dev/null; then
              rsync -a --remove-source-files "$sdcard_shadercache_path"/ "$nvme_shadercache_target_path"/ 2>/dev/null || true
              find "$sdcard_shadercache_path" -type d -empty -delete 2>/dev/null || true
@@ -787,9 +817,16 @@ otimizar_sdcard_cache() {
              rmdir "$sdcard_shadercache_path" 2>/dev/null || true
         fi
     fi
-    ln -s "$nvme_shadercache_target_path" "$sdcard_shadercache_path"
-    _ui_info "sucesso" "otimização do microsd concluída!"
+
+    # 7. Cria o link simbólico final e valida a operação
+    if ln -s "$nvme_shadercache_target_path" "$sdcard_shadercache_path"; then
+        _ui_info "sucesso" "otimização do microsd concluída!"
+    else
+        _ui_info "erro" "falha ao criar link simbólico para o cache."
+        return 1
+    fi
 }
+
 
 reverter_sdcard_cache() {
     _log "revertendo microsd..."
