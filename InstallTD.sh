@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.03- Timeless Child"
+versao="2.9.04- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -295,83 +295,72 @@ _configure_irqbalance() {
     _log "irqbalance configurado com sucesso"
 }
 
+
 _setup_lavd_scheduler() {
-    _log "Iniciando configuração robusta do LAVD Scheduler (CachyOS)..."
-    
-    # 1. Preparação do sistema
-    steamos-devmode enable --no-prompt
+    _log "Iniciando instalação dinâmica: LAVD Scheduler (CachyOS Bleeding Edge)"
+
     _steamos_readonly_disable_if_needed
+    sudo rm -f /var/lib/pacman/db.lck
 
-    # 2. Configuração manual de Chaves (Garante que não dependemos de scripts externos)
-    _log "Configurando chaves PGP do CachyOS..."
-    
-    # Tenta importar a chave de dois servidores diferentes para garantir
-    if ! pacman-key --recv-keys F3B607488DB35989 --keyserver keyserver.ubuntu.com && \
-       ! pacman-key --recv-keys F3B607488DB35989 --keyserver hkps://keys.gnupg.net; then
-        _log "Falha ao baixar chaves. Tentando método alternativo via GitHub..."
-        wget -qO- https://raw.githubusercontent.com/CachyOS/cachyos-repo/master/cachyos-repo.sh | bash -c "cat > /dev/null" 2>/dev/null || true
-    fi
-    
-    pacman-key --lsign-key F3B607488DB35989 2>/dev/null || true
+    # 1. Identificar a última versão disponível via Web Scraping
+    _log "Consultando última versão no repositório CachyOS..."
+    local base_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
 
-    # 3. Injeção Direta no pacman.conf
-    # Usamos o repositório v3 que é o otimizado para o processador do Steam Deck
-    if ! grep -q "\[cachyos-v3\]" /etc/pacman.conf; then
-        _log "Injetando repositórios cachyos-v3 e cachyos no pacman.conf..."
-        cat <<EOF >> /etc/pacman.conf
+    # Captura a versão e o release mais recentes de forma dinâmica
+    local latest_version=$(curl -sL "$base_url" | grep -oP 'scx-scheds-\K[0-9.]+(?=-[0-9]+-x86_64\.pkg\.tar\.zst)' | sort -V | tail -n 1)
+    local latest_release=$(curl -sL "$base_url" | grep -oP "scx-scheds-${latest_version}-\K[0-9]+(?=-x86_64\.pkg\.tar\.zst)" | head -n 1)
 
-[cachyos-v3]
-Priority = 1
-SigLevel = PackageOptional
-Server = https://mirror.cachyos.org/repo/\$arch/v3/\$repo
-
-[cachyos]
-Priority = 2
-SigLevel = PackageOptional
-Server = https://mirror.cachyos.org/repo/\$arch/\$repo
-EOF
+    # Fallback caso o scraping falhe
+    if [[ -z "$latest_version" ]]; then
+        _log "Aviso: Falha na detecção online. Usando 1.0.20-1 como base estável."
+        latest_version="1.0.20"
+        latest_release="1"
     fi
 
-    # 4. Sincronização e Instalação
-    _log "Sincronizando pacman e instalando scx-scheds..."
-    pacman -Sy --noconfirm
-    
-    if ! pacman -S --noconfirm scx-scheds; then
-        _log "Erro: Não foi possível instalar scx-scheds. Tentando fallback para versão genérica..."
-        pacman -S --noconfirm scx-scheds-git || { _log "Falha crítica na instalação."; return 1; }
+    local sched_pkg="scx-scheds-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
+    local tools_pkg="scx-tools-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
+
+    # 2. Download Direto (Bypass de bloqueios do pacman.conf)
+    _log "Baixando versão: ${latest_version}-${latest_release}..."
+    curl -L "${base_url}/${tools_pkg}" -o "/tmp/${tools_pkg}"
+    curl -L "${base_url}/${sched_pkg}" -o "/tmp/${sched_pkg}"
+
+    # 3. Instalação Local (Resolve ciclo de dependências scx-tools <-> scx-scheds)
+    _log "Instalando via Local Upgrade..."
+    if ! sudo pacman -U --noconfirm "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"; then
+        _log "Erro na instalação CachyOS. Usando versão Neptune (Valve) como redundância."
+        sudo pacman -S --noconfirm scx-scheds
     fi
 
-    # 5. Ativação do Serviço Systemd
-    local lavd_path; lavd_path=$(command -v scx_lavd || echo "/usr/bin/scx_lavd")
-    
-    if [ -x "$lavd_path" ]; then
-        _log "Criando serviço de sistema para o LAVD..."
-        cat <<UNIT > /etc/systemd/system/scx_lavd.service
+    # 4. Configuração de Privilégios (Crucial para o eBPF no SteamOS)
+    sudo systemctl disable --now scx.service || true
+    sudo setcap 'cap_sys_admin,cap_sys_ptrace,cap_net_admin,cap_dac_override,cap_sys_resource+eip' /usr/bin/scx_lavd
+
+    # 5. Serviço Systemd (Turbo Decky)
+    sudo bash -c 'cat <<UNIT > /etc/systemd/system/scx_lavd.service
 [Unit]
-Description=LAVD Scheduler (CachyOS x86-64-v3)
+Description=Turbo Decky - LAVD Scheduler (CachyOS)
 After=multi-user.target
 
 [Service]
 Type=simple
-# O scheduler LAVD é o mais testado para reduzir stuttering em jogos no Deck
-ExecStart=${lavd_path} --performance
+ExecStart=/usr/bin/scx_lavd --performance
 Restart=always
-RestartSec=5
+RestartSec=10
 Nice=-20
 
 [Install]
 WantedBy=multi-user.target
-UNIT
-        
-        systemctl daemon-reload
-        systemctl enable --now scx_lavd.service
-        _log "LAVD Scheduler (v3) ativado e rodando."
-    else
-        _log "Erro: scx_lavd não encontrado após instalação."
-        return 1
-    fi
-}
+UNIT'
 
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now scx_lavd.service
+
+    # Limpeza de arquivos temporários
+    rm -f "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"
+
+    _log "LAVD Scheduler ${latest_version} ativado com sucesso."
+}
 
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
