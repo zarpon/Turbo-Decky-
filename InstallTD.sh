@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.8. R02- Timeless Child"
+versao="2.8. R03- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -972,6 +972,8 @@ _instalar_kernel_customizado() {
         _ui_info "sucesso" "Kernel padrão (linux-neptune-611) reinstalado. Reinicie o sistema para completar."
              
         fi
+    fi
+
     fi
 }
 optimize_zram() {
