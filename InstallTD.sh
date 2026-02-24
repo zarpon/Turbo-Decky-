@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.01- Timeless Child"
+versao="2.9.02- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -295,61 +295,63 @@ _configure_irqbalance() {
     _log "irqbalance configurado com sucesso"
 }
 
-# --- FUNÇÃO ATUALIZADA: CONFIGURAÇÃO DO LAVD SCHEDULER VIA CACHYOS ---
 _setup_lavd_scheduler() {
     _log "Configurando LAVD Scheduler (scx) via Repositório CachyOS..."
     
-    # 1. Preparação do Ambiente e Escrita
+    # 1. Preparação do Ambiente
     steamos-devmode enable --no-prompt
     _steamos_readonly_disable_if_needed
 
-    # 2. Adição do Repositório CachyOS (se não existir)
+    # 2. Instalação do Repositório CachyOS (Método Atualizado)
     if ! grep -q "\[cachyos\]" /etc/pacman.conf; then
-        _log "Adicionando chaves e repositório CachyOS para pacotes atualizados..."
+        _log "Baixando script oficial de repositório do CachyOS..."
         
-        # Inicializa e popula chaves básicas se necessário
-        pacman-key --init 2>/dev/null || true
-        
-        # Adiciona a chave do CachyOS
-        if ! pacman-key --recv-keys F3B607488DB35989 &>/dev/null || \
-           ! pacman-key --lsign-key F3B607488DB35989 &>/dev/null; then
-            _log "Falha ao importar chaves via keyserver, tentando via download direto..."
-            wget https://mirror.cachyos.org/cachyos-repo.tar.gz -O /tmp/cachyos-repo.tar.gz
-            tar -xvf /tmp/cachyos-repo.tar.gz -C /tmp/
-            # Nota: O comando abaixo assume a estrutura padrão do instalador de repo deles
-            /tmp/cachyos-repo/cachyos-repo.sh 2>/dev/null || true
-        fi
-
-        # Adiciona o repositório ao pacman.conf manualmente para garantir persistência
-        cat <<EOF >> /etc/pacman.conf
+        # Baixa o script de instalação atualizado
+        if wget https://mirror.cachyos.org/cachyos-repo.sh -O /tmp/cachyos-repo.sh; then
+            chmod +x /tmp/cachyos-repo.sh
+            
+            _log "Executando instalador do repositório (autodetectando arquitetura)..."
+            # O script do CachyOS já cuida das chaves e da adição no pacman.conf
+            if ! /tmp/cachyos-repo.sh; then
+                _log "Erro ao executar cachyos-repo.sh. Tentando inserção manual..."
+                # Fallback manual caso o script falhe no SteamOS
+                pacman-key --recv-keys F3B607488DB35989
+                pacman-key --lsign-key F3B607488DB35989
+                cat <<EOF >> /etc/pacman.conf
 
 [cachyos]
 SigLevel = PackageOptional
 Server = https://mirror.cachyos.org/repo/\$arch/\$repo
 EOF
+            fi
+        else
+            _log "Erro crítico: Não foi possível baixar o script do repositório CachyOS."
+            return 1
+        fi
     fi
 
-    # 3. Instalação/Atualização do scx-scheds
-    _log "Sincronizando e instalando scx-scheds do CachyOS..."
-    # Forçamos a atualização da base de dados para pegar a versão nova
-    if ! pacman -Sy --noconfirm scx-scheds; then
-        _log "AVISO: Falha ao instalar via CachyOS. Tentando fallback para repositório padrão..."
-        pacman -S --noconfirm scx-scheds || { _log "Erro crítico: scx-scheds não encontrado."; return 1; }
+    # 3. Sincronização e Instalação
+    _log "Sincronizando bases de dados e instalando scx-scheds..."
+    # Atualizamos as bases para garantir que o pacman veja o novo repo
+    pacman -Sy --noconfirm
+    
+    if ! pacman -S --noconfirm scx-scheds; then
+        _log "Falha ao instalar scx-scheds. Verifique a conexão ou chaves."
+        return 1
     fi
 
-    # 4. Criação/Atualização do Serviço Systemd
-    if command -v scx_lavd &>/dev/null; then
-        local lavd_path; lavd_path=$(command -v scx_lavd)
-        
+    # 4. Configuração do Serviço Systemd
+    local lavd_path; lavd_path=$(command -v scx_lavd || echo "/usr/bin/scx_lavd")
+    
+    if [ -f "$lavd_path" ]; then
         cat <<UNIT > /etc/systemd/system/scx_lavd.service
 [Unit]
-Description=LAVD Scheduler (CachyOS scx_scheds)
+Description=LAVD Scheduler (CachyOS)
 After=multi-user.target
-ConditionPathExists=${lavd_path}
 
 [Service]
 Type=simple
-# Flags otimizadas para o kernel e scheduler mais recentes
+# O LAVD é excelente para o Steam Deck pois prioriza threads interativas (games)
 ExecStart=${lavd_path} --performance
 Restart=always
 RestartSec=5
@@ -361,7 +363,7 @@ UNIT
         
         systemctl daemon-reload
         systemctl enable --now scx_lavd.service
-        _log "LAVD Scheduler (CachyOS) ativado com sucesso."
+        _log "LAVD Scheduler ativado com sucesso."
     else
         _log "Erro: Binário scx_lavd não encontrado após instalação."
         return 1
