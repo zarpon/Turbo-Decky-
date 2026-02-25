@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.06- Timeless Child"
+versao="2.9.07- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -297,95 +297,58 @@ _configure_irqbalance() {
 
 
 _setup_lavd_scheduler() {
-    _log "Iniciando instalação dinâmica: LAVD Scheduler (via GitHub API)"
+    _log "Iniciando instalação estável: LAVD Scheduler (via SteamOS Neptune Repo)"
 
     _steamos_readonly_disable_if_needed
 
-    # 1. Tratamento SEGURO do pacman lock (evita corrupção irreversível do banco de dados)
+    # 1. Tratamento do pacman lock
     if [[ -f /var/lib/pacman/db.lck ]]; then
-        # Verifica se existe algum processo em execução usando este arquivo
         if ! fuser /var/lib/pacman/db.lck >/dev/null 2>&1; then
             _log "Removendo pacman lock órfão..."
             sudo rm -f /var/lib/pacman/db.lck
         else
-            _ui_info "erro" "O gerenciador de pacotes está em uso (talvez o SteamOS esteja atualizando em segundo plano). Tente novamente mais tarde."
+            _ui_info "erro" "O gerenciador de pacotes está em uso. Tente novamente mais tarde."
             return 1
         fi
     fi
 
-    # 2. Consultar a última versão oficial usando a API do GitHub do projeto upstream
-    _log "Consultando última versão na API do GitHub (sched-ext/scx)..."
-    local api_url="https://api.github.com/repos/sched-ext/scx/releases/latest"
-    local latest_version
-    
-    # Usa curl e extrai o valor de "tag_name" (removendo o prefixo 'v' se existir)
-    latest_version=$(curl -sL "$api_url" | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
+    # 2. Limpeza de versões anteriores (CachyOS ou locais) para evitar conflitos
+    _log "Removendo versões customizadas anteriores do scx..."
+    sudo systemctl disable --now scx_lavd.service scx.service 2>/dev/null || true
+    # Remove pacotes que podem ter vindo do CachyOS para garantir que o pacman use o repo oficial
+    sudo pacman -Rns --noconfirm scx-scheds scx-tools 2>/dev/null || true
 
-    # Fallback de segurança caso a API do GitHub falhe (ex: limite de requisições excedido)
-    if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
-        _log "Aviso: Falha na comunicação com o GitHub. Usando versão de fallback."
-        latest_version="1.0.20"
+    # 3. Sincronização e Instalação do repositório oficial do SteamOS (Neptune)
+    _log "Instalando scx-scheds oficial do repositório SteamOS..."
+    if ! sudo pacman -S --noconfirm scx-scheds; then
+        _log "Erro crítico: Não foi possível instalar o scx-scheds do repositório oficial."
+        return 1
     fi
 
-    local base_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
-    local latest_release="1"
-    local pkg_found=false
-
-    # 3. Descobrir o 'pkgrel' testando de forma limpa a disponibilidade no CachyOS
-    _log "Verificando a disponibilidade do pacote no mirror do CachyOS..."
-    for rel in 4 3 2 1; do
-        local test_pkg="scx-scheds-${latest_version}-${rel}-x86_64.pkg.tar.zst"
-        # Faz um HTTP HEAD request silencioso (-I / --head). Se retornar 200 OK, achamos o pacote.
-        if curl -sLf --head "${base_url}/${test_pkg}" > /dev/null; then
-            latest_release="$rel"
-            pkg_found=true
-            break
-        fi
-    done
-
-    if [[ "$pkg_found" == false ]]; then
-        _log "Aviso: Pacote para a versão ${latest_version} não encontrado no CachyOS. Usando repositório nativo do SteamOS (Neptune)."
-        sudo pacman -S --noconfirm scx-scheds || true
-    else
-        local sched_pkg="scx-scheds-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
-        local tools_pkg="scx-tools-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
-
-        # 4. Download Direto
-        _log "Baixando versão confirmada: ${latest_version}-${latest_release}..."
-        curl -L "${base_url}/${tools_pkg}" -o "/tmp/${tools_pkg}"
-        curl -L "${base_url}/${sched_pkg}" -o "/tmp/${sched_pkg}"
-
-        # 5. Instalação via Local Upgrade
-        _log "Instalando pacotes via pacman local..."
-        if ! sudo pacman -U --noconfirm "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"; then
-            _log "Erro na instalação CachyOS. Usando versão Neptune (Valve) como redundância."
-            sudo pacman -S --noconfirm scx-scheds || true
-        fi
-
-        # Limpeza de arquivos temporários
-        rm -f "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"
-    fi
-
-    # 6. Configuração de Privilégios (Crucial para o eBPF no SteamOS)
-    sudo systemctl disable --now scx.service 2>/dev/null || true
-    # Checa se o binário realmente existe antes de aplicar permissões
+    # 4. Configuração de Privilégios (Fundamental para o eBPF)
+    # No SteamOS oficial, o binário costuma estar em /usr/bin/scx_lavd
     if [[ -f /usr/bin/scx_lavd ]]; then
+        _log "Aplicando permissões de execução (capabilities)..."
         sudo setcap 'cap_sys_admin,cap_sys_ptrace,cap_net_admin,cap_dac_override,cap_sys_resource+eip' /usr/bin/scx_lavd
     else
-        _log "Erro: Binário /usr/bin/scx_lavd não encontrado após instalação."
+        _log "Erro: Binário /usr/bin/scx_lavd não encontrado após instalação oficial."
+        return 1
     fi
 
-    # 7. Serviço Systemd (Turbo Decky)
+    # 5. Criação do Serviço Systemd customizado para o Turbo Decky
+    _log "Configurando serviço scx_lavd..."
     sudo bash -c 'cat <<UNIT > /etc/systemd/system/scx_lavd.service
 [Unit]
-Description=Turbo Decky - LAVD Scheduler
+Description=Turbo Decky - LAVD Scheduler (Official Stable)
 After=multi-user.target
+Conflicts=scx.service
 
 [Service]
 Type=simple
+# Usamos --performance para garantir o foco em jogos no Steam Deck
 ExecStart=/usr/bin/scx_lavd --performance
 Restart=always
-RestartSec=10
+RestartSec=5
 Nice=-20
 
 [Install]
@@ -395,7 +358,12 @@ UNIT'
     sudo systemctl daemon-reload
     sudo systemctl enable --now scx_lavd.service
 
-    _log "LAVD Scheduler ativado com sucesso."
+    # 6. Verificação final
+    if systemctl is-active --quiet scx_lavd.service; then
+        _log "LAVD Scheduler (Versão Estável) ativado com sucesso."
+    else
+        _log "Aviso: O serviço foi instalado, mas falhou ao iniciar. Verifique 'journalctl -u scx_lavd'."
+    fi
 }
 
 
