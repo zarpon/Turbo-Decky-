@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.05- Timeless Child"
+versao="2.9.06- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -297,49 +297,88 @@ _configure_irqbalance() {
 
 
 _setup_lavd_scheduler() {
-    _log "Iniciando instalação dinâmica: LAVD Scheduler (CachyOS Bleeding Edge)"
+    _log "Iniciando instalação dinâmica: LAVD Scheduler (via GitHub API)"
 
     _steamos_readonly_disable_if_needed
-    sudo rm -f /var/lib/pacman/db.lck
 
-    # 1. Identificar a última versão disponível via Web Scraping
-    _log "Consultando última versão no repositório CachyOS..."
-    local base_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
+    # 1. Tratamento SEGURO do pacman lock (evita corrupção irreversível do banco de dados)
+    if [[ -f /var/lib/pacman/db.lck ]]; then
+        # Verifica se existe algum processo em execução usando este arquivo
+        if ! fuser /var/lib/pacman/db.lck >/dev/null 2>&1; then
+            _log "Removendo pacman lock órfão..."
+            sudo rm -f /var/lib/pacman/db.lck
+        else
+            _ui_info "erro" "O gerenciador de pacotes está em uso (talvez o SteamOS esteja atualizando em segundo plano). Tente novamente mais tarde."
+            return 1
+        fi
+    fi
 
-    # Captura a versão e o release mais recentes de forma dinâmica
-    local latest_version=$(curl -sL "$base_url" | grep -oP 'scx-scheds-\K[0-9.]+(?=-[0-9]+-x86_64\.pkg\.tar\.zst)' | sort -V | tail -n 1)
-    local latest_release=$(curl -sL "$base_url" | grep -oP "scx-scheds-${latest_version}-\K[0-9]+(?=-x86_64\.pkg\.tar\.zst)" | head -n 1)
+    # 2. Consultar a última versão oficial usando a API do GitHub do projeto upstream
+    _log "Consultando última versão na API do GitHub (sched-ext/scx)..."
+    local api_url="https://api.github.com/repos/sched-ext/scx/releases/latest"
+    local latest_version
+    
+    # Usa curl e extrai o valor de "tag_name" (removendo o prefixo 'v' se existir)
+    latest_version=$(curl -sL "$api_url" | grep '"tag_name":' | sed -E 's/.*"v?([^"]+)".*/\1/')
 
-    # Fallback caso o scraping falhe
-    if [[ -z "$latest_version" ]]; then
-        _log "Aviso: Falha na detecção online. Usando 1.0.20-1 como base estável."
+    # Fallback de segurança caso a API do GitHub falhe (ex: limite de requisições excedido)
+    if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
+        _log "Aviso: Falha na comunicação com o GitHub. Usando versão de fallback."
         latest_version="1.0.20"
-        latest_release="1"
     fi
 
-    local sched_pkg="scx-scheds-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
-    local tools_pkg="scx-tools-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
+    local base_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
+    local latest_release="1"
+    local pkg_found=false
 
-    # 2. Download Direto (Bypass de bloqueios do pacman.conf)
-    _log "Baixando versão: ${latest_version}-${latest_release}..."
-    curl -L "${base_url}/${tools_pkg}" -o "/tmp/${tools_pkg}"
-    curl -L "${base_url}/${sched_pkg}" -o "/tmp/${sched_pkg}"
+    # 3. Descobrir o 'pkgrel' testando de forma limpa a disponibilidade no CachyOS
+    _log "Verificando a disponibilidade do pacote no mirror do CachyOS..."
+    for rel in 4 3 2 1; do
+        local test_pkg="scx-scheds-${latest_version}-${rel}-x86_64.pkg.tar.zst"
+        # Faz um HTTP HEAD request silencioso (-I / --head). Se retornar 200 OK, achamos o pacote.
+        if curl -sLf --head "${base_url}/${test_pkg}" > /dev/null; then
+            latest_release="$rel"
+            pkg_found=true
+            break
+        fi
+    done
 
-    # 3. Instalação Local (Resolve ciclo de dependências scx-tools <-> scx-scheds)
-    _log "Instalando via Local Upgrade..."
-    if ! sudo pacman -U --noconfirm "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"; then
-        _log "Erro na instalação CachyOS. Usando versão Neptune (Valve) como redundância."
-        sudo pacman -S --noconfirm scx-scheds
+    if [[ "$pkg_found" == false ]]; then
+        _log "Aviso: Pacote para a versão ${latest_version} não encontrado no CachyOS. Usando repositório nativo do SteamOS (Neptune)."
+        sudo pacman -S --noconfirm scx-scheds || true
+    else
+        local sched_pkg="scx-scheds-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
+        local tools_pkg="scx-tools-${latest_version}-${latest_release}-x86_64.pkg.tar.zst"
+
+        # 4. Download Direto
+        _log "Baixando versão confirmada: ${latest_version}-${latest_release}..."
+        curl -L "${base_url}/${tools_pkg}" -o "/tmp/${tools_pkg}"
+        curl -L "${base_url}/${sched_pkg}" -o "/tmp/${sched_pkg}"
+
+        # 5. Instalação via Local Upgrade
+        _log "Instalando pacotes via pacman local..."
+        if ! sudo pacman -U --noconfirm "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"; then
+            _log "Erro na instalação CachyOS. Usando versão Neptune (Valve) como redundância."
+            sudo pacman -S --noconfirm scx-scheds || true
+        fi
+
+        # Limpeza de arquivos temporários
+        rm -f "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"
     fi
 
-    # 4. Configuração de Privilégios (Crucial para o eBPF no SteamOS)
-    sudo systemctl disable --now scx.service || true
-    sudo setcap 'cap_sys_admin,cap_sys_ptrace,cap_net_admin,cap_dac_override,cap_sys_resource+eip' /usr/bin/scx_lavd
+    # 6. Configuração de Privilégios (Crucial para o eBPF no SteamOS)
+    sudo systemctl disable --now scx.service 2>/dev/null || true
+    # Checa se o binário realmente existe antes de aplicar permissões
+    if [[ -f /usr/bin/scx_lavd ]]; then
+        sudo setcap 'cap_sys_admin,cap_sys_ptrace,cap_net_admin,cap_dac_override,cap_sys_resource+eip' /usr/bin/scx_lavd
+    else
+        _log "Erro: Binário /usr/bin/scx_lavd não encontrado após instalação."
+    fi
 
-    # 5. Serviço Systemd (Turbo Decky)
+    # 7. Serviço Systemd (Turbo Decky)
     sudo bash -c 'cat <<UNIT > /etc/systemd/system/scx_lavd.service
 [Unit]
-Description=Turbo Decky - LAVD Scheduler (CachyOS)
+Description=Turbo Decky - LAVD Scheduler
 After=multi-user.target
 
 [Service]
@@ -356,11 +395,9 @@ UNIT'
     sudo systemctl daemon-reload
     sudo systemctl enable --now scx_lavd.service
 
-    # Limpeza de arquivos temporários
-    rm -f "/tmp/${tools_pkg}" "/tmp/${sched_pkg}"
-
-    _log "LAVD Scheduler ${latest_version} ativado com sucesso."
+    _log "LAVD Scheduler ativado com sucesso."
 }
+
 
 create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
