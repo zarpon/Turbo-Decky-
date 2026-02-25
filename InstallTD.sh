@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.07- Timeless Child"
+versao="2.9.08- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -22,9 +22,6 @@ readonly logfile="/var/log/turbodecky.log"
 readonly turbodecky_dir="/var/lib/turbodecky"
 readonly turbodecky_bin="${turbodecky_dir}/bin"
 
-# --- Constantes para otimização do MicroSD ---
-readonly sdcard_device="/dev/mmcblk0p1"
-readonly nvme_shadercache_target_path="/home/deck/sd_shadercache"
 # Caminho do cache DXVK
 readonly dxvk_cache_path="/home/deck/dxvkcache"
 
@@ -783,87 +780,6 @@ EOF
 }
 
 
-
-otimizar_sdcard_cache() {
-    _log "otimizando microsd..."
-    
-    # 1. Busca o ponto de montagem real do SD
-    local sdcard_mount_point; sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
-    
-    if [[ -z "$sdcard_mount_point" ]]; then 
-        _ui_info "erro" "microsd não montado ou não encontrado em $sdcard_device"
-        return 1 
-    fi
-
-    # 2. Caminhos normalizados para o cache
-    local sdcard_steamapps_path="${sdcard_mount_point}/steamapps"
-    local sdcard_shadercache_path="${sdcard_steamapps_path}/shadercache"
-
-    # 3. VERIFICAÇÃO ROBUSTA:
-    # Verifica se já é um link e se aponta para o destino correto no NVMe
-    if [ -L "$sdcard_shadercache_path" ]; then
-        local link_target; link_target=$(readlink -f "$sdcard_shadercache_path")
-        if [[ "$link_target" == "$nvme_shadercache_target_path" ]]; then
-            _ui_info "info" "O MicroSD já está otimizado para o SSD interno."
-            return 0
-        else
-            _log "Link simbólico detectado, mas aponta para local diferente. Recriando..."
-            rm "$sdcard_shadercache_path" 2>/dev/null || true
-        fi
-    fi
-
-    # 4. Verifica a existência da pasta steamapps antes de prosseguir
-    if ! [ -d "$sdcard_steamapps_path" ]; then 
-        _ui_info "erro" "Pasta steamapps não encontrada no MicroSD."
-        return 1 
-    fi
-
-    # 5. Prepara o diretório de destino no NVMe (SSD interno)
-    mkdir -p "$nvme_shadercache_target_path"
-    local deck_user; deck_user=$(stat -c '%U' /home/deck 2>/dev/null || echo "deck")
-    local deck_group; deck_group=$(stat -c '%G' /home/deck 2>/dev/null || echo "deck")
-    chown "${deck_user}:${deck_group}" "$nvme_shadercache_target_path" 2>/dev/null || true
-
-    # 6. Move o conteúdo existente apenas se for um diretório real (não link)
-    if [ -d "$sdcard_shadercache_path" ] && [ ! -L "$sdcard_shadercache_path" ]; then
-        if command -v rsync &>/dev/null; then
-             rsync -a --remove-source-files "$sdcard_shadercache_path"/ "$nvme_shadercache_target_path"/ 2>/dev/null || true
-             find "$sdcard_shadercache_path" -type d -empty -delete 2>/dev/null || true
-        else
-             mv "$sdcard_shadercache_path"/* "$nvme_shadercache_target_path"/ 2>/dev/null || true
-             rmdir "$sdcard_shadercache_path" 2>/dev/null || true
-        fi
-    fi
-
-    # 7. Cria o link simbólico final e valida a operação
-    if ln -s "$nvme_shadercache_target_path" "$sdcard_shadercache_path"; then
-        _ui_info "sucesso" "otimização do microsd concluída!"
-    else
-        _ui_info "erro" "falha ao criar link simbólico para o cache."
-        return 1
-    fi
-}
-
-
-reverter_sdcard_cache() {
-    _log "revertendo microsd..."
-    local sdcard_mount_point; sdcard_mount_point=$(findmnt -n -o TARGET "$sdcard_device" 2>/dev/null || echo "")
-    if [[ -z "$sdcard_mount_point" ]]; then _ui_info "erro" "microsd não montado"; return 1; fi
-    local sdcard_steamapps_path="${sdcard_mount_point}/steamapps"
-    local sdcard_shadercache_path="${sdcard_steamapps_path}/shadercache"
-    if ! [ -L "$sdcard_shadercache_path" ]; then _ui_info "erro" "link não encontrado"; return 1; fi
-    rm "$sdcard_shadercache_path"
-    mkdir -p "$sdcard_shadercache_path"
-    if command -v rsync &>/dev/null; then
-         rsync -a --remove-source-files "$nvme_shadercache_target_path"/ "$sdcard_shadercache_path"/ 2>/dev/null || true
-         find "$nvme_shadercache_target_path" -type d -empty -delete 2>/dev/null || true
-    else
-         mv "$nvme_shadercache_target_path"/* "$sdcard_shadercache_path"/ 2>/dev/null || true
-         rmdir "$nvme_shadercache_target_path" 2>/dev/null || true
-    fi
-    _ui_info "sucesso" "reversão microsd concluída."
-}
-
 _executar_reversao() {
     _steamos_readonly_disable_if_needed
     _log "executando reversão geral"
@@ -1142,26 +1058,7 @@ UNIT
     if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
     _ui_info "sucesso" "ZSWAP aplicado."
 
-    echo -e "\n------------------------------------------------------------"
-    echo "Deseja otimizar o Shader Cache para jogos instalados no MicroSD?"
-    echo "Benefício: Move os arquivos de cache (pequenos e frequentes) do SD para o SSD interno."
-    echo "Isso reduz significativamente os 'engasgos' (stutters) em jogos rodando pelo cartão de memória."
-    echo "------------------------------------------------------------"
-
-    local resp_shader="n"
-    if command -v zenity &>/dev/null; then
-        if zenity --question --text="Deseja otimizar o Shader Cache para jogos instalados no MicroSD?\n\nIsso move o cache para o SSD, reduzindo stutters em jogos do cartão SD." --width=400; then
-            resp_shader="s"
-        fi
-    else
-        read -rp "Aplicar otimização do Shader Cache? (s/n): " input_shader
-        resp_shader="$input_shader"
-    fi
-
-    if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
-        otimizar_sdcard_cache
-    fi
-
+    
     _instalar_kernel_customizado
 
     
@@ -1231,26 +1128,7 @@ UNIT
     if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
     _ui_info "sucesso" "otimizações aplicadas."
 
-    echo -e "\n------------------------------------------------------------"
-    echo "Deseja otimizar o Shader Cache para jogos instalados no MicroSD?"
-    echo "Benefício: Move os arquivos de cache (pequenos e frequentes) do SD para o SSD interno."
-    echo "Isso reduz significativamente os 'engasgos' (stutters) em jogos rodando pelo cartão de memória."
-    echo "------------------------------------------------------------"
-
-    local resp_shader="n"
-    if command -v zenity &>/dev/null; then
-        if zenity --question --text="Deseja otimizar o Shader Cache para jogos instalados no MicroSD?\n\nIsso move o cache para o SSD, reduzindo stutters em jogos do cartão SD." --width=400; then
-            resp_shader="s"
-        fi
-    else
-        read -rp "Aplicar otimização do Shader Cache? (s/n): " input_shader
-        resp_shader="$input_shader"
-    fi
-
-    if [[ "$resp_shader" =~ ^[Ss]$ ]]; then
-        otimizar_sdcard_cache
-    fi
-
+    
     _instalar_kernel_customizado
     # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
     optimize_zram
@@ -1313,7 +1191,6 @@ main() {
             TRUE "1" "Aplicar Otimizações Recomendadas (ZSWAP + Tuning)" \
             FALSE "2" "Aplicar Otimizações (ZRAM + Tuning - Pouco espaço)" \
             FALSE "3" "Reverter Tudo" \
-            FALSE "4" "Reverter Otimizações SD Card" \
             FALSE "5" "Restaurar Kernel Padrão (Remover linux-charcoal)" \
             FALSE "6" "Sair" \
             --height 350 --width 500 --hide-column=2 --print-column=2 || echo "6")
@@ -1324,7 +1201,6 @@ main() {
         echo "1) Aplicar Otimizações Recomendadas (ZSWAP + Tuning)"
         echo "2) Aplicar Otimizações (ZRAM + Tuning - Alternativa para pouco espaço)"
         echo "3) Reverter Tudo"
-        echo "4) Reverter Otimizações de shader cache de jogos instalados no MicroSD"
         echo "5) Reinstalar kernel padrão (remover kernel customizado)"
         echo "6) Sair"
         read -rp "Opção: " escolha
@@ -1334,7 +1210,6 @@ main() {
         1) aplicar_zswap ;;
         2) aplicar_zram ;;
         3) reverter_alteracoes ;;
-        4) reverter_sdcard_cache ;;
         5) _restore_kernel_to_neptune ;;
         6) exit 0 ;;
         *)
