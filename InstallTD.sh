@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.08- Timeless Child"
+versao="2.9.09- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -297,6 +297,8 @@ _setup_lavd_scheduler() {
     _log "Iniciando instalação estável: LAVD Scheduler (via SteamOS Neptune Repo)"
 
     _steamos_readonly_disable_if_needed
+    # NOVO: Garante que o DevMode está ativo para permitir alterações no pacman
+    steamos-devmode enable --no-prompt 2>/dev/null || true
 
     # 1. Tratamento do pacman lock
     if [[ -f /var/lib/pacman/db.lck ]]; then
@@ -314,6 +316,11 @@ _setup_lavd_scheduler() {
     sudo systemctl disable --now scx_lavd.service scx.service 2>/dev/null || true
     # Remove pacotes que podem ter vindo do CachyOS para garantir que o pacman use o repo oficial
     sudo pacman -Rns --noconfirm scx-scheds scx-tools 2>/dev/null || true
+
+    # NOVO: Inicialização obrigatória do chaveiro do pacman no SteamOS
+    _log "Inicializando chaves do pacman..."
+    sudo pacman-key --init 2>/dev/null || true
+    sudo pacman-key --populate archlinux holo 2>/dev/null || true
 
     # 3. Sincronização e Instalação do repositório oficial do SteamOS (Neptune)
     _log "Instalando scx-scheds oficial do repositório SteamOS..."
