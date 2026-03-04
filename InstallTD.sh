@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="2.9.16- Timeless Child"
+versao="3.0- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -972,7 +972,7 @@ rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
 zram-size = min(ram, 8192)
-compression-algorithm = lz4 zstd(level=3) (type=idle) 
+compression-algorithm = zstd(level=1) zstd(level=3) (type=idle) 
 swap-priority = 1000
 fs-type = swap
 EOF
@@ -1018,7 +1018,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "zswap.same_filled_pages_enabled=1" "zswap.non_same_filled_pages_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active"​ "amdgpu.gttsize=9830")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "zswap.same_filled_pages_enabled=1" "zswap.non_same_filled_pages_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active"​ "amdgpu.gttsize=9830")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1038,7 +1038,7 @@ echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
-echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
+echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/same_filled_pages_enabled 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
