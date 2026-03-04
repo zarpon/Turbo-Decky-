@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2 - Timeless Child"
+versao="3.0 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -56,7 +56,7 @@ readonly base_sysctl_params=(
     "kernel.core_pattern=/dev/null"
     "kernel.core_pipe_limit=0"
     "kernel.printk_devkmsg=off"
-    "net.core.default_qdisc=cake"
+    "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
     "net.core.netdev_max_backlog=16384"
     "net.ipv4.tcp_fastopen=3"  
@@ -90,7 +90,7 @@ readonly game_env_vars=(
     "WINE_DISABLE_PROTOCOL_FORK=1"
     "WINE_DISABLE_WRITE_WATCH=1" 
     "PROTON_USE_NTSYNC=1"
-    "VKD3D_CONFIG=force_host_cached"
+    "VKD3D_CONFIG=force_host_cached,no_upload_hvv"
     # --- Otimização de Memória Glibc (Equilíbrio Performance/Estabilidade) ---
     # Trim de 2MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
     "MALLOC_TRIM_THRESHOLD_=2097152"
