@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.0 - Timeless Child"
+versao="3.0.7.03- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -372,8 +372,17 @@ UNIT'
 
 
 create_persistent_configs() {
+
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
+
+    
+# Otimização de GPU e Agendamento de Hardware
+cat << EOF | sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null
+options amdgpu mes=1 uni_mes=1 mes_kiq=1 moverate=128 lbpw=0 preempt_complete_poll_ms=100
+options gpu_sched sched_policy=0
+EOF
+
 
     # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
@@ -795,6 +804,7 @@ _executar_reversao() {
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
     rm -f /etc/environment.d/turbodecky*.conf
     rm -f /etc/security/limits.d/99-game-limits.conf
+    rm -f /etc/modprobe.d/amdgpu.conf
     rm -f /etc/modprobe.d/99-amdgpu-tuning.conf
     rm -f /etc/tmpfiles.d/mglru.conf
     rm -f /etc/tmpfiles.d/thp_shrinker.conf
