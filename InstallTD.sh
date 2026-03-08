@@ -1029,7 +1029,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "zswap.same_filled_pages_enabled=1" "zswap.non_same_filled_pages_enabled=1" "mitigations=off"  "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active"​ "amdgpu.gttsize=9830")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "zswap.same_filled_pages_enabled=1" "zswap.non_same_filled_pages_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1104,7 +1104,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active"​ "amdgpu.gttsize=9830")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830")
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
