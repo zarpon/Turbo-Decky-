@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.0.7.03- Timeless Child"
+versao="3.0.8.03- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -377,9 +377,9 @@ create_persistent_configs() {
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
 
     
-# Otimização de GPU e Agendamento de Hardware
-cat << EOF | sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null
-options amdgpu mes=1 uni_mes=1 mes_kiq=1 moverate=128 lbpw=0 preempt_complete_poll_ms=100
+    # Otimização de GPU e Agendamento de Hardware
+    cat << EOF | sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null
+options amdgpu mes=1 uni_mes=1 mes_kiq=1 moverate=128 lbpw=0 preempt_complete_poll_ms=100 gpu_recovery=1
 options gpu_sched sched_policy=0
 EOF
 
@@ -513,16 +513,22 @@ fi
 EOF
     chmod +x "${turbodecky_bin}/turbodecky-power-monitor.sh"
 
-    # 4. CRIAÇÃO DO SERVICE (Para ser acionado pelo UDEV/SYSTEMD)
+        # 4. CRIAÇÃO DO SERVICE (Para ser acionado no Boot e pelo UDEV)
     cat <<UNIT > /etc/systemd/system/turbodecky-power-monitor.service
 [Unit]
-Description=TurboDecky Power Monitor (oneshot udev-triggered)
+Description=TurboDecky Power Monitor (Boot & Udev Trigger)
+After=multi-user.target
 Wants=sys-devices-virtual-power_supply-*/device
+
 [Service]
 Type=oneshot
 ExecStart=${turbodecky_bin}/turbodecky-power-monitor.sh
+
+[Install]
+WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
+
 
     # 5. Regra UDEV OTIMIZADA (Gatilho Systemd - Foca apenas nos tipos de fonte AC)
     cat <<'UDEV' > /etc/udev/rules.d/99-turbodecky-power.rules
@@ -532,13 +538,14 @@ SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB_C", TAG+="systemd"
 SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB-PD", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
 UDEV
 
-    # 6. Ativar imediatamente
+        # 6. Ativar imediatamente e habilitar no boot
     if command -v udevadm &>/dev/null; then
         udevadm control --reload-rules 2>/dev/null || true
         udevadm trigger --action=change --subsystem-match=power_supply 2>/dev/null || true
     fi
-    systemctl start --no-block turbodecky-power-monitor.service || true
-    _log "monitoramento de energia configurado (THP Latency Tuned - Híbrido/Systemd)."
+    systemctl enable --now turbodecky-power-monitor.service || true
+    _log "monitoramento de energia configurado (THP Latency Tuned - Híbrido/Systemd/Boot)."
+
 }
 
 create_common_scripts_and_services() {
@@ -983,7 +990,7 @@ rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
 zram-size = min(ram, 8192)
-compression-algorithm = zstd(level=3)
+compression-algorithm = zstd(level=1) zstd(level=3)
 swap-priority = 1000
 fs-type = swap
 EOF
@@ -1029,8 +1036,8 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "zswap.same_filled_pages_enabled=1" "zswap.non_same_filled_pages_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830")
-    
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "zswap.same_filled_pages_enabled=1" "zswap.non_same_filled_pages_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830" "page_alloc.shuffle=1")
+
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
     for param in "${kernel_params[@]}"; do local key="${param%%=*}"; new_cmdline=$(echo "$new_cmdline" | sed -E "s/ ?${key}(=[^ ]*)?//g"); done
@@ -1103,8 +1110,9 @@ aplicar_zram() {
     sysctl --system || true
 
     _backup_file_once "$grub_config"
-    
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830")
+       
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830" "page_alloc.shuffle=1")
+
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
