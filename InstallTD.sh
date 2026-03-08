@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.0.8.03. r1- Timeless Child"
+versao="3.0.8.03. r2- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -990,7 +990,7 @@ rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
 zram-size = min(ram, 8192)
-compression-algorithm = zstd(level=1) zstd(level=3)
+compression-algorithm = lz4 zstd(level=3) (type=idle) 
 swap-priority = 1000
 fs-type = swap
 EOF
