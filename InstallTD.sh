@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.0.8.03- Timeless Child"
+versao="3.0.8.03. r1- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1045,10 +1045,12 @@ aplicar_zswap() {
     new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//')
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
 
+create_persistent_configs
+
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
 
-    create_persistent_configs
+    
 
     cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
@@ -1120,10 +1122,13 @@ aplicar_zram() {
     for param in "${kernel_params[@]}"; do new_cmdline="$new_cmdline $param"; done
     new_cmdline=$(echo "$new_cmdline" | tr -s ' ' | sed -E 's/^ //; s/ $//')
     sed -i -E "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$new_cmdline\"|" "$grub_config" || true
+
+create_persistent_configs
+
     steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
     mkinitcpio -P &>/dev/null || true
 
-    create_persistent_configs
+    
 
     cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
