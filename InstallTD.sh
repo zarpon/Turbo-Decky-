@@ -27,7 +27,6 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.workingset_protection=0"
     "vm.dirty_background_bytes=227001600"
     "vm.dirty_bytes=556531840"
     "vm.dirty_expire_centisecs=1500"       
