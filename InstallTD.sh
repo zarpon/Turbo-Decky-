@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. R1 - Timeless Child"
+versao="3.1. R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -970,36 +970,68 @@ _instalar_kernel_customizado() {
 
     fi
 }
+
 optimize_zram() {
-    # ZRAM SteamOS-safe 
-   
+    # ZRAM SteamOS-safe + recompressão automática (idle 3min + huge + huge_idle)
+    
     local gen_dir="/etc/systemd/zram-generator.conf.d"
     local gen_conf="${gen_dir}/00-turbodecky.conf"
+    
+    local timer_file="/etc/systemd/system/zram-recompress.timer"
+    local service_file="/etc/systemd/system/zram-recompress.service"
     
     [ "$(id -u)" -eq 0 ] || return 1
     _steamos_readonly_disable_if_needed
 
-    # -------------------------------------------------
-    # 1) zram-generator (único criador da zram)
-    # -------------------------------------------------
+    # 1) zram-generator
     mkdir -p "$gen_dir"
     rm -f "$gen_conf"
-rm -f /etc/systemd/system/zram-recompress.timer 
-rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
 zram-size = min(ram, 6144)
-compression-algorithm = lz4 zstd(level=3) (type=idle) 
-idle-pages-age = 180
+compression-algorithm = lz4 zstd(level=3) (type=idle)
 swap-priority = 1000
 fs-type = swap
 EOF
 
+    # 2) Timer (4 minutos)
+    cat <<'EOF' > "$timer_file"
+[Unit]
+Description=Recompress ZRAM pages (TurboDecky)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=4min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    # 3) Service (agora com idle + huge + huge_idle)
+    cat <<'EOF' > "$service_file"
+[Unit]
+Description=Recompress ZRAM pages (idle + huge)
+After=dev-zram0.swap
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '
+    echo 180 > /sys/block/zram0/idle
+    echo "type=idle max_pages=15000" > /sys/block/zram0/recompress
+    echo "type=huge max_pages=10000" > /sys/block/zram0/recompress
+    echo "type=huge_idle max_pages=8000" > /sys/block/zram0/recompress 2>/dev/null || true
+'
+RemainAfterExit=no
+EOF
+
+    # 4) Aplicar
     systemctl daemon-reexec
     systemctl daemon-reload
+    systemctl enable --now zram-recompress.timer
+    systemctl start zram-recompress.service
 
-   
-
+    echo "✅ ZRAM otimizado + recompressão (idle + huge + huge_idle) ativada!"
     return 0
 }
 
@@ -1059,7 +1091,6 @@ echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
-echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/same_filled_pages_enabled 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
@@ -1133,7 +1164,7 @@ create_persistent_configs
     cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
 
-echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
+
 sysctl -w vm.swappiness=150 || true
 sysctl -w vm.watermark_scale_factor=125 || true
 sysctl -w vm.vfs_cache_pressure=70  || true
