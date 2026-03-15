@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.0.11-03. R1- Timeless Child"
+versao="3.1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -988,7 +988,7 @@ rm -f /etc/systemd/system/zram-recompress.timer
 rm -f /etc/systemd/system/zram-recompress.service
     cat <<'EOF' > "$gen_conf"
 [zram0]
-zram-size = min(ram, 8192)
+zram-size = min(ram, 6144)
 compression-algorithm = lz4 zstd(level=3) (type=idle) 
 swap-priority = 1000
 fs-type = swap
@@ -1062,7 +1062,7 @@ echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/same_filled_pages_enabled 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/non_same_filled_pages_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=140 || true
+sysctl -w vm.swappiness=100 || true
 sysctl -w vm.watermark_scale_factor=125 || true
 sysctl -w vm.vfs_cache_pressure=70 || true
 ZSWAP_SCRIPT
@@ -1133,7 +1133,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 echo 0 > /sys/kernel/mm/page_idle/enable 2>/dev/null || true
-sysctl -w vm.swappiness=165 || true
+sysctl -w vm.swappiness=150 || true
 sysctl -w vm.watermark_scale_factor=125 || true
 sysctl -w vm.vfs_cache_pressure=70  || true
 sysctl -w vm.page-cluster=0 || true
