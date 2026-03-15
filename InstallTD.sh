@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. R2 - Timeless Child"
+versao="3.1. R3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -886,6 +886,12 @@ _executar_reversao() {
     sysctl --system || true 
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
+
+    # --- LIMPEZA ZRAM RECOMPRESS (TurboDecky) ---
+systemctl disable --now zram-recompress.timer 2>/dev/null || true
+rm -f /etc/systemd/system/zram-recompress.timer
+rm -f /etc/systemd/system/zram-recompress.service
+_log "zram-recompress timer/service removidos na reversão"
 
     rm -rf "${turbodecky_bin}" 2>/dev/null || true
     rm -rf "${turbodecky_dir}" 2>/dev/null || true
