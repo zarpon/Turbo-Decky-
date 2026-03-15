@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. R3 - Timeless Child"
+versao="3.1. R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1034,6 +1034,10 @@ EOF
     # 4) Aplicar
     systemctl daemon-reexec
     systemctl daemon-reload
+    # Adicionar dentro da função optimize_zram, antes de systemctl enable
+swapoff /dev/zram0 2>/dev/null || true
+zramctl --reset /dev/zram0 2>/dev/null || true
+systemctl restart systemd-zram-setup@zram0.service
     systemctl enable --now zram-recompress.timer
     systemctl start zram-recompress.service
 
