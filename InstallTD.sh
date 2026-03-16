@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 16-03 R1 - Timeless Child"
+versao="3.1. 16-03 R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -633,11 +633,11 @@ safe_write "$QUEUE_PATH/add_random" 0
 
 case "$DEV_BASE" in
   nvme*)
-    # NVMe: Prioridade  none -> kyber
-    if printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # none aplicado com sucesso
-    elif printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # Fallback para kyber
+    # NVMe: Prioridade  kyber -> none
+    if printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+        : # kyber aplicado com sucesso
+    elif printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+        : # Fallback para none
     else
         printf "mq-deadline" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
     fi
@@ -784,7 +784,7 @@ configure_read_ahead() {
 
     cat > "$tmp" <<'EOF'
 # zram
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="4"
+SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0"
 
 # NVMe interno (disco e partições)
 SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n1*", ATTR{queue/read_ahead_kb}="512"
