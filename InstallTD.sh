@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 16-03 R3 - Timeless Child"
+versao="3.1. 16-03 R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1078,7 +1078,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1152,7 +1152,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
        
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=9830")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128")
 
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
