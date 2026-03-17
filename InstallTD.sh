@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 16-03 R4 - Timeless Child"
+versao="3.1. 17-03 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -31,7 +31,7 @@ readonly base_sysctl_params=(
     "vm.dirty_bytes=556531840"
     "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=1500"      
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=15"
     "kernel.numa_balancing=0"
     "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
@@ -1103,7 +1103,7 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.watermark_scale_factor=125 || true
+sysctl -w vm.watermark_scale_factor=300 || true
 sysctl -w vm.vfs_cache_pressure=70 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
@@ -1174,7 +1174,7 @@ create_persistent_configs
 
 
 sysctl -w vm.swappiness=150 || true
-sysctl -w vm.watermark_scale_factor=125 || true
+sysctl -w vm.watermark_scale_factor=300 || true
 sysctl -w vm.vfs_cache_pressure=70  || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
