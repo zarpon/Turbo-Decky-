@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 18-03 - Timeless Child"
+versao="3.1. 18-03 Rev1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,6 +27,8 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
+    "kernel.shmmax=17179869184" # Permite até 16GB (RAM total) para um único segmento
+    "kernel.shmall=4194304"     # Ajuste de páginas para 16GB
     "vm.dirty_background_bytes=227001600"
     "vm.dirty_bytes=556531840"
     "vm.dirty_expire_centisecs=1500"       
