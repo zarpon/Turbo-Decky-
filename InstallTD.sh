@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 17-03 - Timeless Child"
+versao="3.1. 18-03 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -633,9 +633,15 @@ safe_write "$QUEUE_PATH/add_random" 0
 
 case "$DEV_BASE" in
   nvme*)
-    # NVMe: Prioridade  kyber -> none
+    # NVMe: Prioridade  kyber -> none -> mq-deadline
     if printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # kyber aplicado com sucesso
+        kyber_path="$QUEUE_PATH/iosched"
+        if [ -d "$kyber_path" ]; then
+            # NVMe é ultrarrápido. Alvo de leitura: 2ms (2000000 ns). Alvo de escrita: 10ms (10000000 ns).
+            # Prioriza fortemente a leitura para streaming de assets em jogos.
+            safe_write "$kyber_path/read_lat_nsec" 2000000
+            safe_write "$kyber_path/write_lat_nsec" 10000000
+        fi
     elif printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
         : # Fallback para none
     else
@@ -644,25 +650,29 @@ case "$DEV_BASE" in
 
     # NVMe se beneficia de completar requisições na CPU que iniciou (cache locality)
     safe_write "$QUEUE_PATH/rq_affinity" 2
-        # Adicionar: Desativar merges para reduzir latência de CPU em NVMe rápido
+    # Desativar merges para reduzir latência de CPU em NVMe rápido
     safe_write "$QUEUE_PATH/nomerges" 2
-
     ;;
-   
+    
   mmcblk*|sd*)
-    # SD/SATA: Prioridade BFQ -> MQ-Deadline
-    if printf "bfq" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+    # SD/SATA: Prioridade Kyber -> BFQ -> MQ-Deadline
+    if printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
+        kyber_path="$QUEUE_PATH/iosched"
+        if [ -d "$kyber_path" ]; then
+            # MicroSD (barramento UHS-I). Metas irreais causam estrangulamento do fluxo.
+            # Alvo de leitura realista: 20ms (20000000 ns). Alvo de escrita: 40ms (40000000 ns).
+            safe_write "$kyber_path/read_lat_nsec" 20000000
+            safe_write "$kyber_path/write_lat_nsec" 40000000
+        fi
+    elif printf "bfq" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
         bfq_path="$QUEUE_PATH/iosched"
         if [ -d "$bfq_path" ]; then
             # 'low_latency' em 1 é vital para o Deck não travar enquanto baixa jogos
             safe_write "$bfq_path/low_latency" 1
-            
             # Como o barramento UHS-I é lento, reduzimos o timeout
             safe_write "$bfq_path/timeout_sync" 200
-            
             # Reduz o 'strict_priority' para evitar engasgos em multitarefa
             safe_write "$bfq_path/strict_priority" 0
-            
             # Aumenta o peso das leituras interativas.
             safe_write "$bfq_path/interactive" 1
         fi
@@ -724,10 +734,9 @@ EOF
     systemctl daemon-reload || true
     udevadm control --reload-rules || true
     udevadm trigger --action=change --subsystem-match=block || true
-    _log "io-boost: instalação concluída (Prioridade: adios)"
+    _log "io-boost: instalação concluída"
     return 0
 }
-
     # === CORREÇÃO CRÍTICA: Chamada da função de instalação do IO Boost ===
     install_io_boost_uadev
 
