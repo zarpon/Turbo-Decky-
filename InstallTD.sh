@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 18-03 Rev2 - Timeless Child"
+versao="3.1. 19-03 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -381,7 +381,7 @@ create_persistent_configs() {
     
     # Otimização de GPU e Agendamento de Hardware
     cat << EOF | sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null
-options amdgpu mes=1 uni_mes=1 mes_kiq=1 moverate=128 lbpw=0 preempt_complete_poll_ms=100 gpu_recovery=1
+options amdgpu mes=1 uni_mes=1 mes_kiq=1 moverate=128 preempt_complete_poll_ms=100 gpu_recovery=1
 options gpu_sched sched_policy=0
 EOF
 
@@ -1090,7 +1090,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128" "amdgpu.ppfeaturemask=0xfffd7fff")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1115,7 +1115,7 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
 sysctl -w vm.swappiness=133 || true
-sysctl -w vm.watermark_scale_factor=300 || true
+sysctl -w vm.watermark_scale_factor=150 || true
 sysctl -w vm.vfs_cache_pressure=70 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
@@ -1164,7 +1164,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
        
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128" "amdgpu.ppfeaturemask=0xfffd7fff")
 
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
@@ -1186,7 +1186,7 @@ create_persistent_configs
 
 
 sysctl -w vm.swappiness=150 || true
-sysctl -w vm.watermark_scale_factor=300 || true
+sysctl -w vm.watermark_scale_factor=150 || true
 sysctl -w vm.vfs_cache_pressure=70  || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
