@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 19-03 - Timeless Child"
+versao="3.1. 19-03 Rev 1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,6 +27,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
+    "kernel.timer_migration=0"
     "vm.overcommit_memory=1"
     "kernel.shmmax=17179869184" # Permite até 16GB (RAM total) para um único segmento
     "kernel.shmall=4194304"     # Ajuste de páginas para 16GB
@@ -84,7 +85,6 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-    "RADEONSI_SHADER_PRECOMPILE=true"
     "MESA_DISK_CACHE_COMPRESSION=zstd"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
     "VKD3D_SHADER_CACHE=1"
@@ -92,7 +92,7 @@ readonly game_env_vars=(
     "WINE_DISABLE_PROTOCOL_FORK=1"
     "WINE_DISABLE_WRITE_WATCH=1" 
     "PROTON_USE_NTSYNC=1"
-    "VKD3D_CONFIG=force_host_cached,no_upload_hvv"
+    "VKD3D_CONFIG=force_host_cached"
     # --- Otimização de Memória Glibc (Equilíbrio Performance/Estabilidade) ---
     # Trim de 2MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
     "MALLOC_TRIM_THRESHOLD_=2097152"
@@ -1090,7 +1090,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128" "amdgpu.ppfeaturemask=0xfffd7fff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.ppfeaturemask=0xfffd7fff")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -1164,7 +1164,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
        
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.gttsize=8128" "amdgpu.ppfeaturemask=0xfffd7fff")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amd_pstate=active" "amdgpu.ppfeaturemask=0xfffd7fff")
 
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
