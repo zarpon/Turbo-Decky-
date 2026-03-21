@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 20-03  - Timeless Child"
+versao="3.1. 21-03  - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -86,20 +86,9 @@ readonly unnecessary_services=(
 readonly game_env_vars=(
     "MESA_DISK_CACHE_COMPRESSION=zstd"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
-    "VKD3D_SHADER_CACHE=1"
-    "PROTON_FORCE_LARGE_ADDRESS_AWARE=1"
-    "WINE_DISABLE_PROTOCOL_FORK=1"
-    "WINE_DISABLE_WRITE_WATCH=1" 
+    "PROTON_FORCE_LARGE_ADDRESS_AWARE=1" 
     "PROTON_USE_NTSYNC=1"
-    "VKD3D_CONFIG=force_host_cached"
-    # --- Otimização de Memória Glibc (Equilíbrio Performance/Estabilidade) ---
-    # Trim de 2MB: Evita micro-stutters, mas libera RAM muito antes de causar OOM.
-    "MALLOC_TRIM_THRESHOLD_=2097152"
-    # MMAP em 1MB: Tira o overhead de alocações frequentes, mas deixa as grandes para o mmap.
-    "MALLOC_MMAP_THRESHOLD_=1048576"
-    # Pad de 256KB: Dobro do padrão, reduzindo churn de sbrk sem desperdício.
-    "MALLOC_TOP_PAD_=262144"   
-)
+)  
 
 # --- Funções Utilitárias ---
 _ui_info() {
