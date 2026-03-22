@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 21-03  - Timeless Child"
+versao="3.1. 22-03  - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -475,7 +475,7 @@ if is_on_ac; then
     if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
       sleep 2
       for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-            echo "performance" > "$epp" 2>/dev/null || true
+            echo "balance_performance" > "$epp" 2>/dev/null || true
         done
     fi
     
