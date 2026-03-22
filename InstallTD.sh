@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 22-03 Rev2 - Timeless Child"
+versao="3.1. 22-03 Rev3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -624,7 +624,10 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     done
-    systemctl daemon-reload || true
+
+   systemctl daemon-reload || true
+systemctl enable --now thp-config.service ksm-config.service kernel-tweaks.service || true 
+
 }
 
 configure_read_ahead() {
@@ -710,6 +713,7 @@ _executar_reversao() {
     _log "Serviço systemd-zram-setup@zram0.service desmascarado e iniciado."
     
     # Remover override de ZRAM em /etc (Caminho persistente)
+    rm -f /etc/systemd/zram-generator.conf.d/00-turbodecky.conf
     rm -f /etc/systemd/zram-generator.conf
     # Remover override legado em /usr (se existir por versões anteriores)
     rm -f /usr/lib/systemd/zram-generator.conf
