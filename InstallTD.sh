@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 22-03 Rev1 - Timeless Child"
+versao="3.1. 22-03 Rev2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -352,47 +352,42 @@ UNIT'
     fi
 }
 
+manage_unnecessary_services() {
+    local action="$1"
+
+    if [[ "$action" == "disable" ]]; then
+        systemctl stop "${unnecessary_services[@]}" 2>/dev/null || true
+        systemctl mask "${unnecessary_services[@]}" 2>/dev/null || true
+    elif [[ "$action" == "enable" ]]; then
+        systemctl unmask "${unnecessary_services[@]}" 2>/dev/null || true
+        systemctl start "${unnecessary_services[@]}" 2>/dev/null || true
+    fi
+}
 
 create_persistent_configs() {
-
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
 
-    
-    # Otimização de GPU e Agendamento de Hardware
     cat << EOF | sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null
 options amdgpu mes=1 uni_mes=1 mes_kiq=1 moverate=128 preempt_complete_poll_ms=100 gpu_recovery=1
 options gpu_sched sched_policy=0
 EOF
 
-
-    # MGLRU
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
 w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
 w /proc/sys/vm/mglru_enable - - - - 1
 EOF
-    
 
-    # NTSYNC - Carregamento Persistente do Módulo
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
     _log "configuração ntsync criada em /etc/modules-load.d/ntsync.conf"
 
-    _log "configurações mglru e ntsync criadas."
+    manage_unnecessary_services "disable"
+
+    systemctl daemon-reload || true
+    _log "configurações mglru, ntsync e serviços desnecessários aplicados."
 }
-
-manage_unnecessary_services() {
-    local action="$1"
-    if [[ "$action" == "disable" ]]; then
-        systemctl stop "${unnecessary_services[@]}" --quiet || true
-        systemctl mask "${unnecessary_services[@]}" --quiet || true
-    elif [[ "$action" == "enable" ]]; then
-        systemctl unmask "${unnecessary_services[@]}" --quiet || true
-    fi
-}
-
-    
-
+   
 
 create_common_scripts_and_services() {
     _log "criando scripts e services comuns"
