@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 22-03  - Timeless Child"
+versao="3.1. 22-03 Rev1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -273,14 +273,6 @@ EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
 
-_configure_irqbalance() {
-    _log "configurando irqbalance..."
-
-    systemctl stop irqbalance.service 2>/dev/null || true
-    systemctl unmask irqbalance.service 2>/dev/null || true
-    systemctl start irqbalance.service 2>/dev/null || true
-    _log "irqbalance configurado com sucesso"
-}
 
 
 _setup_lavd_scheduler() {
@@ -399,144 +391,8 @@ manage_unnecessary_services() {
     fi
 }
 
-# --- FUNÇÃO: REGRAS DE ENERGIA (HÍBRIDO AC/BATERIA COM ANTI-STUTTER) ---
-create_power_rules() {
-    _log "configurando regras dinâmicas de energia (AC/Bateria) com detecção híbrida..."
-
-    # ------------------------------------------------------------------
-    # --- SCRIPT DE MONITORAMENTO (EMBUTIDO) ---
-    # ------------------------------------------------------------------
-    mkdir -p "${turbodecky_bin}"
-    cat <<'EOF' > "${turbodecky_bin}/turbodecky-power-monitor.sh"
-#!/usr/bin/env bash
-
-# Funções de Detecção
-get_ac_state_sysfs() {
-    for ps in /sys/class/power_supply/*; do
-        [ -d "$ps" ] || continue
-        local type_file="$ps/type"
-        local online_file="$ps/online"
-
-        [[ -f "$type_file" ]] || continue
-
-        local type_val; type_val=$(tr -d ' \t\n' < "$type_file" 2>/dev/null)
-        local online_val=""
-
-        if [[ -f "$online_file" ]]; then
-            online_val=$(tr -d ' \t\n' < "$online_file" 2>/dev/null)
-        fi
-
-        case "$type_val" in
-        "Mains"|"Line"|"AC"|"USB_C"|"ACAD"|"USB-PD")
-            echo "${online_val:-unknown}"
-            return
-            ;;
-        esac
-
-        if [[ "$type_val" == "USB" ]]; then
-            if [[ -n "$online_val" ]]; then
-                echo "$online_val"
-                return
-            elif [[ -f "$ps/present" ]]; then
-                local present_val; present_val=$(tr -d ' \t\n' < "$ps/present" 2>/dev/null)
-                echo "$present_val"
-                return
-            fi
-        fi
-    done
-    echo "unknown"
-}
-get_ac_state_upower() {
-    if ! command -v upower &>/dev/null; then
-        echo "unknown"
-        return
-    fi
-    local lp; lp=$(upower -e 2>/dev/null | grep -i line_power | head -n1)
-    if [[ -z "$lp" ]]; then
-        echo "unknown"
-        return
-    fi
-    upower -i "$lp" 2>/dev/null | awk '/online/ {print $2}' | tr '[:upper:]' '[:lower:]' | tr -d ' \t\n'
-}
-is_on_ac() {
-    local sysfs_state; sysfs_state=$(get_ac_state_sysfs)
-    if [[ "$sysfs_state" == "1" ]]; then return 0; fi
-    if [[ "$sysfs_state" == "0" ]]; then return 1; fi
-    local up_state; up_state=$(get_ac_state_upower)
-    if [[ "$up_state" =~ ^(yes|on|1)$ ]]; then return 0; fi
-    return 1
-}
-
-if is_on_ac; then
-    # --- MODO TOMADA (PERFORMANCE & BAIXA LATÊNCIA) ---
-    logger "TurboDecky: Conectado a energia - Boost Seguro (Híbrido)"
-
-    # CPU: Performance (Reação rápida, não clock travado)
-    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
-      sleep 2
-      for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-            echo "balance_performance" > "$epp" 2>/dev/null || true
-        done
-    fi
     
-    if command -v iw &>/dev/null; then
-        WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
-        [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
-    fi
 
-else
-    # --- MODO BATERIA (PADRÃO/ECONOMIA) ---
-    logger "TurboDecky: Bateria - Revertendo (Híbrido)"
-
-    # CPU: Balanceada (Padrão SteamOS)
-    if [ -f /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference ]; then
-        for epp in /sys/devices/system/cpu/cpu*/cpufreq/energy_performance_preference; do
-            echo "balance_performance" > "$epp" 2>/dev/null || true
-        done
-    fi
-    
-    if command -v iw &>/dev/null; then
-        WLAN=$(iw dev | awk '$1=="Interface"{print $2}' | head -n1)
-        [ -n "$WLAN" ] && iw dev "$WLAN" set power_save off 2>/dev/null || true
-    fi
-fi
-EOF
-    chmod +x "${turbodecky_bin}/turbodecky-power-monitor.sh"
-
-        # 4. CRIAÇÃO DO SERVICE (Para ser acionado no Boot e pelo UDEV)
-    cat <<UNIT > /etc/systemd/system/turbodecky-power-monitor.service
-[Unit]
-Description=TurboDecky Power Monitor (Boot & Udev Trigger)
-After=multi-user.target
-Wants=sys-devices-virtual-power_supply-*/device
-
-[Service]
-Type=oneshot
-ExecStart=${turbodecky_bin}/turbodecky-power-monitor.sh
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-    systemctl daemon-reload || true
-
-
-    # 5. Regra UDEV OTIMIZADA (Gatilho Systemd - Foca apenas nos tipos de fonte AC)
-    cat <<'UDEV' > /etc/udev/rules.d/99-turbodecky-power.rules
-SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="Mains", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
-SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="ACAD", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
-SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB_C", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
-SUBSYSTEM=="power_supply", ACTION=="change", ATTR{type}=="USB-PD", TAG+="systemd", ENV{SYSTEMD_WANTS}="turbodecky-power-monitor.service"
-UDEV
-
-        # 6. Ativar imediatamente e habilitar no boot
-    if command -v udevadm &>/dev/null; then
-        udevadm control --reload-rules 2>/dev/null || true
-        udevadm trigger --action=change --subsystem-match=power_supply 2>/dev/null || true
-    fi
-    systemctl enable --now turbodecky-power-monitor.service || true
-    _log "monitoramento de energia configurado (THP Latency Tuned - Híbrido/Systemd/Boot)."
-
-}
 
 create_common_scripts_and_services() {
     _log "criando scripts e services comuns"
@@ -866,10 +722,7 @@ _executar_reversao() {
          mv /usr/lib/systemd/zram-generator.conf.bak /usr/lib/systemd/zram-generator.conf
     fi
 
-    # --- 4. REVERSÃO IRQBALANCE ---
-    _restore_file /etc/default/irqbalance || rm -f /etc/default/irqbalance
-    systemctl unmask irqbalance.service 2>/dev/null || true
-    systemctl restart irqbalance.service 2>/dev/null || true 
+    
 
     # --- 5. SWAP/FSTAB/SYSCTL/GRUB ---
     swapoff "$swapfile_path" 2>/dev/null || true; rm -f "$swapfile_path" || true
@@ -1054,8 +907,6 @@ aplicar_zswap() {
     _executar_reversao
     _configure_ulimits
     create_common_scripts_and_services
-    create_power_rules 
-    _configure_irqbalance
     
     _setup_lavd_scheduler
 
@@ -1140,8 +991,6 @@ aplicar_zram() {
     _executar_reversao
     _configure_ulimits
     create_common_scripts_and_services
-    create_power_rules 
-    _configure_irqbalance
    
     _setup_lavd_scheduler
 
