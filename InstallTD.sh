@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.1. 22-03 Rev3 - Timeless Child"
+versao="3.2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -84,8 +84,8 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-    "MESA_DISK_CACHE_COMPRESSION=zstd"
-    "MESA_SHADER_CACHE_MAX_SIZE=10G"
+    "MESA_DISK_CACHE_COMPRESSION=lz4"
+    "MESA_SHADER_CACHE_MAX_SIZE=5G"
     "PROTON_FORCE_LARGE_ADDRESS_AWARE=1" 
     "PROTON_USE_NTSYNC=1"
 )  
