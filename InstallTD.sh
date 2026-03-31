@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2 - 31-03 r3 - Timeless Child"
+versao="3.2 - 31-03 r4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -874,7 +874,7 @@ After=dev-zram0.swap
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'echo 30 > /sys/block/zram0/idle; echo "type=idle max_pages=15000" > /sys/block/zram0/recompress; echo "type=huge max_pages=10000" > /sys/block/zram0/recompress; echo "type=huge_idle max_pages=8000" > /sys/block/zram0/recompress 2>/dev/null || true'
+ExecStart=/usr/bin/bash -c 'echo 30 > /sys/block/zram0/idle; echo "type=idle max_pages=15000" > /sys/block/zram0/recompress; echo "type=huge max_pages=10000" > /sys/block/zram0/recompress; echo "type=huge_idle max_pages=8000" > /sys/block/zram0/recompress 2>/dev/null || true'
 RemainAfterExit=no
 EOF
 
@@ -887,6 +887,7 @@ zramctl --reset /dev/zram0 2>/dev/null || true
 systemctl restart systemd-zram-setup@zram0.service
     systemctl enable --now zram-recompress.timer
     systemctl start zram-recompress.service
+    systemctl start zram-recompress.timer
 
     echo "✅ ZRAM otimizado + recompressão (idle + huge + huge_idle) ativada!"
     return 0
