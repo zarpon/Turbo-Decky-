@@ -878,19 +878,23 @@ ExecStart=/usr/bin/bash -c 'echo 30 > /sys/block/zram0/idle; echo "type=idle max
 RemainAfterExit=no
 EOF
 
-    # 4) Aplicar
-    systemctl daemon-reexec
+   # 4) Aplicar
+    swapoff -a || true
+    modprobe -r zram 2>/dev/null || true
+    modprobe zram 2>/dev/null || true
+    
     systemctl daemon-reload
-    # Adicionar dentro da função optimize_zram, antes de systemctl enable
-swapoff /dev/zram0 2>/dev/null || true
-zramctl --reset /dev/zram0 2>/dev/null || true
-systemctl restart systemd-zram-setup@zram0.service
+    
+    # Limpeza específica do dispositivo antes do restart
+    swapoff /dev/zram0 2>/dev/null || true
+    zramctl --reset /dev/zram0 2>/dev/null || true
+    
+    # Pequena pausa para o kernel processar a remoção
+    sleep 1
+    
+    systemctl restart systemd-zram-setup@zram0.service
     systemctl enable --now zram-recompress.timer
     systemctl start zram-recompress.service
-    systemctl start zram-recompress.timer
-
-    echo "✅ ZRAM otimizado + recompressão (idle + huge + huge_idle) ativada!"
-    return 0
 }
 
 aplicar_zswap() {
