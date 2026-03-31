@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2 - 31-03 r2 - Timeless Child"
+versao="3.2 - 31-03 r3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -852,14 +852,14 @@ swap-priority = 1000
 fs-type = swap
 EOF
 
-    # 2) Timer (4 minutos)
+    # 2) Timer (2 minutos)
     cat <<'EOF' > "$timer_file"
 [Unit]
 Description=Recompress ZRAM pages (TurboDecky)
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=4min
+OnUnitActiveSec=1min
 Persistent=true
 
 [Install]
@@ -874,7 +874,7 @@ After=dev-zram0.swap
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'echo 180 > /sys/block/zram0/idle; echo "type=idle max_pages=15000" > /sys/block/zram0/recompress; echo "type=huge max_pages=10000" > /sys/block/zram0/recompress; echo "type=huge_idle max_pages=8000" > /sys/block/zram0/recompress 2>/dev/null || true'
+ExecStart=/bin/bash -c 'echo 30 > /sys/block/zram0/idle; echo "type=idle max_pages=15000" > /sys/block/zram0/recompress; echo "type=huge max_pages=10000" > /sys/block/zram0/recompress; echo "type=huge_idle max_pages=8000" > /sys/block/zram0/recompress 2>/dev/null || true'
 RemainAfterExit=no
 EOF
 
