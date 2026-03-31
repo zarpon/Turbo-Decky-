@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2 - 30-03 - Timeless Child"
+versao="3.2 - 31-03 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -866,7 +866,7 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-    # 3) Service (agora com idle + huge + huge_idle)
+   # 3) Service (Corrigido para linha única no ExecStart)
     cat <<'EOF' > "$service_file"
 [Unit]
 Description=Recompress ZRAM pages (idle + huge)
@@ -874,12 +874,7 @@ After=dev-zram0.swap
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c '
-    echo 180 > /sys/block/zram0/idle
-    echo "type=idle max_pages=15000" > /sys/block/zram0/recompress
-    echo "type=huge max_pages=10000" > /sys/block/zram0/recompress
-    echo "type=huge_idle max_pages=8000" > /sys/block/zram0/recompress 2>/dev/null || true
-'
+ExecStart=/bin/bash -c 'echo 180 > /sys/block/zram0/idle; echo "type=idle max_pages=15000" > /sys/block/zram0/recompress; echo "type=huge max_pages=10000" > /sys/block/zram0/recompress; echo "type=huge_idle max_pages=8000" > /sys/block/zram0/recompress 2>/dev/null || true'
 RemainAfterExit=no
 EOF
 
