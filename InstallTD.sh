@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 31-03 - Timeless Child"
+versao="3.2.1- 01-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -33,7 +33,7 @@ readonly base_sysctl_params=(
     "vm.dirty_bytes=556531840"
     "vm.dirty_expire_centisecs=3000"       
     "vm.dirty_writeback_centisecs=1000"      
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=0"
     "kernel.numa_balancing=0"
     "vm.compact_unevictable_allowed=0"
     "vm.watermark_boost_factor=0"
@@ -584,7 +584,7 @@ EOF
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
 #!/usr/bin/env bash
-echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "never" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
