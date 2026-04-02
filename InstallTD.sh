@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 02-04 - Timeless Child"
+versao="3.2.1- 02-04 R1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -30,8 +30,8 @@ readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "vm.dirty_background_bytes=227001600"
     "vm.dirty_bytes=556531840"
-    "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=1500"      
+    "vm.dirty_expire_centisecs=3000"       
+    "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
     "vm.compact_unevictable_allowed=0"
     "vm.zone_reclaim_mode=0"
@@ -45,7 +45,7 @@ readonly base_sysctl_params=(
     "fs.pipe-user-pages-soft=65536"
     "fs.file-max=1000000"   
     # --- Scheduler (scx_lavd friendly) ---
-    "kernel.sched_autogroup_enabled=0"
+    "kernel.sched_autogroup_enabled=1"
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
