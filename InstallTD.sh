@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 03-04 R3 - Timeless Child"
+versao="3.2.1- 03-04 R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -35,15 +35,7 @@ readonly base_sysctl_params=(
     "kernel.numa_balancing=0"
     "vm.compact_unevictable_allowed=0"
     "vm.zone_reclaim_mode=0"
-    "vm.mmap_rnd_compat_bits=16"
-    "vm.unprivileged_userfaultfd=1"
-    "vm.hugetlb_optimize_vmemmap=0"
-    "fs.aio-max-nr=1048576"
-    "fs.epoll.max_user_watches=100000"
-    "fs.inotify.max_user_watches=524288"
-    "fs.pipe-max-size=2097152"
-    "fs.pipe-user-pages-soft=65536"
-    "fs.file-max=1000000"   
+    "vm.hugetlb_optimize_vmemmap=0"   
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
@@ -55,11 +47,6 @@ readonly base_sysctl_params=(
     "kernel.printk_devkmsg=off"
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
-    "net.core.netdev_max_backlog=16384"
-    "net.ipv4.tcp_fastopen=3"  
-    # --- REDE (BAIXA LATÊNCIA / JOGOS ONLINE) ---
-    "net.ipv4.tcp_slow_start_after_idle=0"
-    "net.ipv4.tcp_mtu_probing=1" # Ajuda em conexões instáveis
 )
 
 # --- listas de serviços para ativar/monitorar ---
