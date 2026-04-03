@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 03-04 R2 - Timeless Child"
+versao="3.2.1- 03-04 R3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -45,7 +45,6 @@ readonly base_sysctl_params=(
     "fs.pipe-user-pages-soft=65536"
     "fs.file-max=1000000"   
     # --- Scheduler (scx_lavd friendly) ---
-    "kernel.sched_autogroup_enabled=1"
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
     "kernel.nmi_watchdog=0"
@@ -371,7 +370,7 @@ EOF
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 500
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -484,11 +483,7 @@ case "$DEV_BASE" in
     else
         printf "mq-deadline" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
     fi
-
-    # NVMe se beneficia de completar requisições na CPU que iniciou (cache locality)
-    safe_write "$QUEUE_PATH/rq_affinity" 2
-    # Desativar merges para reduzir latência de CPU em NVMe rápido
-    safe_write "$QUEUE_PATH/nomerges" 2
+    
     ;;
     
   mmcblk*|sd*)
@@ -528,8 +523,6 @@ case "$DEV_BASE" in
         fi
     fi
 
-    # Crucial para o Deck: Força o processamento do IO no core que o solicitou
-    safe_write "$QUEUE_PATH/rq_affinity" 2
     ;;
 
 esac
@@ -580,7 +573,7 @@ EOF
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
 #!/usr/bin/env bash
-echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "never" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
@@ -915,7 +908,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xfffd7fff" "preempt=full")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xfffd7fff")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -986,7 +979,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
        
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xfffd7fff" "preempt=full")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xfffd7fff")
 
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
