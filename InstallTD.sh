@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 03-04 R5 - Timeless Child"
+versao="3.2.1- 03-04 R6 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -380,34 +380,7 @@ create_common_scripts_and_services() {
         chmod 644 /etc/environment.d/turbodecky-game.conf
         _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
     fi
-
-    install_io_boost_uadev() {
-
-    echo "💾 Configurando I/O Nativo de Baixa Latência..."
     
-    # Criar regra UDEV definitiva
-    cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
-# 1. NVMe Interno: Passthrough total (Latência zero de CPU)
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", ATTR{queue/scheduler}="none", ATTR{queue/nr_requests}="256"
-
-# 2. MicroSD/SD Cards: mq-deadline (Estabilidade e priorização de leitura)
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}="mq-deadline"
-
-# 3. Otimizações Gerais (Redução de Overhead)
-# Desativa coleta de estatísticas e entropia (poupa ciclos de CPU)
-ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
-  ATTR{queue/iostats}="0", \
-  ATTR{queue/add_random}="0", \
-  ATTR{queue/nomerges}="1"
-EOF
-
-    # Aplicar as regras imediatamente sem reiniciar
-    udevadm control --reload-rules && udevadm trigger
-    echo "✅ I/O configurado para máxima consistência."
-}
-   
-    
-
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
 #!/usr/bin/env bash
@@ -454,6 +427,31 @@ UNIT
    systemctl daemon-reload || true
 systemctl enable --now thp-config.service ksm-config.service kernel-tweaks.service || true 
 
+}
+
+install_io_boost_uadev() {
+
+    echo "💾 Configurando I/O Nativo de Baixa Latência..."
+    
+    # Criar regra UDEV definitiva
+    cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
+# 1. NVMe Interno: Passthrough total (Latência zero de CPU)
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", ATTR{queue/scheduler}="none", ATTR{queue/nr_requests}="256"
+
+# 2. MicroSD/SD Cards: mq-deadline (Estabilidade e priorização de leitura)
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}="mq-deadline"
+
+# 3. Otimizações Gerais (Redução de Overhead)
+# Desativa coleta de estatísticas e entropia (poupa ciclos de CPU)
+ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
+  ATTR{queue/iostats}="0", \
+  ATTR{queue/add_random}="0", \
+  ATTR{queue/nomerges}="1"
+EOF
+
+    # Aplicar as regras imediatamente sem reiniciar
+    udevadm control --reload-rules && udevadm trigger
+    echo "✅ I/O configurado para máxima consistência."
 }
 
 configure_read_ahead() {
@@ -655,7 +653,7 @@ _instalar_kernel_customizado() {
     fi
 }
 
-Optimize_zram() {
+optimize_zram() {
     local gen_dir="/etc/systemd/zram-generator.conf.d"
     local gen_conf="${gen_dir}/00-turbodecky.conf"
     local timer_file="/etc/systemd/system/zram-recompress.timer"
@@ -724,7 +722,7 @@ aplicar_zswap() {
     _executar_reversao
     _configure_ulimits
     create_common_scripts_and_services
-    
+    install_io_boost_uadev
     _setup_lavd_scheduler
 
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
@@ -807,7 +805,7 @@ aplicar_zram() {
     _executar_reversao
     _configure_ulimits
     create_common_scripts_and_services
-   
+   install_io_boost_uadev
     _setup_lavd_scheduler
 
     _apply_fstab_tweak_if_ext4
