@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 03-04 R7 - Timeless Child"
+versao="3.2.1- 03-04 R8 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -33,9 +33,7 @@ readonly base_sysctl_params=(
     "vm.dirty_expire_centisecs=3000"       
     "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
-    "vm.compact_unevictable_allowed=0"
     "vm.zone_reclaim_mode=0"
-    "vm.hugetlb_optimize_vmemmap=0"   
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
@@ -68,7 +66,6 @@ readonly unnecessary_services=(
 readonly game_env_vars=(
     "MESA_DISK_CACHE_SINGLE_FILE=1"
     "MESA_SHADER_CACHE_MAX_SIZE=5G"
-    "PROTON_FORCE_LARGE_ADDRESS_AWARE=1" 
     "PROTON_USE_NTSYNC=1"
 )  
 
@@ -350,14 +347,10 @@ create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
 
-    cat << EOF | sudo tee /etc/modprobe.d/amdgpu.conf > /dev/null
-options amdgpu mes=1 uni_mes=1 mes_kiq=1 moverate=128 preempt_complete_poll_ms=100 gpu_recovery=1
-options gpu_sched sched_policy=0
-EOF
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 500
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -441,7 +434,7 @@ ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue
 # Otimiza para carregamento de assets sem sobrecarregar a CPU
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
-  ATTR{queue/nr_requests}="256", \
+  ATTR{queue/nr_requests}="1023", \
   ATTR{queue/read_ahead_kb}="512"
 
 # 3. MicroSD/SD Cards: Estabilidade e Read-Ahead agressivo
