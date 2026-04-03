@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 03-04 R6 - Timeless Child"
+versao="3.2.1- 03-04 R7 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -430,55 +430,41 @@ systemctl enable --now thp-config.service ksm-config.service kernel-tweaks.servi
 }
 
 install_io_boost_uadev() {
-
-    echo "💾 Configurando I/O Nativo de Baixa Latência..."
+    _log "💾 Configurando I/O Nativo e Read-Ahead..."
     
-    # Criar regra UDEV definitiva
+    # Criar regra UDEV unificada (Consolida o antigo boost e o read-ahead)
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
-# 1. NVMe Interno: Passthrough total (Latência zero de CPU)
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", ATTR{queue/scheduler}="none", ATTR{queue/nr_requests}="256"
+# 1. ZRAM: Latência zero e sem read-ahead (Pois é RAM)
+ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue/scheduler}="none"
 
-# 2. MicroSD/SD Cards: mq-deadline (Estabilidade e priorização de leitura)
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}="mq-deadline"
+# 2. NVMe Interno: Passthrough total e Read-Ahead equilibrado
+# Otimiza para carregamento de assets sem sobrecarregar a CPU
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
+  ATTR{queue/scheduler}="none", \
+  ATTR{queue/nr_requests}="256", \
+  ATTR{queue/read_ahead_kb}="512"
 
-# 3. Otimizações Gerais (Redução de Overhead)
-# Desativa coleta de estatísticas e entropia (poupa ciclos de CPU)
+# 3. MicroSD/SD Cards: Estabilidade e Read-Ahead agressivo
+# Ajuda a compensar a baixa velocidade de barramento do cartão
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
+  ATTR{queue/scheduler}="mq-deadline", \
+  ATTR{queue/read_ahead_kb}="1024"
+
+# 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
   ATTR{queue/iostats}="0", \
   ATTR{queue/add_random}="0", \
   ATTR{queue/nomerges}="1"
 EOF
 
-    # Aplicar as regras imediatamente sem reiniciar
+    # Remove o arquivo de regra antigo se ele existir para evitar duplicidade
+    rm -f /etc/udev/rules.d/60-read-ahead.rules 2>/dev/null || true
+
+    # Aplicar as regras imediatamente
     udevadm control --reload-rules && udevadm trigger
-    echo "✅ I/O configurado para máxima consistência."
+    _log "✅ I/O e Read-Ahead unificados com sucesso."
 }
 
-configure_read_ahead() {
-    local rule="/etc/udev/rules.d/60-read-ahead.rules"
-    local tmp
-
-    tmp=$(mktemp /tmp/60-read-ahead.XXXXXX) || { _log "erro: falha criando tmpfile"; return 1; }
-
-    cat > "$tmp" <<'EOF'
-# zram
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0"
-
-# NVMe interno (disco e partições)
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme*n1*", ATTR{queue/read_ahead_kb}="512"
-
-# microSD (disco e partições)
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="mmcblk*", ATTR{queue/read_ahead_kb}="1024"
-EOF
-
-    install -m 644 "$tmp" "$rule" || { _log "erro: falha instalando $rule"; rm -f "$tmp"; return 1; }
-    rm -f "$tmp"
-
-    udevadm control --reload-rules
-    udevadm trigger --action=change --subsystem-match=block
-
-    _log "udev rule instalada: $rule"
-}
 
 
 _executar_reversao() {
@@ -717,8 +703,7 @@ aplicar_zswap() {
     _log "Aplicando ZSWAP (Híbrido AC/Battery)"
 
     _steamos_readonly_disable_if_needed
-    _setup_dxvk_folder
-    configure_read_ahead
+    
     _executar_reversao
     _configure_ulimits
     create_common_scripts_and_services
@@ -800,8 +785,7 @@ aplicar_zram() {
     _log "Aplicando otimizações (ZRAM)"
 
     _steamos_readonly_disable_if_needed
-    _setup_dxvk_folder
-    configure_read_ahead
+
     _executar_reversao
     _configure_ulimits
     create_common_scripts_and_services
