@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 03-04 R4 - Timeless Child"
+versao="3.2.1- 03-04 R5 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -382,180 +382,31 @@ create_common_scripts_and_services() {
     fi
 
     install_io_boost_uadev() {
-    local script_path="${turbodecky_bin}/io-boost.sh"
-    local unit_path="/etc/systemd/system/io-boost@.service"
-    local rule_path="/etc/udev/rules.d/99-io-boost.rules"
-    local tmp
 
-    mkdir -p "${turbodecky_bin}"
-
-    # Backup se já existir
-    for f in "$script_path" "$unit_path" "$rule_path"; do
-        if [ -f "$f" ]; then
-            if type _backup_file_once >/dev/null 2>&1; then
-                _backup_file_once "$f"
-            else
-                cp -a "$f" "${f}.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null || true
-            fi
-        fi
-    done
-
-    # --- ${turbodecky_bin}/io-boost.sh ---
-    tmp=$(mktemp /tmp/io-boost.XXXXXX) || { _log "erro: mktemp falhou"; return 1; }
-    cat > "$tmp" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Usage: io-boost.sh <device-name>
-DEV="$1"
-if [ -z "$DEV" ]; then
-  echo "uso: $0 <device>" >&2
-  exit 2
-fi
-
-# Pequena pausa para garantir que o kernel registrou a estrutura sysfs
-sleep 2
-
-resolve_parent() {
-  local dev="$1"
-  if [ -d "/sys/block/$dev" ]; then
-    printf '%s' "$dev"
-    return 0
-  fi
-  local path
-  path=$(readlink -f "/sys/class/block/$dev" 2>/dev/null) || return 1
-  while [ -n "$path" ] && [ "$path" != "/" ]; do
-    local name
-    name=$(basename "$path")
-    if [[ "$name" =~ ^sd[a-z]+$ || "$name" =~ ^mmcblk[0-9]+$ || "$name" =~ ^nvme[0-9]+n[0-9]+$ ]]; then
-      printf '%s' "$name"
-      return 0
-    fi
-    path=$(dirname "$path")
-  done
-  printf '%s' "$dev"
-  return 0
-}
-
-DEV_BASE=$(resolve_parent "$DEV") || DEV_BASE="$DEV"
-DEV_PATH="/sys/block/$DEV_BASE"
-QUEUE_PATH="$DEV_PATH/queue"
-
-[ -d "$DEV_PATH" ] || exit 0
-
-safe_write() {
-  local file="$1" val="$2"
-  if [ -w "$file" ] || [ -f "$file" ]; then
-    printf "%s" "$val" > "$file" 2>/dev/null || true
-  fi
-}
-
-# Desativa coleta de estatísticas I/O (reduz overhead da CPU)
-safe_write "$QUEUE_PATH/iostats" 0
-safe_write "$QUEUE_PATH/add_random" 0
-
-case "$DEV_BASE" in
-  nvme*)
-    # NVMe: Prioridade  kyber -> none -> mq-deadline
-    if printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        kyber_path="$QUEUE_PATH/iosched"
-        if [ -d "$kyber_path" ]; then
-            # NVMe é ultrarrápido. Alvo de leitura: 2ms (2000000 ns). Alvo de escrita: 10ms (10000000 ns).
-            # Prioriza fortemente a leitura para streaming de assets em jogos.
-            safe_write "$kyber_path/read_lat_nsec" 2000000
-            safe_write "$kyber_path/write_lat_nsec" 10000000
-        fi
-    elif printf "none" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        : # Fallback para none
-    else
-        printf "mq-deadline" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
-    fi
+    echo "💾 Configurando I/O Nativo de Baixa Latência..."
     
-    ;;
-    
-  mmcblk*|sd*)
-    # SD/SATA: Prioridade Kyber -> BFQ -> MQ-Deadline
-    if printf "kyber" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        kyber_path="$QUEUE_PATH/iosched"
-        if [ -d "$kyber_path" ]; then
-            # MicroSD (barramento UHS-I). Metas irreais causam estrangulamento do fluxo.
-            # Alvo de leitura realista: 20ms (20000000 ns). Alvo de escrita: 40ms (40000000 ns).
-            safe_write "$kyber_path/read_lat_nsec" 20000000
-            safe_write "$kyber_path/write_lat_nsec" 40000000
-        fi
-    elif printf "bfq" > "$QUEUE_PATH/scheduler" 2>/dev/null; then
-        bfq_path="$QUEUE_PATH/iosched"
-        if [ -d "$bfq_path" ]; then
-            # 'low_latency' em 1 é vital para o Deck não travar enquanto baixa jogos
-            safe_write "$bfq_path/low_latency" 1
-            # Como o barramento UHS-I é lento, reduzimos o timeout
-            safe_write "$bfq_path/timeout_sync" 200
-            # Reduz o 'strict_priority' para evitar engasgos em multitarefa
-            safe_write "$bfq_path/strict_priority" 0
-            # Aumenta o peso das leituras interativas.
-            safe_write "$bfq_path/interactive" 1
-        fi
-    else 
-        # Fallback MQ-Deadline
-        printf "mq-deadline" > "$QUEUE_PATH/scheduler" 2>/dev/null || true
-        current_sched=$(cat "$QUEUE_PATH/scheduler" 2>/dev/null || true)
-        if [[ "$current_sched" == *"deadline"* ]]; then
-            deadline_path="$QUEUE_PATH/iosched"
-            if [ -d "$deadline_path" ]; then
-                safe_write "$deadline_path/read_expire" 150
-                safe_write "$deadline_path/write_expire" 1500
-                safe_write "$deadline_path/writes_starved" 4
-                safe_write "$deadline_path/fifo_batch" 1
-            fi
-        fi
-    fi
+    # Criar regra UDEV definitiva
+    cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
+# 1. NVMe Interno: Passthrough total (Latência zero de CPU)
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", ATTR{queue/scheduler}="none", ATTR{queue/nr_requests}="256"
 
-    ;;
+# 2. MicroSD/SD Cards: mq-deadline (Estabilidade e priorização de leitura)
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}="mq-deadline"
 
-esac
-
-exit 0
+# 3. Otimizações Gerais (Redução de Overhead)
+# Desativa coleta de estatísticas e entropia (poupa ciclos de CPU)
+ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
+  ATTR{queue/iostats}="0", \
+  ATTR{queue/add_random}="0", \
+  ATTR{queue/nomerges}="1"
 EOF
 
-    install -m 755 "$tmp" "$script_path" || { _log "erro: falha instalando $script_path"; rm -f "$tmp"; return 1; }
-    rm -f "$tmp"
-
-    # --- /etc/systemd/system/io-boost@.service ---
-    tmp=$(mktemp /tmp/io-boost-unit.XXXXXX) || { _log "erro: mktemp falhou"; return 1; }
-    cat > "$tmp" <<EOF
-[Unit]
-Description=IO Boost for %i (Turbo Decky)
-After=local-fs.target
-
-[Service]
-Type=oneshot
-ExecStart=${turbodecky_bin}/io-boost.sh %i
-TimeoutStartSec=30
-RemainAfterExit=yes
-EOF
-    install -m 644 "$tmp" "$unit_path" || { _log "erro: falha instalando $unit_path"; rm -f "$tmp"; return 1; }
-    rm -f "$tmp"
-
-    # --- /etc/udev/rules.d/99-io-boost.rules ---
-    tmp=$(mktemp /tmp/io-boost-rule.XXXXXX) || { _log "erro: mktemp falhou"; return 1; }
-    cat > "$tmp" <<'EOF'
-# Disparar otimização IO Boost para dispositivos de bloco físicos
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="sd[a-z]", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="mmcblk[0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
-SUBSYSTEM=="block", ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="io-boost@%k.service"
-EOF
-    install -m 644 "$tmp" "$rule_path" || { _log "erro: falha instalando $rule_path"; rm -f "$tmp"; return 1; }
-    rm -f "$tmp"
-
-    # Recarrega e aplica
-    systemctl daemon-reload || true
-    udevadm control --reload-rules || true
-    udevadm trigger --action=change --subsystem-match=block || true
-    _log "io-boost: instalação concluída"
-    return 0
+    # Aplicar as regras imediatamente sem reiniciar
+    udevadm control --reload-rules && udevadm trigger
+    echo "✅ I/O configurado para máxima consistência."
 }
-    # === CORREÇÃO CRÍTICA: Chamada da função de instalação do IO Boost ===
-    install_io_boost_uadev
+   
+    
 
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
