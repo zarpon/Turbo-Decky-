@@ -435,18 +435,22 @@ ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
   ATTR{queue/nr_requests}="512", \
-  ATTR{queue/read_ahead_kb}="1024"
+  ATTR{queue/read_ahead_kb}="1024", \
+  ATTR{queue/nomerges}="2", \
+  ATTR{queue/rq_affinity}="2"
 
 # 3. MicroSD/SD Cards: Estabilidade e Read-Ahead agressivo
 # Ajuda a compensar a baixa velocidade de barramento do cartão
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
+  ATTR{queue/nr_requests}="64", \
   ATTR{queue/read_ahead_kb}="2048"
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
   ATTR{queue/iostats}="0", \
-  ATTR{queue/add_random}="0", \
+  ATTR{queue/add_random}="0"
+  
 EOF
 
     # Remove o arquivo de regra antigo se ele existir para evitar duplicidade
