@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.2-- Timeless Child"
+versao="3.2.2- 04-04- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -314,7 +314,7 @@ Type=simple
 ExecStart=/usr/bin/scx_lavd --performance
 Restart=always
 RestartSec=5
-Nice=-20
+
 
 [Install]
 WantedBy=multi-user.target
