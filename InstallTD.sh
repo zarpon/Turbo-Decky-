@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.1- 03-04 R8 - Timeless Child"
+versao="3.2.2-- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -434,20 +434,19 @@ ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue
 # Otimiza para carregamento de assets sem sobrecarregar a CPU
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
-  ATTR{queue/nr_requests}="1023", \
-  ATTR{queue/read_ahead_kb}="512"
+  ATTR{queue/nr_requests}="512", \
+  ATTR{queue/read_ahead_kb}="1024"
 
 # 3. MicroSD/SD Cards: Estabilidade e Read-Ahead agressivo
 # Ajuda a compensar a baixa velocidade de barramento do cartão
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
-  ATTR{queue/read_ahead_kb}="1024"
+  ATTR{queue/read_ahead_kb}="2048"
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
   ATTR{queue/iostats}="0", \
   ATTR{queue/add_random}="0", \
-  ATTR{queue/nomerges}="1"
 EOF
 
     # Remove o arquivo de regra antigo se ele existir para evitar duplicidade
@@ -722,7 +721,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xfffd7fff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -792,7 +791,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
        
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xfffd7fff")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
 
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
