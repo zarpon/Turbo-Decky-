@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.2- 05-04- Timeless Child"
+versao="3.2.2 R1 - 05-04-Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,6 +28,8 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
+    "vm.compaction_proactiveness=0"
+    "vm.page_lock_unfairness=1"
     "vm.dirty_background_bytes=207001600"
     "vm.dirty_bytes=556531840"
     "vm.dirty_expire_centisecs=3000"       
@@ -436,8 +438,8 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
   ATTR{queue/nr_requests}="512", \
   ATTR{queue/read_ahead_kb}="1024", \
-  ATTR{queue/nomerges}="2", \
-  ATTR{queue/rq_affinity}="2"
+  ATTR{queue/nomerges}="2"
+  
 
 # 3. MicroSD/SD Cards: Estabilidade e Read-Ahead agressivo
 # Ajuda a compensar a baixa velocidade de barramento do cartão
@@ -449,8 +451,8 @@ ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
   ATTR{queue/iostats}="0", \
-  ATTR{queue/add_random}="0"
-  
+  ATTR{queue/add_random}="0", \
+  ATTR{queue/rq_affinity}="2"
 EOF
 
     # Remove o arquivo de regra antigo se ele existir para evitar duplicidade
