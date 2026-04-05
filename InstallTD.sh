@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.2- 04-04- Timeless Child"
+versao="3.2.2- 05-04- Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,7 +28,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
-    "vm.dirty_background_bytes=227001600"
+    "vm.dirty_background_bytes=207001600"
     "vm.dirty_bytes=556531840"
     "vm.dirty_expire_centisecs=3000"       
     "vm.dirty_writeback_centisecs=1000"      
@@ -350,7 +350,7 @@ create_persistent_configs() {
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 250
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -654,14 +654,14 @@ swap-priority = 1000
 fs-type = swap
 EOF
 
-    # 2) Timer (Frequência de 2 minutos)
+    # 2) Timer (Frequência de  3 minutos)
     cat <<'EOF' > "$timer_file"
 [Unit]
 Description=Timer para Recompressão de Páginas ZRAM (TurboDecky)
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=2min
+OnBootSec=3min
+OnUnitActiveSec=3min
 Persistent=true
 
 [Install]
@@ -749,8 +749,8 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=133 || true
-sysctl -w vm.vfs_cache_pressure=70 || true
+sysctl -w vm.swappiness=150 || true
+sysctl -w vm.vfs_cache_pressure=110 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -816,8 +816,8 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=150 || true
-sysctl -w vm.vfs_cache_pressure=70  || true
+sysctl -w vm.swappiness=180 || true
+sysctl -w vm.vfs_cache_pressure=125  || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
