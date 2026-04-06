@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.2 R2 - 05-04-Timeless Child"
+versao="3.2.2 R2 - 06-04-Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,7 +27,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.min_free_kbytes=65536" 
+    "vm.min_free_kbytes=131072" 
     "vm.compaction_proactiveness=10"
     "vm.page_lock_unfairness=1"
     "vm.dirty_ratio=20" 
@@ -751,7 +751,7 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=133 || true
+sysctl -w vm.swappiness=150 || true
 sysctl -w vm.vfs_cache_pressure=66 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
@@ -769,12 +769,12 @@ WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zswap-config.service || true
-    if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
-    _ui_info "sucesso" "ZSWAP aplicado."
+   
 
-    
+    systemctl enable --now fstrim.timer
     _instalar_kernel_customizado
 
+    _ui_info "sucesso" "Otimizações aplicadas."
     
     _ui_info "aviso" "Reinicie para efeito total (Kernel, GRUB e EnvVars)."
 }
@@ -818,7 +818,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=160 || true
+sysctl -w vm.swappiness=180 || true
 sysctl -w vm.vfs_cache_pressure=66  || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
@@ -839,14 +839,15 @@ WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zram-config.service || true
-    if command -v udevadm &>/dev/null; then udevadm trigger --action=change --subsystem-match=power_supply; fi
+   
     _ui_info "sucesso" "otimizações aplicadas."
 
     
-    _instalar_kernel_customizado
+   
     # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
     optimize_zram
-  
+    systemctl enable --now fstrim.timer
+   _instalar_kernel_customizado
     _ui_info "aviso" "Reinicie o sistema para efeito total."
 }
 
