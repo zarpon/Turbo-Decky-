@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.2 R3 - 06-04-Timeless Child"
+versao="3.2.2 R4 - 06-04-Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -29,10 +29,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "vm.compaction_proactiveness=10"
-    "vm.page_lock_unfairness=1"
     "vm.dirty_ratio=6" 
     "vm.dirty_background_ratio=2" 
-    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_expire_centisecs=3000"       
     "vm.dirty_writeback_centisecs=1500"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
@@ -67,7 +66,6 @@ readonly unnecessary_services=(
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
     "MESA_DISK_CACHE_SINGLE_FILE=1"
-    "MESA_SHADER_CACHE_MAX_SIZE=5G"
     "PROTON_USE_NTSYNC=1"
 )  
 
@@ -261,6 +259,9 @@ _setup_lavd_scheduler() {
 
     _steamos_readonly_disable_if_needed
     # NOVO: Garante que o DevMode está ativo para permitir alterações no pacman
+    sudo systemctl disable --now irqbalance 2>/dev/null || true
+    sudo systemctl mask irqbalance 2>/dev/null || true
+
     steamos-devmode enable --no-prompt 2>/dev/null || true
 
     # 1. Tratamento do pacman lock
@@ -450,7 +451,7 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
   ATTR{queue/nr_requests}="64", \
-  ATTR{queue/read_ahead_kb}="2048"
+  ATTR{queue/read_ahead_kb}="2048", \
   ATTR{iosched/writes_starved}="16", \
   ATTR{iosched/read_expire}="125", \
   ATTR{iosched/write_expire}="2000", \
@@ -476,7 +477,9 @@ EOF
 _executar_reversao() {
     _steamos_readonly_disable_if_needed
     _log "executando reversão geral"
-
+    sudo systemctl unmask irqbalance 2>/dev/null || true
+    sudo systemctl enable --now irqbalance 2>/dev/null || true
+    
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
     rm -f /etc/environment.d/turbodecky*.conf
     rm -f /etc/security/limits.d/99-game-limits.conf
