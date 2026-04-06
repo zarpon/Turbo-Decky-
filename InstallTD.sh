@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.2 R2 - 06-04-Timeless Child"
+versao="3.2.2 R3 - 06-04-Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -30,10 +30,10 @@ readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "vm.compaction_proactiveness=10"
     "vm.page_lock_unfairness=1"
-    "vm.dirty_ratio=20" 
+    "vm.dirty_ratio=6" 
     "vm.dirty_background_ratio=2" 
-    "vm.dirty_expire_centisecs=3000"       
-    "vm.dirty_writeback_centisecs=1000"      
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=1500"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     # --- Scheduler (scx_lavd friendly) ---
@@ -352,7 +352,7 @@ create_persistent_configs() {
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 250
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -440,8 +440,8 @@ ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue
 # Otimiza para carregamento de assets sem sobrecarregar a CPU
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
-  ATTR{queue/nr_requests}="512", \
-  ATTR{queue/read_ahead_kb}="1024", \
+  ATTR{queue/nr_requests}="128", \
+  ATTR{queue/read_ahead_kb}="512", \
   ATTR{queue/nomerges}="2"
   
 
@@ -451,6 +451,10 @@ ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
   ATTR{queue/nr_requests}="64", \
   ATTR{queue/read_ahead_kb}="2048"
+  ATTR{iosched/writes_starved}="16", \
+  ATTR{iosched/read_expire}="125", \
+  ATTR{iosched/write_expire}="2000", \
+  ATTR{iosched/fifo_batch}="16"
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
@@ -702,7 +706,7 @@ EOF
 
 
 aplicar_zswap() {
-    _log "Aplicando ZSWAP (Híbrido AC/Battery)"
+    _log "Aplicando otimizações"
 
     _steamos_readonly_disable_if_needed
     
@@ -731,7 +735,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=35" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -751,12 +755,12 @@ create_persistent_configs
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
 sysctl -w vm.swappiness=150 || true
-sysctl -w vm.vfs_cache_pressure=66 || true
+sysctl -w vm.vfs_cache_pressure=85 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -801,7 +805,7 @@ aplicar_zram() {
 
     _backup_file_once "$grub_config"
        
-    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off" "amdgpu.ppfeaturemask=0xffffffff")
+    local kernel_params=("zswap.enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
@@ -823,7 +827,7 @@ create_persistent_configs
 
 
 sysctl -w vm.swappiness=180 || true
-sysctl -w vm.vfs_cache_pressure=66  || true
+sysctl -w vm.vfs_cache_pressure=100  || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
