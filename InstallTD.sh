@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.2 R4 - 06-04-Timeless Child"
+versao="3.2.3 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -29,10 +29,10 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "vm.compaction_proactiveness=10"
-    "vm.dirty_ratio=6" 
-    "vm.dirty_background_ratio=2" 
+    "vm.dirty_ratio=10" 
+    "vm.dirty_background_ratio=5" 
     "vm.dirty_expire_centisecs=3000"       
-    "vm.dirty_writeback_centisecs=1500"      
+    "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     # --- Scheduler (scx_lavd friendly) ---
@@ -65,7 +65,7 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-    "MESA_DISK_CACHE_SINGLE_FILE=1"
+    "MESA_DISK_CACHE_SIZE=10G"
     "PROTON_USE_NTSYNC=1"
 )  
 
