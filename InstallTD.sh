@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.3 - 07-04 R3 - Timeless Child"
+versao="3.2.3 - 07-04 R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -354,7 +354,7 @@ create_persistent_configs() {
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 500
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
