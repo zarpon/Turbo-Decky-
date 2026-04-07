@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.3 - 07-04 R1 - Timeless Child"
+versao="3.2.3 - 07-04 R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -353,7 +353,7 @@ create_persistent_configs() {
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 500
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -430,48 +430,47 @@ systemctl enable --now thp-config.service ksm-config.service kernel-tweaks.servi
 }
 
 install_io_boost_uadev() {
-    _log "💾 Configurando I/O Nativo e Read-Ahead..."
+    _log "💾 Configurando I/O Nativo e Read-Ahead (BFQ Otimizado)..."
     
-    # Criar regra UDEV unificada (Consolida o antigo boost e o read-ahead)
+    # Criar regra UDEV unificada
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
-# 1. ZRAM: Latência zero e sem read-ahead (Pois é RAM)
+# 1. ZRAM: Latência zero e sem read-ahead
 ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue/scheduler}="none"
 
 # 2. NVMe Interno: Passthrough total e Read-Ahead equilibrado
-# Otimiza para carregamento de assets sem sobrecarregar a CPU
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
-  ATTR{queue/nr_requests}="128", \
+  ATTR{queue/nr_requests}="256", \
   ATTR{queue/read_ahead_kb}="512", \
   ATTR{queue/nomerges}="2"
 
-# 3. MicroSD/SD Cards: Estabilidade e Read-Ahead agressivo
-# Parte A: Define o escalonador e a fila básica
+# 3. MicroSD/SD Cards: Otimização para BFQ (Budget Fair Queuing)
+# Parte A: Define o escalonador BFQ e aumenta a profundidade da fila para o scheduler trabalhar
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
-  ATTR{queue/scheduler}="mq-deadline", \
-  ATTR{queue/nr_requests}="64", \
+  ATTR{queue/scheduler}="bfq", \
+  ATTR{queue/nr_requests}="128", \
   ATTR{queue/read_ahead_kb}="2048"
 
-# Parte B: Ajusta parâmetros finos do mq-deadline (só dispara se o scheduler estiver ativo)
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="mq-deadline", \
-  ATTR{iosched/writes_starved}="16", \
-  ATTR{iosched/read_expire}="125", \
-  ATTR{iosched/write_expire}="2000", \
-  ATTR{iosched/fifo_batch}="16"
+# Parte B: Ajustes finos do BFQ para priorizar carregamento de jogos e interatividade
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="bfq", \
+  ATTR{iosched/low_latency}="1", \
+  ATTR{iosched/slice_idle}="0", \
+  ATTR{iosched/strict_guarantees}="1", \
+  ATTR{iosched/timeout_sync}="300", \
+  ATTR{iosched/backwards_seek_max}="0"
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
-# Separado individualmente pois o Udev não processa o caractere '|' no campo KERNEL
 ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
 ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
 EOF
 
-    # Remove o arquivo de regra antigo se ele existir para evitar duplicidade
+    # Remove o arquivo de regra antigo se ele existir
     rm -f /etc/udev/rules.d/60-read-ahead.rules 2>/dev/null || true
 
-    # Aplicar as regras imediatamente para que o sistema assuma os novos valores sem reboot
+    # Aplicar as regras imediatamente
     udevadm control --reload-rules && udevadm trigger
-    _log "✅ I/O e Read-Ahead unificados com sucesso."
+    _log "✅ I/O unificado com BFQ aplicado ao MicroSD com sucesso."
 }
 
 
@@ -765,7 +764,7 @@ echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=120 || true
+sysctl -w vm.swappiness=150 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -831,7 +830,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=150 || true
+sysctl -w vm.swappiness=180 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
