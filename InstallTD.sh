@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.3 - 07-04 R5 - Timeless Child"
+versao="3.2.3 - 07-04 R6 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -455,10 +455,10 @@ ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
 # Parte B: Ajustes finos do BFQ para priorizar carregamento de jogos e interatividade
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="bfq", \
   ATTR{iosched/low_latency}="1", \
-  ATTR{iosched/slice_idle}="0", \
-  ATTR{iosched/strict_guarantees}="1", \
+  ATTR{iosched/slice_idle}="1", \
+  ATTR{iosched/strict_guarantees}="0", \
   ATTR{iosched/timeout_sync}="300", \
-  ATTR{iosched/backwards_seek_max}="0"
+  ATTR{iosched/back_seek_max}="16384"
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
