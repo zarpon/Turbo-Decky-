@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.3 - 07-04 - Timeless Child"
+versao="3.2.3 - 07-04 R1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -444,33 +444,36 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/nr_requests}="128", \
   ATTR{queue/read_ahead_kb}="512", \
   ATTR{queue/nomerges}="2"
-  
 
 # 3. MicroSD/SD Cards: Estabilidade e Read-Ahead agressivo
-# Ajuda a compensar a baixa velocidade de barramento do cartão
+# Parte A: Define o escalonador e a fila básica
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
   ATTR{queue/nr_requests}="64", \
-  ATTR{queue/read_ahead_kb}="2048", \
+  ATTR{queue/read_ahead_kb}="2048"
+
+# Parte B: Ajusta parâmetros finos do mq-deadline (só dispara se o scheduler estiver ativo)
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="mq-deadline", \
   ATTR{iosched/writes_starved}="16", \
   ATTR{iosched/read_expire}="125", \
   ATTR{iosched/write_expire}="2000", \
   ATTR{iosched/fifo_batch}="16"
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
-ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", \
-  ATTR{queue/iostats}="0", \
-  ATTR{queue/add_random}="0", \
-  ATTR{queue/rq_affinity}="2"
+# Separado individualmente pois o Udev não processa o caractere '|' no campo KERNEL
+ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
 EOF
 
     # Remove o arquivo de regra antigo se ele existir para evitar duplicidade
     rm -f /etc/udev/rules.d/60-read-ahead.rules 2>/dev/null || true
 
-    # Aplicar as regras imediatamente
+    # Aplicar as regras imediatamente para que o sistema assuma os novos valores sem reboot
     udevadm control --reload-rules && udevadm trigger
     _log "✅ I/O e Read-Ahead unificados com sucesso."
 }
+
 
 
 
