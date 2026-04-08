@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.3 - 07-04 R7 - Timeless Child"
+versao="3.2.3 - 08-04  - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -29,10 +29,8 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "vm.compaction_proactiveness=10"
-    "vm.dirty_ratio=40" 
-    "vm.dirty_background_ratio=2" 
-    "vm.dirty_expire_centisecs=3000"       
-    "vm.dirty_writeback_centisecs=1000"      
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=1500"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     "vm.vfs_cache_pressure=50"
@@ -47,6 +45,13 @@ readonly base_sysctl_params=(
     "kernel.printk_devkmsg=off"
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
+      # --- Novos Parâmetros ---
+    "kernel.timer_migration=0"
+    "vm.dirty_background_bytes=209715200"
+    "vm.dirty_bytes=419430400"
+    "vm.watermark_boost_factor=0"
+    "vm.watermark_scale_factor=125"
+    "vm.page_lock_unfairness=8"
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -454,8 +459,8 @@ ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
 
 # Parte B: Ajustes finos do BFQ para priorizar carregamento de jogos e interatividade
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="bfq", \
-  ATTR{iosched/low_latency}="1", \
-  ATTR{iosched/slice_idle}="1", \
+  ATTR{iosched/low_latency}="0", \
+  ATTR{iosched/slice_idle}="0", \
   ATTR{iosched/strict_guarantees}="0", \
   ATTR{iosched/timeout_sync}="300", \
   ATTR{iosched/back_seek_max}="16384"
