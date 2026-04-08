@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.3 - 08-04  - Timeless Child"
+versao="3.2.3 - 08-04 R1  - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -447,23 +447,23 @@ ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
   ATTR{queue/nr_requests}="256", \
-  ATTR{queue/read_ahead_kb}="512", \
-  ATTR{queue/nomerges}="2"
+  ATTR{queue/read_ahead_kb}="512"
+  
 
 # 3. MicroSD/SD Cards: Otimização para BFQ (Budget Fair Queuing)
 # Parte A: Define o escalonador BFQ e aumenta a profundidade da fila para o scheduler trabalhar
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="bfq", \
   ATTR{queue/nr_requests}="128", \
-  ATTR{queue/read_ahead_kb}="2048"
-
+  ATTR{queue/read_ahead_kb}="2048", \
+  ATTR{queue/nomerges}="2"
+  
 # Parte B: Ajustes finos do BFQ para priorizar carregamento de jogos e interatividade
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="bfq", \
-  ATTR{iosched/low_latency}="0", \
+  ATTR{iosched/low_latency}="1", \
   ATTR{iosched/slice_idle}="0", \
-  ATTR{iosched/strict_guarantees}="0", \
-  ATTR{iosched/timeout_sync}="300", \
-  ATTR{iosched/back_seek_max}="16384"
+  ATTR{iosched/strict_guarantees}="0"
+  
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
