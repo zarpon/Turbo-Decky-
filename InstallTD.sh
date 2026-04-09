@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.4 - 09-04 R3 - Timeless Child"
+versao="3.2.4 - 09-04 R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -31,9 +31,9 @@ readonly base_sysctl_params=(
     "kernel.sched_autogroup_enabled=0"
     "vm.compact_unevictable_allowed=0"
     "vm.stat_interval=15"
-    "vm.compaction_proactiveness=25"
-    "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=1500"      
+    "vm.compaction_proactiveness=15"
+    "vm.dirty_expire_centisecs=3500"       
+    "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     "vm.vfs_cache_pressure=85"
