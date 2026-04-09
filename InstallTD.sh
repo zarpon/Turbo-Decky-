@@ -3,18 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.4 - 09-04 R4 - Timeless Child"
+versao="3.2.4 - 09-04 R5 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Calcula 40% da RAM total de forma dinâmica
-readonly zswap_swapfile_size_gb=$(awk '/MemTotal/ {printf "%.0f", ($2 / 1024 / 1024) * 0.40}' /proc/meminfo)
-
-
-readonly zram_swapfile_size_gb="2"
+# Define o tamanho do swapfile fixo em 4GB
+readonly zswap_swapfile_size_gb="4"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -361,7 +358,7 @@ create_persistent_configs() {
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 250
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -683,8 +680,8 @@ EOF
 Description=Timer para Recompressão de Páginas ZRAM (TurboDecky)
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=3min
+OnBootSec=2min
+OnUnitActiveSec=4min
 Persistent=true
 
 [Install]
