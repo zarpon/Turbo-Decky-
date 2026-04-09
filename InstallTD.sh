@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.4 -  - Timeless Child"
+versao="3.2.4 - 09-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,12 +28,15 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
+    "kernel.sched_autogroup_enabled=0"
+    "vm.compact_unevictable_allowed=0"
+    "vm.stat_interval=15"
     "vm.compaction_proactiveness=10"
     "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=1500"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
-    "vm.vfs_cache_pressure=75"
+    "vm.vfs_cache_pressure=85"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
@@ -51,7 +54,7 @@ readonly base_sysctl_params=(
     "vm.dirty_bytes=419430400"
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
-    "vm.page_lock_unfairness=1"
+    
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -770,7 +773,7 @@ echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=150 || true
+sysctl -w vm.swappiness=100 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -836,7 +839,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=180 || true
+sysctl -w vm.swappiness=150 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
