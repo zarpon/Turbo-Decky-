@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.4 - 09-04 - Timeless Child"
+versao="3.2.4 - 09-04 R1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -49,7 +49,6 @@ readonly base_sysctl_params=(
     "net.core.default_qdisc=fq_codel"
     "net.ipv4.tcp_congestion_control=bbr"
       # --- Novos Parâmetros ---
-    "kernel.timer_migration=0"
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
     "vm.watermark_boost_factor=0"
