@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 - - Timeless Child"
+versao="3.2.5 10-04 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -26,10 +26,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "kernel.sched_autogroup_enabled=0"
-    "vm.compact_unevictable_allowed=0"
-    "vm.compaction_proactiveness=10"
-    "vm.dirty_expire_centisecs=3000"       
-    "vm.dirty_writeback_centisecs=1000"      
+    "vm.compaction_proactiveness=15"
+    "vm.dirty_expire_centisecs=2500"       
+    "vm.dirty_writeback_centisecs=800"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     "vm.vfs_cache_pressure=85"
@@ -387,11 +386,7 @@ create_common_scripts_and_services() {
 echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
-echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
-echo 2048 > /sys/kernel/mm/transparent_hugepage/khugepaged/pages_to_scan 2>/dev/null || true
-echo 5000 > /sys/kernel/mm/transparent_hugepage/khugepaged/scan_sleep_millisecs 2>/dev/null || true
-echo 50000 > /sys/kernel/mm/transparent_hugepage/khugepaged/alloc_sleep_millisecs 2>/dev/null || true
-echo 409 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none 2>/dev/null || true
+echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 THP
     chmod +x "${turbodecky_bin}/thp-config.sh"
