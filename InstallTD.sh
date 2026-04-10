@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 10-04 - - Timeless Child"
+versao="3.2.5 10-04 R1 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -27,7 +27,7 @@ readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "kernel.sched_autogroup_enabled=0"
     "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=2500"       
+    "vm.dirty_expire_centisecs=2000"       
     "vm.dirty_writeback_centisecs=800"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
@@ -45,7 +45,7 @@ readonly base_sysctl_params=(
     "net.ipv4.tcp_congestion_control=bbr"
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=419430400"
+    "vm.dirty_bytes=619430400"
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     
@@ -356,7 +356,7 @@ create_persistent_configs() {
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 350
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -763,7 +763,7 @@ echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=1 || true
-sysctl -w vm.swappiness=101 || true
+sysctl -w vm.swappiness=120 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
