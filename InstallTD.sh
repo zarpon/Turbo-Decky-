@@ -3,15 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.4 - 09-04 R8 - Timeless Child"
+versao="3.2.4 - 10-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 8GB
-readonly zswap_swapfile_size_gb="8"
+# Define o tamanho do swapfile fixo em 5GB
+readonly zswap_swapfile_size_gb="5"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -24,13 +24,13 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.min_free_kbytes=65536" 
+    "vm.min_free_kbytes=131072" 
     "kernel.sched_autogroup_enabled=0"
     "vm.compact_unevictable_allowed=0"
     "vm.stat_interval=15"
     "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=3500"       
-    "vm.dirty_writeback_centisecs=1000"      
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=1500"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     "vm.vfs_cache_pressure=85"
@@ -745,7 +745,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -765,11 +765,11 @@ create_persistent_configs
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
-echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
+echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=133 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
