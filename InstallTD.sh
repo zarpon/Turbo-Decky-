@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.4 - 10-04 - Timeless Child"
+versao="3.2.4 - 10-04 R1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -454,7 +454,7 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="bfq", \
   ATTR{queue/nr_requests}="128", \
-  ATTR{queue/read_ahead_kb}="2048"
+  ATTR{queue/read_ahead_kb}="1024"
   
   
 # Parte B: Ajustes finos do BFQ para priorizar carregamento de jogos e interatividade
