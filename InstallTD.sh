@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 10-04 R1 - - Timeless Child"
+versao="3.2.5 10-04 R2 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -26,9 +26,9 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "kernel.sched_autogroup_enabled=0"
-    "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=2000"       
-    "vm.dirty_writeback_centisecs=800"      
+    "vm.compaction_proactiveness=0"
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     "vm.vfs_cache_pressure=85"
@@ -45,7 +45,7 @@ readonly base_sysctl_params=(
     "net.ipv4.tcp_congestion_control=bbr"
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=619430400"
+    "vm.dirty_bytes=419430400"
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     
