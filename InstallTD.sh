@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.4 - 09-04 R6 - Timeless Child"
+versao="3.2.4 - 09-04 R7 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -11,7 +11,7 @@ pix_doacao="jorgezarpon@msn.com"
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
 # Define o tamanho do swapfile fixo em 4GB
-readonly zswap_swapfile_size_gb="4"
+readonly zswap_swapfile_size_gb="8"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -385,7 +385,7 @@ create_common_scripts_and_services() {
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
 #!/usr/bin/env bash
-echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 1 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
