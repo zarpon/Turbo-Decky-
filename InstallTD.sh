@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 11-04 R3  - - Timeless Child"
+versao="3.2.5 11-04 R4  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -421,7 +421,7 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
   ATTR{queue/nr_requests}="256", \
   ATTR{queue/read_ahead_kb}="512", \
-  ATTR{queue/nomerges}="1"
+  ATTR{queue/nomerges}="2"
 
 # 3. MicroSD/SD Cards: Otimização para BFQ (Budget Fair Queuing)
 # Parte A: Define o escalonador mq-deadline e aumenta a profundidade da fila para o scheduler trabalhar
