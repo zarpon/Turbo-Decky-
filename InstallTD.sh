@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 10-04 R3 - - Timeless Child"
+versao="3.2.5 11-04  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -261,9 +261,7 @@ _setup_lavd_scheduler() {
 
     _steamos_readonly_disable_if_needed
     # NOVO: Garante que o DevMode está ativo para permitir alterações no pacman
-    sudo systemctl disable --now irqbalance 2>/dev/null || true
-    sudo systemctl mask irqbalance 2>/dev/null || true
-
+    
     steamos-devmode enable --no-prompt 2>/dev/null || true
 
     # 1. Tratamento do pacman lock
@@ -387,28 +385,13 @@ echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null ||
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
 THP
     chmod +x "${turbodecky_bin}/thp-config.sh"
 
-    
-    # --- 5. SCRIPT KSM ---
-    cat <<'KSM' > "${turbodecky_bin}/ksm-config.sh"
-#!/usr/bin/env bash
-echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
-KSM
-    chmod +x "${turbodecky_bin}/ksm-config.sh"
-
-    # --- 6. SCRIPT KERNEL TWEAKS ---
-    cat <<'KRT' > "${turbodecky_bin}/kernel-tweaks.sh"
-#!/usr/bin/env bash
-echo 1 > /sys/module/multi_queue/parameters/multi_queue_alloc 2>/dev/null || true
-echo 1 > /sys/module/multi_queue/parameters/multi_queue_reclaim 2>/dev/null || true
-
-KRT
-    chmod +x "${turbodecky_bin}/kernel-tweaks.sh"
-
+       
     # --- 7. CRIAÇÃO DOS SERVICES SYSTEMD ---
-    for service_name in thp-config ksm-config kernel-tweaks; do
+    for service_name in thp-config; do
         cat <<UNIT > /etc/systemd/system/${service_name}.service
 [Unit]
 Description=TurboDecky ${service_name} persistence
@@ -423,7 +406,7 @@ UNIT
     done
 
    systemctl daemon-reload || true
-systemctl enable --now thp-config.service ksm-config.service kernel-tweaks.service || true 
+systemctl enable --now thp-config.service || true 
 
 }
 
@@ -440,7 +423,7 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
   ATTR{queue/nr_requests}="256", \
   ATTR{queue/read_ahead_kb}="512", \
-  ATTR{queue/nomerges}="2"
+  ATTR{queue/nomerges}="1"
 
 # 3. MicroSD/SD Cards: Otimização para BFQ (Budget Fair Queuing)
 # Parte A: Define o escalonador BFQ e aumenta a profundidade da fila para o scheduler trabalhar
