@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 11-04 R2  - - Timeless Child"
+versao="3.2.5 11-04 R3  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -286,7 +286,7 @@ _setup_lavd_scheduler() {
 
     # 3. Sincronização e Instalação do repositório oficial do SteamOS (Neptune)
     _log "Instalando scx-scheds oficial do repositório SteamOS..."
-    if ! sudo pacman -S --noconfirm scx-scheds; then
+    if ! sudo pacman -Sy --noconfirm scx-scheds; then
         _log "Erro crítico: Não foi possível instalar o scx-scheds do repositório oficial."
         return 1
     fi
