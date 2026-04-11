@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 11-04  - - Timeless Child"
+versao="3.2.5 11-04 R1  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -53,8 +53,6 @@ readonly base_sysctl_params=(
 # --- listas de serviços para ativar/monitorar ---
 readonly otimization_services=(
     "thp-config.service"
-    "ksm-config.service"
-    "kernel-tweaks.service"
 )
 
 readonly unnecessary_services=(
