@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 11-04 R5  - - Timeless Child"
+versao="3.2.5 11-04 R6  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -366,12 +366,13 @@ EOF
 
 create_common_scripts_and_services() {
     _log "criando scripts e services comuns"
-    mkdir -p "${turbodecky_bin}" /etc/systemd/system /etc/environment.d
-
+    mkdir -p "${turbodecky_bin}" /etc/systemd/system /etc/environment.d /home/deck/.config/environment.d
     # --- 1. APLICAÇÃO DE VARIÁVEIS DE AMBIENTE ---
     if [ ${#game_env_vars[@]} -gt 0 ]; then
         printf "%s\n" "${game_env_vars[@]}" > /etc/environment.d/turbodecky-game.conf
+        printf "%s\n" "${game_env_vars[@]}" > /home/deck/.config/environment.d/envvars.conf
         chmod 644 /etc/environment.d/turbodecky-game.conf
+        chmod 644 /home/deck/.config/environment.d/envvars.conf
         _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
     fi
     
