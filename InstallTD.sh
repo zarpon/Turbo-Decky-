@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 11-04 R4  - - Timeless Child"
+versao="3.2.5 11-04 R5  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -423,7 +423,7 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/read_ahead_kb}="512", \
   ATTR{queue/nomerges}="2"
 
-# 3. MicroSD/SD Cards: Otimização para BFQ (Budget Fair Queuing)
+# 3. MicroSD/SD Cards: Otimização para mq-deadline 
 # Parte A: Define o escalonador mq-deadline e aumenta a profundidade da fila para o scheduler trabalhar
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
@@ -432,10 +432,11 @@ ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   
   
 # Parte B: Ajustes finos do BFQ para priorizar carregamento de jogos e interatividade
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="bfq", \
-  ATTR{iosched/low_latency}="1", \
-  ATTR{iosched/slice_idle}="0", \
-  ATTR{iosched/strict_guarantees}="0"
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="mq-deadline", \
+  ATTR{queue/iosched/read_expire}="200", \
+  ATTR{queue/iosched/write_expire}="8000", \
+  ATTR{queue/iosched/writes_starved}="2", \
+  ATTR{queue/iosched/fifo_batch}="4"
   
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
@@ -449,7 +450,7 @@ EOF
 
     # Aplicar as regras imediatamente
     udevadm control --reload-rules && udevadm trigger
-    _log "✅ I/O unificado com BFQ aplicado ao MicroSD com sucesso."
+    _log "✅ I/O de disco nvme e microsd otimizados."
 }
 
 
