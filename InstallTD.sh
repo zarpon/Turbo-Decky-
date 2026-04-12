@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 11-04 R6  - - Timeless Child"
+versao="3.2.5 11-04 R7  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -67,6 +67,9 @@ readonly unnecessary_services=(
 readonly game_env_vars=(
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
     "PROTON_USE_NTSYNC=1"
+    "RADV_PERFTEST=nggc" 
+    "MESA_VK_CACHE_CONTROL=1"
+    "DXVK_FRAME_RATE=0"
 )  
 
 # --- Funções Utilitárias ---
