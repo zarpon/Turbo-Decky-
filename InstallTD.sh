@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.6 - - Timeless Child"
+versao="3.2.6 - 13/04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -388,6 +388,7 @@ echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null ||
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+echo 409 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none 2>/dev/null || true
 echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
 THP
     chmod +x "${turbodecky_bin}/thp-config.sh"
