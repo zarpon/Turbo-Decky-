@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.5 11-04 R7  - - Timeless Child"
+versao="3.2.5 13-04  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -11,7 +11,7 @@ pix_doacao="jorgezarpon@msn.com"
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
 # Define o tamanho do swapfile fixo em 5GB
-readonly zswap_swapfile_size_gb="5"
+readonly zswap_swapfile_size_gb="10"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -46,7 +46,8 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=419430400"
-    
+    "vm.watermark_boost_factor=0"
+    "vm.watermark_scale_factor=125"
     
 )
 
