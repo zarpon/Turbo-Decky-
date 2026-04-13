@@ -10,8 +10,8 @@ pix_doacao="jorgezarpon@msn.com"
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 5GB
-readonly zswap_swapfile_size_gb="10"
+# Define o tamanho do swapfile fixo em 6GB
+readonly zswap_swapfile_size_gb="6"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
