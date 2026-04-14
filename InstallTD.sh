@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.6  - 14-04 - R2 Timeless Child"
+versao="3.2.7  -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -575,13 +575,13 @@ _log "zram-recompress timer/service removidos na reversão"
 }
 
 _instalar_kernel_customizado() {
-    local install_msg="NOVIDADE: Instalação de Kernel Customizado.\n\nAtenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.7.*\n\nBenefícios:\n * Freq. 1000Hz (Menor Latência)\n * NTSYNC (Melhor sincronização Wine/Proton)\n * Otimizações Zen 2\n\n⚠️ O instalador irá substituir o kernel padrão. Você deve aceitar a remoção do 'linux-neptune' quando solicitado."
+    local install_msg="NOVIDADE: Instalação de Kernel Customizado.\n\nAtenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.8.*\n\nBenefícios:\n * Freq. 1000Hz (Menor Latência)\n * NTSYNC (Melhor sincronização Wine/Proton)\n * Otimizações Zen 2\n\n⚠️ O instalador irá substituir o kernel padrão. Você deve aceitar a remoção do 'linux-neptune' quando solicitado."
 
     local resp_kernel="n"
 
     # --- INTEGRAÇÃO ZENITY ---
     if command -v zenity &>/dev/null; then
-        if zenity --question --title="Kernel Customizado" --text="$install_msg\n\nDeseja instalar o Kernel Customizado agora? (Compatível apenas com 3.7.*)" --width=500; then
+        if zenity --question --title="Kernel Customizado" --text="$install_msg\n\nDeseja instalar o Kernel Customizado agora? (Compatível apenas com 3.8.*)" --width=500; then
             resp_kernel="s"
         else
             resp_kernel="n"
@@ -590,7 +590,7 @@ _instalar_kernel_customizado() {
         echo -e "\n------------------------------------------------------------"
         echo -e "$install_msg"
         echo "------------------------------------------------------------"
-        read -rp "Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.7.* (s/n): " input_val
+        read -rp "Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.8.* (s/n): " input_val
         resp_kernel="$input_val"
     fi
 
@@ -631,20 +631,19 @@ _instalar_kernel_customizado() {
         _steamos_readonly_disable_if_needed
         steamos-devmode enable --no-prompt
         echo "Instalando Kernel (linux-charcoal)..." 
-             pacman -R --noconfirm linux-neptune-611 || true
-             pacman -R --noconfirm linux-neptune-611-headers || true
-        if pacman -U --noconfirm "$DEST_DIR"/*.pkg.tar.zst; then
+             
+        if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
              
              _log "Kernel customizado instalado com sucesso."
              update-grub &>/dev/null || true
              mkinitcpio -P &>/dev/null || true
         else
              _ui_info "erro" "Falha na instalação do Kernel customizado, reinstalando kernel padrão."
-        if pacman -S --noconfirm linux-neptune-611; then
-        _log "linux-neptune-611 instalado com sucesso."
+        if pacman -S --noconfirm linux-neptune; then
+        _log "linux-neptune instalado com sucesso."
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
         mkinitcpio -P &>/dev/null || true
-        _ui_info "sucesso" "Kernel padrão (linux-neptune-611) reinstalado. Reinicie o sistema para completar."
+        _ui_info "sucesso" "Kernel padrão (linux-neptune) reinstalado. Reinicie o sistema para completar."
              
         fi
     fi
@@ -878,29 +877,29 @@ _restore_kernel_to_neptune() {
         return 1
     fi
 
-    if pacman -Q linux-charcoal-611 &>/dev/null; then
-        _log "linux-charcoal-611 detectado. Removendo..."
+    if pacman -Q linux-charcoal-* &>/dev/null; then
+        _log "linux-charcoal detectado. Removendo..."
         _steamos_readonly_disable_if_needed
-        if pacman -Rs --noconfirm linux-charcoal-611; then
-            _log "linux-charcoal-611 removido com sucesso."
+        if pacman -Rs --noconfirm linux-charcoal-*; then
+            _log "linux-charcoal removido com sucesso."
         else
-            _ui_info "erro" "Falha ao remover linux-charcoal-611"
+            _ui_info "erro" "Falha ao remover linux-charcoal"
             return 1
         fi
     else
-        _log "linux-charcoal-611 não está instalado. Pulando remoção."
+        _log "linux-charcoal não está instalado. Pulando remoção."
         _ui_info "info" "Kernel customizado não encontrado instalado."
     fi
 
     _log "Instalando linux-neptune-611..."
-    if pacman -S --noconfirm linux-neptune-611; then
-        _log "linux-neptune-611 instalado com sucesso."
+    if pacman -S --noconfirm linux-neptune; then
+        _log "linux-neptune instalado com sucesso."
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
         mkinitcpio -P &>/dev/null || true
-        _ui_info "sucesso" "Kernel padrão (linux-neptune-611) reinstalado. Reinicie o sistema para completar."
+        _ui_info "sucesso" "Kernel padrão (linux-neptune) reinstalado. Reinicie o sistema para completar."
         return 0
     else
-        _ui_info "erro" "Falha ao instalar linux-neptune-611"
+        _ui_info "erro" "Falha ao instalar linux-neptune"
         return 1
     fi
 }
