@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7  -  Timeless Child"
+versao="3.2.7 R1 -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -635,7 +635,7 @@ _instalar_kernel_customizado() {
              
         fi
     fi
-
+  rm -rf "$DEST_DIR"
     fi
 }
 
