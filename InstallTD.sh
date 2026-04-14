@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7  -  Timeless Child"
+versao="3.2.7 R1  -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -437,34 +437,22 @@ systemctl enable --now thp-config.service || true
 }
 
 install_io_boost_uadev() {
-    _log "💾 Configurando I/O Nativo e Read-Ahead (BFQ Otimizado)..."
+    _log "💾 Configurando I/O Nativo e Read-Ahead (Híbrido Adios-Aware)..."
     
-    # Criar regra UDEV unificada
+    # Criar regra UDEV unificada com lógica de proteção e delay
+    # Usamos RUN para garantir que o sleep de 2s ocorra antes da verificação
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
-# 1. ZRAM: Latência zero e sem read-ahead
-ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue/scheduler}="none"
+# 1. ZRAM: Read-ahead zero e Scheduler (aplica se não for adios)
+ACTION=="add|change", KERNEL=="zram*", RUN+="/usr/bin/bash -c 'sleep 2; echo 0 > /sys/block/%k/queue/read_ahead_kb; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
-# 2. NVMe Interno: Passthrough total e Read-Ahead equilibrado
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
-  ATTR{queue/scheduler}="none", \
-  ATTR{queue/nr_requests}="1023", \
-  ATTR{queue/read_ahead_kb}="256", \
-  ATTR{queue/nomerges}="2"
+# 2. NVMe Interno: Tunables universais + Scheduler condicional
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/bash -c 'sleep 2; echo 1023 > /sys/block/%k/queue/nr_requests; echo 256 > /sys/block/%k/queue/read_ahead_kb; echo 2 > /sys/block/%k/queue/nomerges; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
-# 3. MicroSD/SD Cards: Unificado para garantir aplicação dos tunables
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
-  ATTR{queue/scheduler}="mq-deadline", \
-  ATTR{queue/nr_requests}="64", \
-  ATTR{queue/read_ahead_kb}="2048", \
-  ATTR{queue/iosched/read_expire}="200", \
-  ATTR{queue/iosched/write_expire}="8000", \
-  ATTR{queue/iosched/writes_starved}="2", \
-  ATTR{queue/iosched/fifo_batch}="4" 
+# 3. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/bash -c 'sleep 2; echo 64 > /sys/block/%k/queue/nr_requests; echo 2048 > /sys/block/%k/queue/read_ahead_kb; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
 
-# 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
-ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
+# 4. Otimizações Gerais de Overhead (Sempre aplicadas após o delay de 2s)
+ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", RUN+="/usr/bin/bash -c 'sleep 2; echo 0 > /sys/block/%k/queue/iostats; echo 0 > /sys/block/%k/queue/add_random; echo 2 > /sys/block/%k/queue/rq_affinity'"
 EOF
 
     # Remove o arquivo de regra antigo se ele existir
@@ -472,7 +460,7 @@ EOF
 
     # Aplicar as regras imediatamente
     udevadm control --reload-rules && udevadm trigger
-    _log "✅ I/O de disco nvme e microsd otimizados."
+    _log "✅ Otimizações de I/O aplicadas (Respeitando Adios e Race Condition)."
 }
 
 
