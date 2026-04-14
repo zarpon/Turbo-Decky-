@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.6 R3 - - Timeless Child"
+versao="3.2.6  - 14-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -26,7 +26,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
     "kernel.sched_autogroup_enabled=0"
-    "vm.compaction_proactiveness=0"
+    "vm.compaction_proactiveness=10"
     "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=1500"      
     "kernel.numa_balancing=0"
@@ -355,7 +355,7 @@ create_persistent_configs() {
 
     cat << EOF > /etc/tmpfiles.d/mglru.conf
 w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 500
+w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
 EOF
 
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -744,7 +744,7 @@ echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=120 || true
+sysctl -w vm.swappiness=99 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
