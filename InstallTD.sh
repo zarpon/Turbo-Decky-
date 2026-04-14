@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7 R1 -  Timeless Child"
+versao="3.2.7 -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -627,7 +627,7 @@ _instalar_kernel_customizado() {
              mkinitcpio -P &>/dev/null || true
         else
              _ui_info "erro" "Falha na instalação do Kernel customizado, reinstalando kernel padrão."
-        if pacman -S --noconfirm linux-neptune; then
+        if pacman -S --noconfirm --needed linux-neptune; then
         _log "linux-neptune instalado com sucesso."
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
         mkinitcpio -P &>/dev/null || true
