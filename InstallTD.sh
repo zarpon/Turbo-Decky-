@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.6  - 14-04 - Timeless Child"
+versao="3.2.6  - 14-04 - R1 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -425,15 +425,15 @@ ACTION=="add|change", KERNEL=="zram*", ATTR{queue/read_ahead_kb}="0", ATTR{queue
 # 2. NVMe Interno: Passthrough total e Read-Ahead equilibrado
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/scheduler}="none", \
-  ATTR{queue/nr_requests}="256", \
-  ATTR{queue/read_ahead_kb}="512", \
+  ATTR{queue/nr_requests}="1023", \
+  ATTR{queue/read_ahead_kb}="256", \
   ATTR{queue/nomerges}="2"
 
 # 3. MicroSD/SD Cards: Unificado para garantir aplicação dos tunables
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
-  ATTR{queue/nr_requests}="128", \
-  ATTR{queue/read_ahead_kb}="1024", \
+  ATTR{queue/nr_requests}="64", \
+  ATTR{queue/read_ahead_kb}="2048", \
   ATTR{queue/iosched/read_expire}="200", \
   ATTR{queue/iosched/write_expire}="8000", \
   ATTR{queue/iosched/writes_starved}="2", \
