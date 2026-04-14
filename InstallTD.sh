@@ -650,7 +650,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = min(ram, 8192)
-compression-algorithm = lzo-rle
+compression-algorithm = lz4
 swap-priority = 1000
 fs-type = swap
 EOF
