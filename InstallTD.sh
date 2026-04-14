@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.6 R2 - - Timeless Child"
+versao="3.2.6 R3 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -429,21 +429,15 @@ ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", \
   ATTR{queue/read_ahead_kb}="512", \
   ATTR{queue/nomerges}="2"
 
-# 3. MicroSD/SD Cards: Otimização para mq-deadline 
-# Parte A: Define o escalonador mq-deadline e aumenta a profundidade da fila para o scheduler trabalhar
+# 3. MicroSD/SD Cards: Unificado para garantir aplicação dos tunables
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", \
   ATTR{queue/scheduler}="mq-deadline", \
   ATTR{queue/nr_requests}="128", \
-  ATTR{queue/read_ahead_kb}="1024"
-  
-  
-# Parte B: Ajustes finos do BFQ para priorizar carregamento de jogos e interatividade
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/scheduler}=="mq-deadline", \
+  ATTR{queue/read_ahead_kb}="1024", \
   ATTR{queue/iosched/read_expire}="200", \
   ATTR{queue/iosched/write_expire}="8000", \
   ATTR{queue/iosched/writes_starved}="2", \
-  ATTR{queue/iosched/fifo_batch}="4"
-  
+  ATTR{queue/iosched/fifo_batch}="4" 
 
 # 4. Otimizações Gerais de Overhead (NVMe, SD e Discos USB)
 ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0", ATTR{queue/rq_affinity}="2"
