@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7 R1  -  Timeless Child"
+versao="3.2.7  -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -569,7 +569,7 @@ _instalar_kernel_customizado() {
 
     # --- INTEGRAÇÃO ZENITY ---
     if command -v zenity &>/dev/null; then
-        if zenity --question --title="Kernel Customizado" --text="$install_msg\n\nDeseja instalar o Kernel Customizado agora? (Compatível apenas com 3.8.*)" --width=500; then
+        if zenity --question --title="Kernel Customizado" --text="$install_msg\n\nDeseja instalar o Kernel Customizado agora? (Compatível apenas com 3.8.*). Siga atentamente as instruções e aceite a remoção do Kernel padrão quando for perguntado" --width=500; then
             resp_kernel="s"
         else
             resp_kernel="n"
@@ -879,7 +879,7 @@ _restore_kernel_to_neptune() {
         _ui_info "info" "Kernel customizado não encontrado instalado."
     fi
 
-    _log "Instalando linux-neptune-611..."
+    _log "Instalando linux-neptune..."
     if pacman -S --noconfirm linux-neptune; then
         _log "linux-neptune instalado com sucesso."
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
