@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.6  - 14-04 - R1 Timeless Child"
+versao="3.2.6  - 14-04 - R2 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -352,20 +352,42 @@ create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
 
+    # 1. Define E EXECUTA a criação do serviço MGLRU
+    _setup_mglru_service() {
+        _log "Configurando MGLRU Tune Service (Latência Otimizada)"
+        cat <<EOF > /etc/systemd/system/mglru-tune.service
+[Unit]
+Description=TurboDecky MGLRU tuning
+After=local-fs.target
+ConditionPathExists=/sys/kernel/mm/lru_gen/enabled
 
-    cat << EOF > /etc/tmpfiles.d/mglru.conf
-w /sys/kernel/mm/lru_gen/enabled - - - - 7
-w /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 1000 > /sys/kernel/mm/lru_gen/min_ttl_ms'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
 EOF
+    }
 
+    # CHAMADA OBRIGATÓRIA DA FUNÇÃO INTERNA
+    _setup_mglru_service
+
+    # 2. Configuração do ntsync
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
     _log "configuração ntsync criada em /etc/modules-load.d/ntsync.conf"
 
+    # 3. Gerenciamento de serviços desnecessários
     manage_unnecessary_services "disable"
 
+    # 4. Aplicação no Systemd
     systemctl daemon-reload || true
+    systemctl enable --now mglru-tune.service
+    
     _log "configurações mglru, ntsync e serviços desnecessários aplicados."
 }
+
    
 
 create_common_scripts_and_services() {
