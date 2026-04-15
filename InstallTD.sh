@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7 15-04 -  Timeless Child"
+versao="3.2.7 15-04 R1 -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -26,7 +26,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
     "kernel.sched_autogroup_enabled=0"
-    "vm.compaction_proactiveness=15"
+    "vm.compaction_proactiveness=18"
     "vm.dirty_expire_centisecs=2500"       
     "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
