@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7 -  Timeless Child"
+versao="3.2.7 R1 -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,14 +24,13 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.min_free_kbytes=131072" 
+    "vm.min_free_kbytes=65536" 
     "kernel.sched_autogroup_enabled=0"
     "vm.compaction_proactiveness=10"
-    "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=1500"      
+    "vm.dirty_expire_centisecs=2500"       
+    "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
-    "vm.vfs_cache_pressure=100"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
@@ -45,10 +44,8 @@ readonly base_sysctl_params=(
     "net.ipv4.tcp_congestion_control=bbr"
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=419430400"
-    "vm.watermark_boost_factor=0"
-    "vm.watermark_scale_factor=125"
-    
+    "vm.dirty_bytes=619430400"
+       
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -66,7 +63,7 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-    "MESA_SHADER_CACHE_MAX_SIZE=10G"
+    "MESA_SHADER_CACHE_MAX_SIZE=6G"
     "PROTON_USE_NTSYNC=1"
     "RADV_PERFTEST=nggc" 
     "MESA_VK_CACHE_CONTROL=1"
@@ -290,7 +287,7 @@ _setup_lavd_scheduler() {
 
     # 3. Sincronização e Instalação do repositório oficial do SteamOS (Neptune)
     _log "Instalando scx-scheds oficial do repositório SteamOS..."
-    if ! sudo pacman -Sy --noconfirm scx-scheds; then
+    if ! sudo pacman -Syu --noconfirm scx-scheds; then
         _log "Erro crítico: Não foi possível instalar o scx-scheds do repositório oficial."
         return 1
     fi
@@ -729,7 +726,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -751,9 +748,9 @@ echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
-echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
+echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=133 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -819,7 +816,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=150 || true
+sysctl -w vm.swappiness=180 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
