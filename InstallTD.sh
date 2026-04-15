@@ -3,15 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7 R1 -  Timeless Child"
+versao="3.2.7 15-04 -  Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 6GB
-readonly zswap_swapfile_size_gb="6"
+# Define o tamanho do swapfile fixo em 8GB
+readonly zswap_swapfile_size_gb="8"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -26,7 +26,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
     "kernel.sched_autogroup_enabled=0"
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=15"
     "vm.dirty_expire_centisecs=2500"       
     "vm.dirty_writeback_centisecs=1000"      
     "kernel.numa_balancing=0"
