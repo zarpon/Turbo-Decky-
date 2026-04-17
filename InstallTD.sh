@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7 17-04 -Timeless Child"
+versao="3.2.7 17-04 - R1 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -449,19 +449,17 @@ install_io_boost_uadev() {
     _log "💾 Configurando I/O Nativo e Read-Ahead (Híbrido Adios-Aware)..."
     
     # Criar regra UDEV unificada com lógica de proteção e delay
-    # Usamos RUN para garantir que o sleep de 2s ocorra antes da verificação
+    # Usamos RUN para garantir que o sleep de 1s ocorra antes da verificação
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
-# 1. ZRAM: Read-ahead zero e Scheduler (aplica se não for adios)
-ACTION=="add|change", KERNEL=="zram*", RUN+="/usr/bin/bash -c 'sleep 1; echo 0 > /sys/block/%k/queue/read_ahead_kb; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
-# 2. NVMe Interno: Tunables universais + Scheduler condicional
+# 1. NVMe Interno: Tunables universais + Scheduler condicional
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/bash -c 'sleep 1; echo 1023 > /sys/block/%k/queue/nr_requests; echo 256 > /sys/block/%k/queue/read_ahead_kb; echo 2 > /sys/block/%k/queue/nomerges; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
-# 3. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/bash -c 'sleep 1; echo 64 > /sys/block/%k/queue/nr_requests; echo 2048 > /sys/block/%k/queue/read_ahead_kb; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
+# 2. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/bash -c 'sleep 1; echo 64 > /sys/block/%k/queue/nr_requests; echo 1024 > /sys/block/%k/queue/read_ahead_kb; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
 
-# 4. Otimizações Gerais de Overhead (Sempre aplicadas após o delay de 2s)
-ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", RUN+="/usr/bin/bash -c 'sleep 1; echo 0 > /sys/block/%k/queue/iostats; echo 0 > /sys/block/%k/queue/add_random; echo 2 > /sys/block/%k/queue/rq_affinity'"
+#3. Otimizações Gerais de Overhead (Sempre aplicadas após o delay de 1s)
+ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", RUN+="/usr/bin/bash -c 'sleep 1; echo 0 > /sys/block/%k/queue/iostats; echo 0 > /sys/block/%k/queue/add_random;'"
 EOF
 
     # Remove o arquivo de regra antigo se ele existir
@@ -478,8 +476,7 @@ EOF
 _executar_reversao() {
     _steamos_readonly_disable_if_needed
     _log "executando reversão geral"
-    sudo systemctl unmask irqbalance 2>/dev/null || true
-    sudo systemctl enable --now irqbalance 2>/dev/null || true
+    
     
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
     rm -f /etc/environment.d/turbodecky*.conf
