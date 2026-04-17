@@ -3,15 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.7 16-04 - R1 Timeless Child"
+versao="3.2.7 17-04 -Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 8GB
-readonly zswap_swapfile_size_gb="8"
+# Define o tamanho do swapfile fixo em 10GB
+readonly zswap_swapfile_size_gb="10"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -45,7 +45,19 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=619430400"
-       
+    # Impede a migração de timers do kernel entre os núcleos,
+    # estabilizando o uso de CPU e reduzindo o frametime em jogos
+    "kernel.timer_migration=0"
+    
+    # Aumenta a frequência máxima de interrupção de hardware em user-space,
+    # vital para o Wine/Proton sincronizar a física e os quadros corretamente
+    "dev.hpet.max-user-freq=2048"
+    "dev.rtc.max-user-freq=2048"
+    
+    # Desativa rastreamentos de debug do kernel e limita as rajadas
+    # de logs para poupar ciclos de CPU e operações de escrita (I/O)
+    "kernel.ftrace_enabled=0"
+    "kernel.printk_ratelimit_burst=1"   
 )
 
 # --- listas de serviços para ativar/monitorar ---
