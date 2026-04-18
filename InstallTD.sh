@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 18-04 - - Timeless Child"
+versao="3.2.8 18-04 R1 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -299,7 +299,7 @@ _setup_lavd_scheduler() {
 
     # 3. Sincronização e Instalação do repositório oficial do SteamOS (Neptune)
     _log "Instalando scx-scheds oficial do repositório SteamOS..."
-    if ! sudo pacman -Syu --noconfirm scx-scheds; then
+    if ! sudo pacman -Sy --noconfirm scx-scheds; then
         _log "Erro crítico: Não foi possível instalar o scx-scheds do repositório oficial."
         return 1
     fi
@@ -456,7 +456,7 @@ install_io_boost_uadev() {
 ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 1023 > /sys/block/%k/queue/nr_requests; echo 256 > /sys/block/%k/queue/read_ahead_kb; echo 2 > /sys/block/%k/queue/nomerges; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
 # 2. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 64 > /sys/block/%k/queue/nr_requests; echo 1024 > /sys/block/%k/queue/read_ahead_kb; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 64 > /sys/block/%k/queue/nr_requests; echo 1024 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
 
 # 3. Otimizações Gerais de Overhead (Sempre aplicadas após o delay de 1s)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 0 > /sys/block/%k/queue/iostats; echo 0 > /sys/block/%k/queue/add_random;'"
