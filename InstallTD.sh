@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 - Timeless Child"
+versao="3.2.8 18-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -69,7 +69,7 @@ readonly unnecessary_services=(
     "gpu-trace.service"
     "steamos-log-submitter.service"
     "cups.service"
-    "steamos-cfs-debugfs-tunings.service" 
+    
 )
 
 # --- variáveis de ambiente (Configuração de Jogos) ---
@@ -553,6 +553,8 @@ _executar_reversao() {
     mkinitcpio -P &>/dev/null || true
 
     # --- 6. APLICAÇÃO FINAL ---
+systemctl unmask steamos-cfs-debugfs-tunings.service
+systemctl enable --now steamos-cfs-debugfs-tunings.service
     sysctl --system || true 
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
@@ -657,10 +659,17 @@ optimize_zram() {
     mkdir -p "$gen_dir"
     cat > "$gen_conf" <<EOF
 [zram0]
-zram-size = ram * 0.75
-compression-algorithm = lz4 zstd(level=3,type=idle)
+zram-size = 4g
+compression-algorithm = lz4
 swap-priority = 3000
 fs-type = swap
+
+[zram1]
+zram-size = 6g
+compression-algorithm = zstd
+swap-priority = 10
+fs-type = swap
+
 EOF
    
     
