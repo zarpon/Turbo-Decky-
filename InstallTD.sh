@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 18-04 R1 - - Timeless Child"
+versao="3.2.8 19-04 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -45,6 +45,7 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=619430400"
+    "vm.vfs_cache_pressure=75"
     # Impede a migração de timers do kernel entre os núcleos,
     # estabilizando o uso de CPU e reduzindo o frametime em jogos
     "kernel.timer_migration=0"
@@ -372,7 +373,7 @@ ConditionPathExists=/sys/kernel/mm/lru_gen/enabled
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 250 > /sys/kernel/mm/lru_gen/min_ttl_ms'
+ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 500 > /sys/kernel/mm/lru_gen/min_ttl_ms'
 RemainAfterExit=yes
 
 [Install]
