@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 19-04 - - Timeless Child"
+versao="3.2.8 19-04 R1 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -81,6 +81,8 @@ readonly game_env_vars=(
     "RADV_PERFTEST=nggc" 
     "MESA_VK_CACHE_CONTROL=1"
     "DXVK_FRAME_RATE=0"
+    "DXVK_STATE_CACHE=1" 
+    "DXVK_STATE_CACHE_PATH=/home/deck/dxvkcache" 
 )  
 
 # --- Funções Utilitárias ---
