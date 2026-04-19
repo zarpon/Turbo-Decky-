@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 19-04  R1 - - Timeless Child"
+versao="3.2.8 19-04  R2 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -683,15 +683,24 @@ set -euo pipefail
 
 ZRAM_DEV="/sys/block/zram0"
 
-# Só executa se o kernel expuser os nós necessários
-[[ -e "${ZRAM_DEV}/recompress" && -e "${ZRAM_DEV}/recomp_algorithm" ]] || exit 0
+# Só continua se o suporte existir e o zram estiver ativo
+[[ -e "${ZRAM_DEV}/recompress" ]] || exit 0
+[[ -e "${ZRAM_DEV}/recomp_algorithm" ]] || exit 0
+[[ -e "${ZRAM_DEV}/idle" ]] || exit 0
 
-# Secondary algorithm list: zstd como prioridade 1
+# Só faz sentido quando zram0 está realmente em uso como swap
+grep -qE '^/dev/zram0[[:space:]]' /proc/swaps 2>/dev/null || exit 0
+
+# Define o algoritmo secundário para recompressão
 echo "algo=zstd priority=1" > "${ZRAM_DEV}/recomp_algorithm"
 
-# Recompressão apenas de páginas ociosas com threshold de 3600 bytes
+# Marca as páginas atuais como idle antes de recomprimir
+echo all > "${ZRAM_DEV}/idle"
+
+# Recompressão apenas de páginas ociosas, com limiar em bytes
 echo "type=idle threshold=3600" > "${ZRAM_DEV}/recompress"
 EOF
+
     chmod +x "$recompress_script"
 
     cat > /etc/systemd/system/zram-recompress.service <<EOF
@@ -699,6 +708,7 @@ EOF
 Description=TurboDecky ZRAM background recompression
 ConditionPathExists=/sys/block/zram0/recompress
 ConditionPathExists=/sys/block/zram0/recomp_algorithm
+ConditionPathExists=/sys/block/zram0/idle
 After=local-fs.target
 
 [Service]
@@ -711,10 +721,10 @@ EOF
 Description=TurboDecky ZRAM recompression timer
 
 [Timer]
-OnBootSec=5min
+OnBootSec=10min
 OnUnitActiveSec=10min
-Unit=zram-recompress.service
 AccuracySec=1min
+Unit=zram-recompress.service
 
 [Install]
 WantedBy=timers.target
@@ -723,7 +733,6 @@ EOF
     systemctl daemon-reload || true
     systemctl enable --now zram-recompress.timer || true
 }
-
 aplicar_zswap() {
     _log "Aplicando otimizações"
 
