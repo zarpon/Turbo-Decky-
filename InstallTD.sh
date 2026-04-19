@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 19-04  R2 - - Timeless Child"
+versao="3.2.8 19-04  R1 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -698,7 +698,7 @@ echo "algo=zstd priority=1" > "${ZRAM_DEV}/recomp_algorithm"
 echo all > "${ZRAM_DEV}/idle"
 
 # Recompressão apenas de páginas ociosas, com limiar em bytes
-echo "type=idle threshold=3600" > "${ZRAM_DEV}/recompress"
+echo "type=idle threshold=2048" > "${ZRAM_DEV}/recompress"
 EOF
 
     chmod +x "$recompress_script"
@@ -722,7 +722,7 @@ Description=TurboDecky ZRAM recompression timer
 
 [Timer]
 OnBootSec=10min
-OnUnitActiveSec=10min
+OnUnitActiveSec=15min
 AccuracySec=1min
 Unit=zram-recompress.service
 
