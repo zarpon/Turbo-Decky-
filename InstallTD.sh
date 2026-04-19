@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 19-04  - - Timeless Child"
+versao="3.2.8 19-04  R1 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -566,6 +566,9 @@ systemctl enable --now steamos-cfs-debugfs-tunings.service
 systemctl disable --now zram-recompress.timer 2>/dev/null || true
 rm -f /etc/systemd/system/zram-recompress.timer
 rm -f /etc/systemd/system/zram-recompress.service
+systemctl disable --now zram-recompress.timer 2>/dev/null || true
+
+rm -f "${turbodecky_bin}/zram-recompress.sh"
 _log "zram-recompress timer/service removidos na reversão"
 
     rm -rf "${turbodecky_bin}" 2>/dev/null || true
@@ -669,7 +672,57 @@ fs-type = swap
 EOF
        
 }
+_setup_zram_recompress() {
+    _log "Configurando recompressão em segundo plano do zram..."
 
+    local recompress_script="${turbodecky_bin}/zram-recompress.sh"
+
+    cat > "$recompress_script" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+ZRAM_DEV="/sys/block/zram0"
+
+# Só executa se o kernel expuser os nós necessários
+[[ -e "${ZRAM_DEV}/recompress" && -e "${ZRAM_DEV}/recomp_algorithm" ]] || exit 0
+
+# Secondary algorithm list: zstd como prioridade 1
+echo "algo=zstd priority=1" > "${ZRAM_DEV}/recomp_algorithm"
+
+# Recompressão apenas de páginas ociosas com threshold de 3600 bytes
+echo "type=idle threshold=3600" > "${ZRAM_DEV}/recompress"
+EOF
+    chmod +x "$recompress_script"
+
+    cat > /etc/systemd/system/zram-recompress.service <<EOF
+[Unit]
+Description=TurboDecky ZRAM background recompression
+ConditionPathExists=/sys/block/zram0/recompress
+ConditionPathExists=/sys/block/zram0/recomp_algorithm
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=${recompress_script}
+EOF
+
+    cat > /etc/systemd/system/zram-recompress.timer <<'EOF'
+[Unit]
+Description=TurboDecky ZRAM recompression timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+Unit=zram-recompress.service
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload || true
+    systemctl enable --now zram-recompress.timer || true
+}
 
 aplicar_zswap() {
     _log "Aplicando otimizações"
@@ -818,6 +871,7 @@ UNIT
    
     # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
     optimize_zram
+   _setup_zram_recompress 
     systemctl enable --now fstrim.timer
    _instalar_kernel_customizado
     _ui_info "aviso" "Reinicie o sistema para efeito total."
