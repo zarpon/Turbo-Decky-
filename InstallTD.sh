@@ -3,15 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - R2 - Timeless Child"
+versao="3.2.9 - R3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 6GB
-readonly zswap_swapfile_size_gb="6"
+# Define o tamanho do swapfile fixo em 8GB
+readonly zswap_swapfile_size_gb="8"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -936,7 +936,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 echo 256 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
-sysctl -w vm.swappiness=180 || true
+sysctl -w vm.swappiness=150 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
