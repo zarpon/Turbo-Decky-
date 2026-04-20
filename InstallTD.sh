@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 20-04  R1 - - Timeless Child"
+versao="3.2.8 20-04  R2 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -739,7 +739,6 @@ EOF
     systemctl daemon-reload
     systemctl enable zram-preconfig.service
 
-    _steamos_readonly_enable_if_needed
 }
 
 _setup_zram_recompress() {
