@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 20-04  R2 - - Timeless Child"
+versao="3.2.9- - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -421,7 +421,6 @@ echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
-echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 echo 409 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none 2>/dev/null || true
 echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
 THP
@@ -673,7 +672,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lzo-rle zstd
+compression-algorithm = lz4 zstd
 swap-priority = 3000
 fs-type = swap
 EOF
@@ -712,7 +711,7 @@ if [[ -e "$ZRAM/reset" ]]; then
 fi
 
 # Define algoritmos antes de uso
-echo "lzo-rle" > "$ZRAM/comp_algorithm"
+echo "lz4" > "$ZRAM/comp_algorithm"
 echo "zstd" > "$ZRAM/recomp_algorithm"
 EOF
 
@@ -846,7 +845,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -865,12 +864,13 @@ create_persistent_configs
     cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lzo-rle > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=101 || true
+sysctl -w vm.swappiness=110 || true
+echo 16 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -935,7 +935,7 @@ create_persistent_configs
     cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
 
-
+echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 sysctl -w vm.swappiness=180 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
