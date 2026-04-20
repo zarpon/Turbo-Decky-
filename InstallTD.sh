@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 19-04 R1 - - Timeless Child"
+versao="3.2.8 20-04 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -666,7 +666,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lzo-rle zstd(level=3,type=idle)
+compression-algorithm = lzo-rle zstd(type=idle)
 swap-priority = 3000
 fs-type = swap
 EOF
