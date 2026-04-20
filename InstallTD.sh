@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 20-04 - - Timeless Child"
+versao="3.2.8 20-04  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -666,11 +666,73 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lzo-rle zstd(type=idle)
+compression-algorithm = lzo-rle zstd
 swap-priority = 3000
 fs-type = swap
 EOF
        
+}
+
+setup_zram_boot_override() {
+    set -euo pipefail
+
+    local script="/usr/local/bin/zram-preconfig.sh"
+    local service="/etc/systemd/system/zram-preconfig.service"
+
+    [ "$(id -u)" -eq 0 ] || return 1
+
+    _steamos_readonly_disable_if_needed
+
+    # Script de preconfiguração (executa antes do generator)
+    cat > "$script" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+ZRAM="/sys/block/zram0"
+
+# Aguarda device aparecer (generator cria dinamicamente)
+for i in {1..50}; do
+    [[ -e "$ZRAM" ]] && break
+    sleep 0.1
+done
+
+# Se não existir, sai silenciosamente
+[[ -e "$ZRAM" ]] || exit 0
+
+# Garante estado limpo
+if [[ -e "$ZRAM/reset" ]]; then
+    echo 1 > "$ZRAM/reset"
+fi
+
+# Define algoritmos antes de uso
+echo "lzo-rle" > "$ZRAM/comp_algorithm"
+echo "zstd" > "$ZRAM/recomp_algorithm"
+EOF
+
+    chmod +x "$script"
+
+    # Unit systemd
+    cat > "$service" <<EOF
+[Unit]
+Description=ZRAM Pre-Configuration (recompression setup)
+DefaultDependencies=no
+Before=systemd-zram-setup@zram0.service
+After=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=$script
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Reload + enable
+    systemctl daemon-reexec
+    systemctl daemon-reload
+    systemctl enable zram-preconfig.service
+
+    _steamos_readonly_enable_if_needed
 }
 
 _setup_zram_recompress() {
@@ -895,6 +957,7 @@ UNIT
    
     # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
     optimize_zram
+    setup_zram_boot_override
    _setup_zram_recompress 
     systemctl enable --now fstrim.timer
    _instalar_kernel_customizado
