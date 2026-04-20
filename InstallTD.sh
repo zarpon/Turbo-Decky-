@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 19-04  R2 - - Timeless Child"
+versao="3.2.8 19-04  - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -667,11 +667,13 @@ optimize_zram() {
 [zram0]
 zram-size = ram * 1.5
 compression-algorithm = lzo-rle
+recompression-algorithm = zstd
 swap-priority = 3000
 fs-type = swap
 EOF
        
 }
+
 _setup_zram_recompress() {
     _log "Configurando recompressão em segundo plano do zram..."
 
@@ -683,22 +685,18 @@ set -euo pipefail
 
 ZRAM_DEV="/sys/block/zram0"
 
-# Só continua se o suporte existir e o zram estiver ativo
+# Só continua se o suporte existir
 [[ -e "${ZRAM_DEV}/recompress" ]] || exit 0
-[[ -e "${ZRAM_DEV}/recomp_algorithm" ]] || exit 0
 [[ -e "${ZRAM_DEV}/idle" ]] || exit 0
 
-# Só faz sentido quando zram0 está realmente em uso como swap
+# Só faz sentido quando o zram0 está realmente em uso como swap
 grep -qE '^/dev/zram0[[:space:]]' /proc/swaps 2>/dev/null || exit 0
 
-# Define o algoritmo secundário para recompressão
-echo "algo=zstd priority=1" > "${ZRAM_DEV}/recomp_algorithm"
-
 # Marca as páginas atuais como idle antes de recomprimir
-echo all > "${ZRAM_DEV}/idle"
+echo all > "${ZRAM_DEV}/idle" 2>/dev/null || true
 
-# Recompressão apenas de páginas ociosas, com limiar em bytes
-echo "type=idle threshold=2048" > "${ZRAM_DEV}/recompress"
+# Dispara a recompressão usando o algoritmo secundário já configurado no boot/setup
+echo "type=idle threshold=2048" > "${ZRAM_DEV}/recompress" 2>/dev/null || true
 EOF
 
     chmod +x "$recompress_script"
@@ -707,12 +705,13 @@ EOF
 [Unit]
 Description=TurboDecky ZRAM background recompression
 ConditionPathExists=/sys/block/zram0/recompress
-ConditionPathExists=/sys/block/zram0/recomp_algorithm
 ConditionPathExists=/sys/block/zram0/idle
 After=local-fs.target
 
 [Service]
 Type=oneshot
+Nice=19
+IOSchedulingClass=idle
 ExecStart=${recompress_script}
 EOF
 
@@ -722,7 +721,7 @@ Description=TurboDecky ZRAM recompression timer
 
 [Timer]
 OnBootSec=10min
-OnUnitActiveSec=15min
+OnUnitActiveSec=10min
 AccuracySec=1min
 Unit=zram-recompress.service
 
