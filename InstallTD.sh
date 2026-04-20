@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 19-04  - - Timeless Child"
+versao="3.2.8 19-04 R1 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -666,8 +666,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lzo-rle
-recompression-algorithm = zstd
+compression-algorithm = lzo-rle zstd(level=3,type=idle)
 swap-priority = 3000
 fs-type = swap
 EOF
@@ -679,24 +678,40 @@ _setup_zram_recompress() {
 
     local recompress_script="${turbodecky_bin}/zram-recompress.sh"
 
+    mkdir -p "${turbodecky_bin}"
+
     cat > "$recompress_script" <<'EOF'
 #!/usr/bin/env bash
-set -euo pipefail
+set -u
 
 ZRAM_DEV="/sys/block/zram0"
+LOCK_FILE="/tmp/zram-recompress.lock"
 
-# Só continua se o suporte existir
+# Evita execução concorrente
+exec 9>"$LOCK_FILE"
+flock -n 9 || exit 0
+
+# Verificações de suporte
 [[ -e "${ZRAM_DEV}/recompress" ]] || exit 0
 [[ -e "${ZRAM_DEV}/idle" ]] || exit 0
 
-# Só faz sentido quando o zram0 está realmente em uso como swap
-grep -qE '^/dev/zram0[[:space:]]' /proc/swaps 2>/dev/null || exit 0
+# Confirma uso como swap
+grep -q '^/dev/zram0' /proc/swaps 2>/dev/null || exit 0
 
-# Marca as páginas atuais como idle antes de recomprimir
-echo all > "${ZRAM_DEV}/idle" 2>/dev/null || true
+# Função segura para sysfs
+write_sysfs() {
+    local path="$1"
+    local value="$2"
+    printf '%s\n' "$value" > "$path" 2>/dev/null || return 1
+}
 
-# Dispara a recompressão usando o algoritmo secundário já configurado no boot/setup
-echo "type=idle threshold=2048" > "${ZRAM_DEV}/recompress" 2>/dev/null || true
+# Marca páginas como idle
+write_sysfs "${ZRAM_DEV}/idle" "all" || exit 0
+
+# Dispara recompressão (pode falhar se busy → comportamento esperado)
+write_sysfs "${ZRAM_DEV}/recompress" "type=idle threshold=2048" || exit 0
+
+exit 0
 EOF
 
     chmod +x "$recompress_script"
@@ -732,6 +747,7 @@ EOF
     systemctl daemon-reload || true
     systemctl enable --now zram-recompress.timer || true
 }
+
 aplicar_zswap() {
     _log "Aplicando otimizações"
 
