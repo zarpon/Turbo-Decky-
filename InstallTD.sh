@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.8 20-04  - - Timeless Child"
+versao="3.2.8 20-04  R1 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -481,6 +481,13 @@ _executar_reversao() {
     _steamos_readonly_disable_if_needed
     _log "executando reversão geral"
     
+        # --- LIMPEZA DE NOVOS SERVIÇOS (MGLRU E PRE-CONFIG) ---
+    systemctl stop mglru-tune.service zram-preconfig.service 2>/dev/null || true
+    systemctl disable mglru-tune.service zram-preconfig.service 2>/dev/null || true
+    rm -f /etc/systemd/system/mglru-tune.service
+    rm -f /etc/systemd/system/zram-preconfig.service
+    rm -f /usr/local/bin/zram-preconfig.sh
+
     
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
     rm -f /etc/environment.d/turbodecky*.conf
