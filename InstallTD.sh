@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 21-04 R2 - Timeless Child"
+versao="3.2.9 - 21-04 R3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -378,7 +378,7 @@ ConditionPathExists=/sys/kernel/mm/lru_gen/enabled
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 500 > /sys/kernel/mm/lru_gen/min_ttl_ms'
+ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 1000 > /sys/kernel/mm/lru_gen/min_ttl_ms'
 RemainAfterExit=yes
 
 [Install]
@@ -675,7 +675,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lzo-rle zstd
+compression-algorithm = lz4 zstd
 swap-priority = 3000
 swap-opts = discard
 fs-type = swap
@@ -715,7 +715,7 @@ if [[ -e "$ZRAM/reset" ]]; then
 fi
 
 # Define algoritmos antes de uso
-echo "lzo-rle" > "$ZRAM/comp_algorithm"
+echo "lz4" > "$ZRAM/comp_algorithm"
 echo "zstd" > "$ZRAM/recomp_algorithm"
 EOF
 
@@ -849,7 +849,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lzo-rle" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -868,7 +868,7 @@ create_persistent_configs
     cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo lzo-rle > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
