@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 21-04 R1 - Timeless Child"
+versao="3.2.9 - 21-04 R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -32,6 +32,8 @@ readonly base_sysctl_params=(
     "kernel.numa_balancing=0"
     "vm.zone_reclaim_mode=0"
     "vm.compact_unevictable_allowed=1"
+    "vm.watermark_boost_factor=0"
+    "vm.watermark_scale_factor=500"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
