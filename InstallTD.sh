@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 21-04 R3 - Timeless Child"
+versao="3.2.9 - 21-04 R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,7 +24,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.min_free_kbytes=131072" 
+    "vm.min_free_kbytes=65536" 
     "kernel.sched_autogroup_enabled=0"
     "vm.compaction_proactiveness=16"
     "vm.dirty_expire_centisecs=1500"       
@@ -33,7 +33,7 @@ readonly base_sysctl_params=(
     "vm.zone_reclaim_mode=0"
     "vm.compact_unevictable_allowed=1"
     "vm.watermark_boost_factor=0"
-    "vm.watermark_scale_factor=500"
+    "vm.watermark_scale_factor=150"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
     # --- WATCHDOG E NETWORK ---
