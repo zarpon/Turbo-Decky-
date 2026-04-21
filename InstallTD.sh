@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 21-04 R2 - Timeless Child"
+versao="3.2.9 - 21-04 R3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,7 +24,7 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
-    "vm.min_free_kbytes=65536" 
+    "vm.min_free_kbytes=131072" 
     "kernel.sched_autogroup_enabled=0"
     "vm.compaction_proactiveness=16"
     "vm.dirty_expire_centisecs=1500"       
@@ -873,7 +873,7 @@ echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=110 || true
+sysctl -w vm.swappiness=133 || true
 echo 32 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
@@ -940,7 +940,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 echo 192 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
-sysctl -w vm.swappiness=150 || true
+sysctl -w vm.swappiness=180 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
