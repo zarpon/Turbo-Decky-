@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 22-04 R2 - Timeless Child"
+versao="3.2.9 - 22-04 R3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -49,10 +49,6 @@ readonly base_sysctl_params=(
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=619430400"
     "vm.vfs_cache_pressure=85"
-    # Impede a migração de timers do kernel entre os núcleos,
-    # estabilizando o uso de CPU e reduzindo o frametime em jogos
-    "kernel.timer_migration=0"
-    
     # Aumenta a frequência máxima de interrupção de hardware em user-space,
     # vital para o Wine/Proton sincronizar a física e os quadros corretamente
     "dev.hpet.max-user-freq=2048"
@@ -674,9 +670,9 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lz4 zstd
+compression-algorithm = lz4 zstd(level=3)
 swap-priority = 3000
-swap-opts = discard
+options = discard
 fs-type = swap
 EOF
        
