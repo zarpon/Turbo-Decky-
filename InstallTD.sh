@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 22-04 R1 - Timeless Child"
+versao="3.2.9 - 22-04 R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -565,8 +565,7 @@ _executar_reversao() {
     mkinitcpio -P &>/dev/null || true
 
     # --- 6. APLICAÇÃO FINAL ---
-systemctl unmask steamos-cfs-debugfs-tunings.service
-systemctl enable --now steamos-cfs-debugfs-tunings.service
+
     sysctl --system || true 
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
