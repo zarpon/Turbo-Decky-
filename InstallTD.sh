@@ -3,15 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 22-04 R3 - Timeless Child"
+versao="3.2.9 - 22-04 R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 10GB
-readonly zswap_swapfile_size_gb="10"
+# Define o tamanho do swapfile fixo em 8GB
+readonly zswap_swapfile_size_gb="8"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -25,39 +25,17 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=131072" 
-    "kernel.sched_autogroup_enabled=0"
-    "vm.compaction_proactiveness=16"
+    "vm.compaction_proactiveness=15"
     "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=500"      
-    "kernel.numa_balancing=0"
-    "vm.zone_reclaim_mode=0"
-    "vm.compact_unevictable_allowed=1"
+    "vm.dirty_writeback_centisecs=1500"      
     "vm.watermark_boost_factor=0"
-    "vm.watermark_scale_factor=150"
+    "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
-    # --- WATCHDOG E NETWORK ---
-    "kernel.nmi_watchdog=0"
-    "kernel.soft_watchdog=0"
-    "kernel.watchdog=0"
-    "kernel.core_pattern=/dev/null"
-    "kernel.core_pipe_limit=0"
-    "kernel.printk_devkmsg=off"
-    "net.core.default_qdisc=fq_codel"
-    "net.ipv4.tcp_congestion_control=bbr"
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=619430400"
-    "vm.vfs_cache_pressure=85"
-    # Aumenta a frequência máxima de interrupção de hardware em user-space,
-    # vital para o Wine/Proton sincronizar a física e os quadros corretamente
-    "dev.hpet.max-user-freq=2048"
-    "dev.rtc.max-user-freq=2048"
-    
-    # Desativa rastreamentos de debug do kernel e limita as rajadas
-    # de logs para poupar ciclos de CPU e operações de escrita (I/O)
-    "kernel.ftrace_enabled=0"
-    "kernel.printk_ratelimit_burst=1"   
+    "vm.dirty_bytes=419430400"
+    "vm.vfs_cache_pressure=85"   
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -75,11 +53,8 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-    "MESA_SHADER_CACHE_MAX_SIZE=10G"
+    "MESA_SHADER_CACHE_MAX_SIZE=5G"
     "PROTON_USE_NTSYNC=1"
-    "RADV_PERFTEST=nggc" 
-    "MESA_VK_CACHE_CONTROL=1"
-    "DXVK_FRAME_RATE=0"
     "DXVK_STATE_CACHE=1" 
     "DXVK_STATE_CACHE_PATH=/home/deck/dxvkcache" 
 )  
@@ -374,7 +349,7 @@ ConditionPathExists=/sys/kernel/mm/lru_gen/enabled
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 1000 > /sys/kernel/mm/lru_gen/min_ttl_ms'
+ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 350 > /sys/kernel/mm/lru_gen/min_ttl_ms'
 RemainAfterExit=yes
 
 [Install]
@@ -844,7 +819,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=25" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=0" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -864,12 +839,12 @@ create_persistent_configs
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 25 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 0 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=80 || true
-echo 32 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+sysctl -w vm.swappiness=75 || true
+echo 96 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -934,7 +909,7 @@ create_persistent_configs
     cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
 
-echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+echo 192 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 sysctl -w vm.swappiness=100 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
