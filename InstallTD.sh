@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 25-04 R1 - Timeless Child"
+versao="3.2.9 - 25-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -26,16 +26,16 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=121634" 
     "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=3500"       
+    "vm.dirty_expire_centisecs=2000"       
     "vm.dirty_writeback_centisecs=1000"      
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
       # --- Novos Parâmetros ---
-    "vm.dirty_background_bytes=259715200"
-    "vm.dirty_bytes=709430400"
-    "vm.vfs_cache_pressure=75"   
+    "vm.dirty_background_bytes=209715200"
+    "vm.dirty_bytes=409430400"
+    "vm.vfs_cache_pressure=85"   
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -390,7 +390,7 @@ create_common_scripts_and_services() {
     # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
     cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
 #!/usr/bin/env bash
-echo "always" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
+echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
 echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
 echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
 echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
@@ -842,7 +842,7 @@ echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=70 || true
+sysctl -w vm.swappiness=45 || true
 echo 32 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
@@ -909,7 +909,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
-sysctl -w vm.swappiness=80 || true
+sysctl -w vm.swappiness=50 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
