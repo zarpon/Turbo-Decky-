@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 23-04 - Timeless Child"
+versao="3.2.9 - 25-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -25,17 +25,17 @@ readonly dxvk_cache_path="/home/deck/dxvkcache"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=121634" 
-    "vm.compaction_proactiveness=18"
-    "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=1500"      
+    "vm.compaction_proactiveness=15"
+    "vm.dirty_expire_centisecs=4000"       
+    "vm.dirty_writeback_centisecs=1000"      
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
       # --- Novos Parâmetros ---
-    "vm.dirty_background_bytes=209715200"
-    "vm.dirty_bytes=419430400"
-    "vm.vfs_cache_pressure=85"   
+    "vm.dirty_background_bytes=259715200"
+    "vm.dirty_bytes=709430400"
+    "vm.vfs_cache_pressure=75"   
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -54,7 +54,6 @@ readonly unnecessary_services=(
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
     "MESA_SHADER_CACHE_MAX_SIZE=5G"
-    "PROTON_USE_NTSYNC=1"
     "DXVK_STATE_CACHE=1" 
     "DXVK_STATE_CACHE_PATH=/home/deck/dxvkcache" 
 )  
@@ -843,8 +842,8 @@ echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=75 || true
-echo 96 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+sysctl -w vm.swappiness=70 || true
+echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -909,8 +908,8 @@ create_persistent_configs
     cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
 
-echo 192 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
-sysctl -w vm.swappiness=100 || true
+echo 256 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+sysctl -w vm.swappiness=80 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
