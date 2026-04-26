@@ -234,9 +234,6 @@ _configure_ulimits() {
 * hard nofile 524288
 root soft nofile 524288
 root hard nofile 524288
-* hard memlock unlimited
-* soft memlock unlimited
-
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
 }
