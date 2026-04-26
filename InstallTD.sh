@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.2.9 - 25-04 - Timeless Child"
+versao="3.2.9 - 26-04 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -227,15 +227,15 @@ _setup_dxvk_folder() {
 }
 
 _configure_ulimits() {
-    _log "aplicando limite de arquivo aberto (ulimit) alto (1048576)"
+    _log "aplicando limite de arquivo aberto (ulimit) alto (524288)"
     mkdir -p /etc/security/limits.d
     cat <<'EOF' > /etc/security/limits.d/99-game-limits.conf
 * soft nofile 524288
 * hard nofile 524288
 root soft nofile 524288
 root hard nofile 524288
-* hard memlock 2147484
-* soft memlock 2147484
+* hard memlock unlimited
+* soft memlock unlimited
 
 EOF
     _log "/etc/security/limits.d/99-game-limits.conf criado/atualizado."
@@ -842,7 +842,7 @@ echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=45 || true
+sysctl -w vm.swappiness=40 || true
 echo 32 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
