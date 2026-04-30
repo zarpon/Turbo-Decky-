@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.3 30-04 - Timeless Child"
+versao="3.3 30-04 R1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -35,7 +35,7 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=409430400"
-    
+    "vm.vfs_cache_pressure=66"
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -345,7 +345,7 @@ ConditionPathExists=/sys/kernel/mm/lru_gen/enabled
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 1000 > /sys/kernel/mm/lru_gen/min_ttl_ms'
+ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 200 > /sys/kernel/mm/lru_gen/min_ttl_ms'
 RemainAfterExit=yes
 
 [Install]
@@ -425,7 +425,7 @@ install_io_boost_uadev() {
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
 
 # 1. NVMe Interno: Tunables universais + Scheduler condicional
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 256 > /sys/block/%k/queue/nr_requests; echo 512 > /sys/block/%k/queue/read_ahead_kb; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 256 > /sys/block/%k/queue/nr_requests; echo 256 > /sys/block/%k/queue/read_ahead_kb; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
 # 2. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 64 > /sys/block/%k/queue/nr_requests; echo 1024 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
@@ -815,7 +815,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=zstd" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -834,13 +834,13 @@ create_persistent_configs
     cat <<'ZSWAP_SCRIPT' > "${turbodecky_bin}/zswap-config.sh"
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
-echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null || true
+echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
 echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=50 || true
-echo 32 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+sysctl -w vm.swappiness=100 || true
+echo 16 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -906,7 +906,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
-sysctl -w vm.swappiness=40 || true
+sysctl -w vm.swappiness=90 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
