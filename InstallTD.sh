@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.3 30-04 R1 - Timeless Child"
+versao="3.3 01-05 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -19,8 +19,7 @@ readonly logfile="/var/log/turbodecky.log"
 readonly turbodecky_dir="/var/lib/turbodecky"
 readonly turbodecky_bin="${turbodecky_dir}/bin"
 
-# Caminho do cache DXVK
-readonly dxvk_cache_path="/home/deck/dxvkcache"
+
 
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
@@ -54,8 +53,7 @@ readonly unnecessary_services=(
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
     "MESA_SHADER_CACHE_MAX_SIZE=5G"
-    "DXVK_STATE_CACHE=1" 
-    "DXVK_STATE_CACHE_PATH=/home/deck/dxvkcache" 
+         
 )  
 
 # --- Funções Utilitárias ---
@@ -204,7 +202,7 @@ _apply_fstab_tweak_if_ext4() {
     _backup_file_once "$fstab_file"
     if [[ "$fstype" == "ext4" ]]; then
         if grep -q " /home " "$fstab_file" 2>/dev/null; then
-            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,data=writeback,commit=60,x-systemd.growfs|g' "$fstab_file" || true
+            sed -E -i 's|(^[^[:space:]]+[[:space:]]+/home[[:space:]]+[^[:space:]]+[[:space:]]+ext4[[:space:]]+)[^[:space:]]+|\1defaults,nofail,noatime,commit=60,x-systemd.growfs|g' "$fstab_file" || true
             _log "tweak FSTAB para /home (ext4) aplicado."
         else
             _log "nenhuma entrada /home encontrada em $fstab_file para ajustar."
@@ -214,17 +212,8 @@ _apply_fstab_tweak_if_ext4() {
     fi
 }
 
-_setup_dxvk_folder() {
-    _log "Configurando pasta DXVK Cache..."
-    if [ ! -d "$dxvk_cache_path" ]; then
-        mkdir -p "$dxvk_cache_path"
-        _log "Pasta criada: $dxvk_cache_path"
-    fi
-    # Corrige permissões para o usuário 'deck' (UID 1000)
-    chown -R 1000:1000 "$dxvk_cache_path" 2>/dev/null || chown -R deck:deck "$dxvk_cache_path" 2>/dev/null || true
-    chmod 755 "$dxvk_cache_path"
-    _log "Permissões da pasta DXVK ajustadas para usuário deck."
-}
+
+
 
 _configure_ulimits() {
     _log "aplicando limite de arquivo aberto (ulimit) alto (524288)"
@@ -795,7 +784,6 @@ aplicar_zswap() {
     create_common_scripts_and_services
     install_io_boost_uadev
     _setup_lavd_scheduler
-    _setup_dxvk_folder
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
@@ -877,7 +865,6 @@ aplicar_zram() {
     create_common_scripts_and_services
    install_io_boost_uadev
     _setup_lavd_scheduler
-    _setup_dxvk_folder
     _apply_fstab_tweak_if_ext4
 
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${base_sysctl_params[@]}"
