@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.3 02-05  - Timeless Child"
+versao="3.4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -26,7 +26,7 @@ readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
     "vm.compaction_proactiveness=15"
     "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=500"      
+    "vm.dirty_writeback_centisecs=1500"      
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
@@ -522,7 +522,7 @@ install_io_boost_uadev() {
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
 
 # 1. NVMe Interno: Tunables universais + Scheduler condicional
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 32 > /sys/block/%k/queue/read_ahead_kb; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
 # 2. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
 ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 512 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
