@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - R1 Timeless Child"
+versao="3.4 - R2 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,7 +28,7 @@ readonly base_sysctl_params=(
     "vm.dirty_expire_centisecs=2000"       
     "vm.dirty_writeback_centisecs=500"      
     "vm.watermark_boost_factor=0"
-    "vm.watermark_scale_factor=125"
+    "vm.watermark_scale_factor=50"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
       # --- Novos Parâmetros ---
@@ -369,7 +369,7 @@ _setup_lavd_scheduler() {
 
     # 3. Sincronização e Instalação do repositório oficial do SteamOS (Neptune)
     _log "Instalando scx-scheds oficial do repositório SteamOS..."
-    if ! sudo pacman -Sy --noconfirm scx-scheds; then
+    if ! sudo pacman -Sy --noconfirm --needed scx-scheds; then
         _log "Erro crítico: Não foi possível instalar o scx-scheds do repositório oficial."
         return 1
     fi
@@ -935,7 +935,7 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
 sysctl -w vm.swappiness=100 || true
-echo 32 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+echo 8 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -999,8 +999,8 @@ create_persistent_configs
     cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
 
-echo 128 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
-sysctl -w vm.swappiness=90 || true
+echo 256 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+sysctl -w vm.swappiness=110 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
