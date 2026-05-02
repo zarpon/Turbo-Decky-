@@ -3,15 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.3 01-05 R1 - Timeless Child"
+versao="3.3 02-05  - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 8GB
-readonly zswap_swapfile_size_gb="8"
+# Define o tamanho do swapfile fixo em 12GB
+readonly zswap_swapfile_size_gb="12"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -25,8 +25,8 @@ readonly turbodecky_bin="${turbodecky_dir}/bin"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
     "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=2000"       
-    "vm.dirty_writeback_centisecs=1000"      
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=500"      
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
@@ -76,11 +76,119 @@ _log() {
     echo "$(date '+%F %T') - $*" | tee -a "$logfile"
 }
 
+# --- seleção de idioma / language selection ---
+select_language() {
+    local lang_choice
+    if command -v zenity &>/dev/null; then
+        lang_choice=$(zenity --list --title="Language / Idioma" \
+            --text="Select your language / Selecione seu idioma:" \
+            --radiolist \
+            --column="Select" --column="Code" --column="Language" \
+            TRUE "pt" "Português" \
+            FALSE "en" "English" \
+            --height 250 --width 400 --hide-column=2 --print-column=2 2>/dev/null || echo "pt")
+        if [ -z "$lang_choice" ]; then lang_choice="pt"; fi
+    else
+        echo "Select your language / Selecione seu idioma:"
+        echo "1) Português"
+        echo "2) English"
+        read -rp "Option/Opção (1/2): " lang_opt
+        if [[ "$lang_opt" == "2" ]]; then lang_choice="en"; else lang_choice="pt"; fi
+    fi
+
+    if [[ "$lang_choice" == "en" ]]; then
+        STR_ERR_ROOT="This script must be run as root (sudo)."
+        STR_ERR_ROOT_CLI="❌ error: this script must be run as root (sudo)."
+        STR_ERR_PACMAN_LOCK="The package manager is in use. Try again later."
+        STR_ERR_NO_SPACE="Insufficient space"
+        STR_SUCCESS_OPT="Optimizations applied."
+        STR_WARN_REBOOT="Reboot for full effect (Kernel, GRUB and EnvVars)."
+        STR_WARN_REBOOT_SHORT="Reboot the system for full effect."
+        STR_SUCCESS_REVERT="Reversion complete. Please reboot."
+        STR_ERR_NO_PACMAN="pacman not found on the system. Cannot reinstall the kernel."
+        STR_ERR_RM_KERNEL="Failed to remove linux-charcoal"
+        STR_INFO_NO_KERNEL="Custom kernel not found installed."
+        STR_SUCCESS_RESTORE_KERNEL="Default kernel (linux-neptune) reinstalled. Reboot the system to complete."
+        STR_ERR_INSTALL_KERNEL="Failed to install linux-neptune"
+        
+        STR_KERNEL_TITLE="Custom Kernel"
+        STR_KERNEL_MSG="NEW: Custom Kernel Installation.\n\nAttention!!! Compatibility tested only on SteamOS 3.8.*\n\nBenefits:\n * 1000Hz Freq (Lower Latency)\n * NTSYNC (Better Wine/Proton sync)\n * Zen 2 Optimizations\n\n⚠️ The installer will replace the default kernel. You must accept the removal of 'linux-neptune' when asked."
+        STR_KERNEL_Q_ZENITY="Do you want to install the Custom Kernel now? (Only compatible with 3.8.*). Follow the instructions carefully and accept the default Kernel removal when prompted."
+        STR_KERNEL_Q_CLI="Do you want to install the Custom Kernel now? Compatible only with SteamOS 3.8.* (y/n): "
+        STR_KERNEL_ERR_NO_PKG="No kernel package (.pkg.tar.zst) found in the repository."
+        STR_KERNEL_ERR_DL="Failed to download"
+        STR_KERNEL_DOWNLOADING="Downloading"
+        STR_KERNEL_INSTALLING="Installing Kernel (linux-charcoal)..."
+        STR_KERNEL_ERR_FAIL_REINSTALL="Custom Kernel installation failed, reinstalling default kernel."
+
+        STR_MAIN_WELCOME="Welcome to Turbo Decky! Optimize your Steam Deck for the best gaming performance!\nAll optimizations are safe and can be reverted."
+        STR_MAIN_CHOOSE="Choose the desired option:"
+        STR_OPT_1="Apply Recommended Optimizations (ZSWAP + Tuning)"
+        STR_OPT_2="Apply Optimizations (ZRAM + Tuning - Low space)"
+        STR_OPT_2_CLI="Apply Optimizations (ZRAM + Tuning - Low space alternative)"
+        STR_OPT_3="Revert Everything"
+        STR_OPT_5="Restore Default Kernel (Remove linux-charcoal)"
+        STR_OPT_5_CLI="Reinstall default kernel (remove custom kernel)"
+        STR_OPT_6="Exit"
+        STR_OPT_INVALID="Invalid Option"
+        STR_CLI_OPT="Option: "
+        
+        STR_COL_ACTIVE="Active"
+        STR_COL_OPT="Option"
+        STR_COL_DESC="Description"
+        REGEX_YES="^[YySs]$"
+    else
+        STR_ERR_ROOT="Este script deve ser executado como root (sudo)."
+        STR_ERR_ROOT_CLI="❌ erro: este script deve ser executado como root (sudo)."
+        STR_ERR_PACMAN_LOCK="O gerenciador de pacotes está em uso. Tente novamente mais tarde."
+        STR_ERR_NO_SPACE="espaço insuficiente"
+        STR_SUCCESS_OPT="Otimizações aplicadas."
+        STR_WARN_REBOOT="Reinicie para efeito total (Kernel, GRUB e EnvVars)."
+        STR_WARN_REBOOT_SHORT="Reinicie o sistema para efeito total."
+        STR_SUCCESS_REVERT="Reversão completa. Reinicie."
+        STR_ERR_NO_PACMAN="pacman não encontrado no sistema. Não é possível reinstalar o kernel."
+        STR_ERR_RM_KERNEL="Falha ao remover linux-charcoal"
+        STR_INFO_NO_KERNEL="Kernel customizado não encontrado instalado."
+        STR_SUCCESS_RESTORE_KERNEL="Kernel padrão (linux-neptune) reinstalado. Reinicie o sistema para completar."
+        STR_ERR_INSTALL_KERNEL="Falha ao instalar linux-neptune"
+        
+        STR_KERNEL_TITLE="Kernel Customizado"
+        STR_KERNEL_MSG="NOVIDADE: Instalação de Kernel Customizado.\n\nAtenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.8.*\n\nBenefícios:\n * Freq. 1000Hz (Menor Latência)\n * NTSYNC (Melhor sincronização Wine/Proton)\n * Otimizações Zen 2\n\n⚠️ O instalador irá substituir o kernel padrão. Você deve aceitar a remoção do 'linux-neptune' quando solicitado."
+        STR_KERNEL_Q_ZENITY="Deseja instalar o Kernel Customizado agora? (Compatível apenas com 3.8.*). Siga atentamente as instruções e aceite a remoção do Kernel padrão quando for perguntado"
+        STR_KERNEL_Q_CLI="Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.8.* (s/n): "
+        STR_KERNEL_ERR_NO_PKG="Nenhum pacote de kernel (.pkg.tar.zst) encontrado no repositório."
+        STR_KERNEL_ERR_DL="Falha ao baixar"
+        STR_KERNEL_DOWNLOADING="Baixando"
+        STR_KERNEL_INSTALLING="Instalando Kernel (linux-charcoal)..."
+        STR_KERNEL_ERR_FAIL_REINSTALL="Falha na instalação do Kernel customizado, reinstalando kernel padrão."
+
+        STR_MAIN_WELCOME="Bem vindo ao Turbo Decky! Otimize seu Steam Deck para obter o melhor desempenho em jogos!\nTodas as otimizações são seguras e podem ser revertidas."
+        STR_MAIN_CHOOSE="Escolha a opção desejada:"
+        STR_OPT_1="Aplicar Otimizações Recomendadas (ZSWAP + Tuning)"
+        STR_OPT_2="Aplicar Otimizações (ZRAM + Tuning - Pouco espaço)"
+        STR_OPT_2_CLI="Aplicar Otimizações (ZRAM + Tuning - Alternativa para pouco espaço)"
+        STR_OPT_3="Reverter Tudo"
+        STR_OPT_5="Restaurar Kernel Padrão (Remover linux-charcoal)"
+        STR_OPT_5_CLI="Reinstalar kernel padrão (remover kernel customizado)"
+        STR_OPT_6="Sair"
+        STR_OPT_INVALID="Opção Inválida"
+        STR_CLI_OPT="Opção: "
+        
+        STR_COL_ACTIVE="Ativo"
+        STR_COL_OPT="Opção"
+        STR_COL_DESC="Descrição"
+        REGEX_YES="^[SsYy]$"
+    fi
+}
+
+# Inicializa idioma
+select_language
+
 if [[ $EUID -ne 0 ]]; then
     if command -v zenity &>/dev/null; then
-        zenity --error --text="Este script deve ser executado como root (sudo)." --width=300
+        zenity --error --text="$STR_ERR_ROOT" --width=300
     fi
-    echo "❌ erro: este script deve ser executado como root (sudo)." >&2; exit 1;
+    echo "$STR_ERR_ROOT_CLI" >&2; exit 1;
 fi
 
 steamos_readonly_cmd=""
@@ -243,7 +351,7 @@ _setup_lavd_scheduler() {
             _log "Removendo pacman lock órfão..."
             sudo rm -f /var/lib/pacman/db.lck
         else
-            _ui_info "erro" "O gerenciador de pacotes está em uso. Tente novamente mais tarde."
+            _ui_info "erro" "$STR_ERR_PACMAN_LOCK"
             return 1
         fi
     fi
@@ -414,10 +522,10 @@ install_io_boost_uadev() {
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
 
 # 1. NVMe Interno: Tunables universais + Scheduler condicional
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 256 > /sys/block/%k/queue/nr_requests; echo 256 > /sys/block/%k/queue/read_ahead_kb; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
 # 2. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 64 > /sys/block/%k/queue/nr_requests; echo 1024 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 512 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
 
 # 3. Otimizações Gerais de Overhead (Sempre aplicadas após o delay de 1s)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 0 > /sys/block/%k/queue/iostats; echo 0 > /sys/block/%k/queue/add_random;'"
@@ -542,13 +650,12 @@ _log "zram-recompress timer/service removidos na reversão"
 }
 
 _instalar_kernel_customizado() {
-    local install_msg="NOVIDADE: Instalação de Kernel Customizado.\n\nAtenção!!! A compatibilidade desse kernel foi testada apenas no SteamOS 3.8.*\n\nBenefícios:\n * Freq. 1000Hz (Menor Latência)\n * NTSYNC (Melhor sincronização Wine/Proton)\n * Otimizações Zen 2\n\n⚠️ O instalador irá substituir o kernel padrão. Você deve aceitar a remoção do 'linux-neptune' quando solicitado."
-
+    local install_msg="$STR_KERNEL_MSG"
     local resp_kernel="n"
 
     # --- INTEGRAÇÃO ZENITY ---
     if command -v zenity &>/dev/null; then
-        if zenity --question --title="Kernel Customizado" --text="$install_msg\n\nDeseja instalar o Kernel Customizado agora? (Compatível apenas com 3.8.*). Siga atentamente as instruções e aceite a remoção do Kernel padrão quando for perguntado" --width=500; then
+        if zenity --question --title="$STR_KERNEL_TITLE" --text="$install_msg\n\n$STR_KERNEL_Q_ZENITY" --width=500; then
             resp_kernel="s"
         else
             resp_kernel="n"
@@ -557,11 +664,11 @@ _instalar_kernel_customizado() {
         echo -e "\n------------------------------------------------------------"
         echo -e "$install_msg"
         echo "------------------------------------------------------------"
-        read -rp "Deseja instalar o Kernel Customizado agora? Compativel apenas com SteamOs 3.8.* (s/n): " input_val
+        read -rp "$STR_KERNEL_Q_CLI" input_val
         resp_kernel="$input_val"
     fi
 
-    if [[ "$resp_kernel" =~ ^[Ss]$ ]]; then
+    if [[ "$resp_kernel" =~ $REGEX_YES ]]; then
         local REPO="V10lator/linux-charcoal"
         local DEST_DIR="./kernel"
 
@@ -578,7 +685,7 @@ _instalar_kernel_customizado() {
             | grep "\.pkg\.tar\.zst$")
 
         if [ -z "$DOWNLOAD_URLS" ]; then
-            _ui_info "erro" "Nenhum pacote de kernel (.pkg.tar.zst) encontrado no repositório."
+            _ui_info "erro" "$STR_KERNEL_ERR_NO_PKG"
             return 1
         fi
 
@@ -586,9 +693,9 @@ _instalar_kernel_customizado() {
             local filename
             filename=$(basename "$url")
             _log "Baixando: $filename"
-            echo "Baixando $filename..."
+            echo "$STR_KERNEL_DOWNLOADING $filename..."
             if ! wget -q --show-progress -P "$DEST_DIR" "$url"; then
-                _ui_info "erro" "Falha ao baixar $filename. Verifique sua internet."
+                _ui_info "erro" "$STR_KERNEL_ERR_DL $filename."
                 return 1
             fi
         done
@@ -597,7 +704,7 @@ _instalar_kernel_customizado() {
         _log "Iniciando instalação do kernel customizado..."
         _steamos_readonly_disable_if_needed
         steamos-devmode enable --no-prompt
-        echo "Instalando Kernel (linux-charcoal)..." 
+        echo "$STR_KERNEL_INSTALLING" 
              
         if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
              
@@ -605,12 +712,12 @@ _instalar_kernel_customizado() {
              update-grub &>/dev/null || true
              mkinitcpio -P &>/dev/null || true
         else
-             _ui_info "erro" "Falha na instalação do Kernel customizado, reinstalando kernel padrão."
+             _ui_info "erro" "$STR_KERNEL_ERR_FAIL_REINSTALL"
         if pacman -S --noconfirm --needed linux-neptune; then
         _log "linux-neptune instalado com sucesso."
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
         mkinitcpio -P &>/dev/null || true
-        _ui_info "sucesso" "Kernel padrão (linux-neptune) reinstalado. Reinicie o sistema para completar."
+        _ui_info "sucesso" "$STR_SUCCESS_RESTORE_KERNEL"
              
         fi
     fi
@@ -791,7 +898,7 @@ aplicar_zswap() {
     _apply_fstab_tweak_if_ext4
 
     local free_space_gb; free_space_gb=$(df -BG /home | awk 'NR==2 {print $4}' | tr -d 'G' || echo 0)
-    if (( free_space_gb < zswap_swapfile_size_gb )); then _ui_info "erro" "espaço insuficiente"; exit 1; fi
+    if (( free_space_gb < zswap_swapfile_size_gb )); then _ui_info "erro" "$STR_ERR_NO_SPACE"; exit 1; fi
 
     _create_swapfile "$swapfile_path" "$zswap_swapfile_size_gb"
 
@@ -803,7 +910,7 @@ aplicar_zswap() {
 
     _backup_file_once "$grub_config"
     
-    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=30" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
+    local kernel_params=("zswap.enabled=1" "zswap.compressor=lz4" "zswap.max_pool_percent=40" "zswap.zpool=zsmalloc" "zswap.shrinker_enabled=1" "mitigations=off" "audit=0" "nmi_watchdog=0" "nowatchdog" "split_lock_detect=off")
 
     local current_cmdline; current_cmdline=$(grep -E '^GRUB_CMDLINE_LINUX=' "$grub_config" | sed -E 's/^GRUB_CMDLINE_LINUX="([^"]*)"(.*)/\1/' || true)
     local new_cmdline="$current_cmdline"
@@ -823,7 +930,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 echo 1 > /sys/module/zswap/parameters/enabled 2>/dev/null || true
 echo lz4 > /sys/module/zswap/parameters/compressor 2>/dev/null || true
-echo 30 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
+echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
@@ -850,9 +957,9 @@ UNIT
     systemctl enable --now fstrim.timer
     _instalar_kernel_customizado
 
-    _ui_info "sucesso" "Otimizações aplicadas."
+    _ui_info "sucesso" "$STR_SUCCESS_OPT"
     
-    _ui_info "aviso" "Reinicie para efeito total (Kernel, GRUB e EnvVars)."
+    _ui_info "aviso" "$STR_WARN_REBOOT"
 }
 
 aplicar_zram() {
@@ -914,7 +1021,7 @@ UNIT
     systemctl daemon-reload || true
     systemctl enable --now "${otimization_services[@]}" zram-config.service || true
    
-    _ui_info "sucesso" "otimizações aplicadas."
+    _ui_info "sucesso" "$STR_SUCCESS_OPT"
 
     
    
@@ -924,12 +1031,12 @@ UNIT
    _setup_zram_recompress 
     systemctl enable --now fstrim.timer
    _instalar_kernel_customizado
-    _ui_info "aviso" "Reinicie o sistema para efeito total."
+    _ui_info "aviso" "$STR_WARN_REBOOT_SHORT"
 }
 
 reverter_alteracoes() {
     _executar_reversao
-    _ui_info "sucesso" "Reversão completa. Reinicie."
+    _ui_info "sucesso" "$STR_SUCCESS_REVERT"
 }
 
 _restore_kernel_to_neptune() {
@@ -937,7 +1044,7 @@ _restore_kernel_to_neptune() {
     _log "Iniciando restauração do kernel padrão (linux-neptune)"
 
     if ! command -v pacman &>/dev/null; then
-        _ui_info "erro" "pacman não encontrado no sistema. Não é possível reinstalar o kernel."
+        _ui_info "erro" "$STR_ERR_NO_PACMAN"
         return 1
     fi
 
@@ -947,12 +1054,12 @@ _restore_kernel_to_neptune() {
         if pacman -Rs --noconfirm linux-charcoal-*; then
             _log "linux-charcoal removido com sucesso."
         else
-            _ui_info "erro" "Falha ao remover linux-charcoal"
+            _ui_info "erro" "$STR_ERR_RM_KERNEL"
             return 1
         fi
     else
         _log "linux-charcoal não está instalado. Pulando remoção."
-        _ui_info "info" "Kernel customizado não encontrado instalado."
+        _ui_info "info" "$STR_INFO_NO_KERNEL"
     fi
 
     _log "Instalando linux-neptune..."
@@ -960,41 +1067,40 @@ _restore_kernel_to_neptune() {
         _log "linux-neptune instalado com sucesso."
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
         mkinitcpio -P &>/dev/null || true
-        _ui_info "sucesso" "Kernel padrão (linux-neptune) reinstalado. Reinicie o sistema para completar."
+        _ui_info "sucesso" "$STR_SUCCESS_RESTORE_KERNEL"
         return 0
     else
-        _ui_info "erro" "Falha ao instalar linux-neptune"
+        _ui_info "erro" "$STR_ERR_INSTALL_KERNEL"
         return 1
     fi
 }
 
 main() {
     echo -e "\n=== Turbo Decky $versao ==="
-    echo "Bem vindo ao Turbo Decky! Otimize seu Steam Deck para obter o melhor desempenho em jogos!"
-    echo "Todas as otimizações são seguras e podem ser revertidas."
+    echo -e "$STR_MAIN_WELCOME"
 
     if command -v zenity &>/dev/null; then
         local z_escolha
         z_escolha=$(zenity --list --title="Turbo Decky - $versao" \
-            --text="Escolha a opção desejada:" \
+            --text="$STR_MAIN_CHOOSE" \
             --radiolist \
-            --column="Ativo" --column="Opção" --column="Descrição" \
-            TRUE "1" "Aplicar Otimizações Recomendadas (ZSWAP + Tuning)" \
-            FALSE "2" "Aplicar Otimizações (ZRAM + Tuning - Pouco espaço)" \
-            FALSE "3" "Reverter Tudo" \
-            FALSE "5" "Restaurar Kernel Padrão (Remover linux-charcoal)" \
-            FALSE "6" "Sair" \
+            --column="$STR_COL_ACTIVE" --column="$STR_COL_OPT" --column="$STR_COL_DESC" \
+            TRUE "1" "$STR_OPT_1" \
+            FALSE "2" "$STR_OPT_2" \
+            FALSE "3" "$STR_OPT_3" \
+            FALSE "5" "$STR_OPT_5" \
+            FALSE "6" "$STR_OPT_6" \
             --height 350 --width 500 --hide-column=2 --print-column=2 || echo "6")
 
         if [ -z "$z_escolha" ]; then z_escolha="6"; fi
         escolha="$z_escolha"
     else
-        echo "1) Aplicar Otimizações Recomendadas (ZSWAP + Tuning)"
-        echo "2) Aplicar Otimizações (ZRAM + Tuning - Alternativa para pouco espaço)"
-        echo "3) Reverter Tudo"
-        echo "5) Reinstalar kernel padrão (remover kernel customizado)"
-        echo "6) Sair"
-        read -rp "Opção: " escolha
+        echo "1) $STR_OPT_1"
+        echo "2) $STR_OPT_2_CLI"
+        echo "3) $STR_OPT_3"
+        echo "5) $STR_OPT_5_CLI"
+        echo "6) $STR_OPT_6"
+        read -rp "$STR_CLI_OPT" escolha
     fi
 
     case "$escolha" in
@@ -1004,7 +1110,7 @@ main() {
         5) _restore_kernel_to_neptune ;;
         6) exit 0 ;;
         *)
-           _ui_info "erro" "Opção Inválida"
+           _ui_info "erro" "$STR_OPT_INVALID"
            if command -v zenity &>/dev/null; then exit 1; else main "$@"; fi
            ;;
     esac
