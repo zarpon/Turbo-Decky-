@@ -3,15 +3,15 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - Timeless Child"
+versao="3.4 - R1 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
 # --- constantes e variáveis ---
 readonly swapfile_path="/home/swapfile"
 readonly grub_config="/etc/default/grub"
-# Define o tamanho do swapfile fixo em 12GB
-readonly zswap_swapfile_size_gb="12"
+# Define o tamanho do swapfile fixo em 8GB
+readonly zswap_swapfile_size_gb="8"
 readonly backup_suffix="bak-turbodecky"
 readonly logfile="/var/log/turbodecky.log"
 
@@ -25,8 +25,8 @@ readonly turbodecky_bin="${turbodecky_dir}/bin"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
     "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=1500"      
+    "vm.dirty_expire_centisecs=2000"       
+    "vm.dirty_writeback_centisecs=500"      
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
@@ -34,7 +34,7 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=409430400"
-    "vm.vfs_cache_pressure=66"
+    "vm.vfs_cache_pressure=75"
 )
 
 # --- listas de serviços para ativar/monitorar ---
@@ -442,7 +442,7 @@ ConditionPathExists=/sys/kernel/mm/lru_gen/enabled
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 200 > /sys/kernel/mm/lru_gen/min_ttl_ms'
+ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 100 > /sys/kernel/mm/lru_gen/min_ttl_ms'
 RemainAfterExit=yes
 
 [Install]
@@ -522,10 +522,10 @@ install_io_boost_uadev() {
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
 
 # 1. NVMe Interno: Tunables universais + Scheduler condicional
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 32 > /sys/block/%k/queue/read_ahead_kb; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 256 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
 # 2. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 512 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; echo 2 > /sys/block/%k/queue/rq_affinity; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 512 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
 
 # 3. Otimizações Gerais de Overhead (Sempre aplicadas após o delay de 1s)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 0 > /sys/block/%k/queue/iostats; echo 0 > /sys/block/%k/queue/add_random;'"
@@ -935,7 +935,7 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
 sysctl -w vm.swappiness=100 || true
-echo 16 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+echo 32 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
