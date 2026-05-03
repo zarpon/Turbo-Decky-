@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - 03-05 R1 Timeless Child"
+versao="3.4 - 03-05 R2 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -553,10 +553,10 @@ _executar_reversao() {
     if command -v udevadm &>/dev/null; then udevadm control --reload-rules; fi
 
     # --- 2. GERENCIAMENTO DE SERVIÇOS (STOP/DISABLE/REMOVE) ---
-    systemctl stop "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
-    systemctl disable "${otimization_services[@]}" zswap-config.service zram-config.service 2>/dev/null || true
+    systemctl stop zswap-config.service zram-config.service 2>/dev/null || true
+    systemctl disable zswap-config.service zram-config.service 2>/dev/null || true
 
-    for svc in "${otimization_services[@]}" zswap-config.service zram-config.service; do
+    for svc in zswap-config.service zram-config.service; do
         rm -f "/etc/systemd/system/$svc"
     done
 
@@ -564,10 +564,7 @@ _executar_reversao() {
     rm -f "${turbodecky_bin}/zswap-config.sh" "${turbodecky_bin}/zram-config.sh"
     rm -f /usr/local/bin/zswap-config.sh /usr/local/bin/zram-config.sh
 
-    for script_svc in "${otimization_services[@]}"; do
-        rm -f "${turbodecky_bin}/${script_svc%%.service}.sh"
-        rm -f "/usr/local/bin/${script_svc%%.service}.sh"
-    done
+    
 
     # Remover io-boost scripts e regras
     rm -f "${turbodecky_bin}/io-boost.sh" /usr/local/bin/io-boost.sh
