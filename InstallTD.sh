@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - 03-05 R2 Timeless Child"
+versao="3.4 - 03-05 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -448,7 +448,7 @@ w! /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 16
 w! /sys/kernel/mm/ksm/run - - - - 0
-w! /sys/kernel/mm/lru_gen/enabled - - - - y
+w! /sys/kernel/mm/lru_gen/enabled - - - - 7
 w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
 EOF
 
@@ -988,7 +988,7 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
-    systemctl enable --now "${otimization_services[@]}" zram-config.service || true
+    systemctl enable --now zram-config.service || true
    
     _ui_info "sucesso" "$STR_SUCCESS_OPT"
 
