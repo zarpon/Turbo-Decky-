@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - R2 Timeless Child"
+versao="3.4 - 03-05 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -37,10 +37,7 @@ readonly base_sysctl_params=(
     "vm.vfs_cache_pressure=75"
 )
 
-# --- listas de serviços para ativar/monitorar ---
-readonly otimization_services=(
-    "thp-config.service"
-)
+
 
 readonly unnecessary_services=(
     "gpu-trace.service"
@@ -431,27 +428,33 @@ create_persistent_configs() {
     _log "criando arquivos de configuração persistentes"
     mkdir -p /etc/tmpfiles.d /etc/modprobe.d /etc/modules-load.d
 
-    # 1. Define E EXECUTA a criação do serviço MGLRU
-    _setup_mglru_service() {
-        _log "Configurando MGLRU Tune Service (Latência Otimizada)"
-        cat <<EOF > /etc/systemd/system/mglru-tune.service
-[Unit]
-Description=TurboDecky MGLRU tuning
-After=local-fs.target
-ConditionPathExists=/sys/kernel/mm/lru_gen/enabled
+   # --- 7. OTIMIZAÇÃO DE MEMÓRIA (TdMemoryTweak) ---
 
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/bash -c 'echo y > /sys/kernel/mm/lru_gen/enabled; echo 100 > /sys/kernel/mm/lru_gen/min_ttl_ms'
-RemainAfterExit=yes
+# Remoção de legado
+for s in thp-config mglru-tune; do
+    systemctl disable --now "$s.service" &>/dev/null || true
+    rm -f "/etc/systemd/system/$s.service"
+done
+rm -f "${turbodecky_bin}/thp-config.sh"
+systemctl daemon-reload
 
-[Install]
-WantedBy=multi-user.target
+# Configuração via tmpfiles.d
+
+cat <<'EOF' > /etc/tmpfiles.d/TdMemoryTweak.conf
+w! /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise
+w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise
+w! /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise
+w! /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0
+w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
+w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 16
+w! /sys/kernel/mm/ksm/run - - - - 0
+w! /sys/kernel/mm/lru_gen/enabled - - - - y
+w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
 EOF
-    }
 
-    # CHAMADA OBRIGATÓRIA DA FUNÇÃO INTERNA
-    _setup_mglru_service
+# Aplicação imediata
+systemd-tmpfiles --create /etc/tmpfiles.d/TdMemoryTweak.conf || true
+
 
     # 2. Configuração do ntsync
     echo "ntsync" > /etc/modules-load.d/ntsync.conf
@@ -460,9 +463,8 @@ EOF
     # 3. Gerenciamento de serviços desnecessários
     manage_unnecessary_services "disable"
 
-    # 4. Aplicação no Systemd
-    systemctl daemon-reload || true
-    systemctl enable --now mglru-tune.service
+    
+    
     
     _log "configurações mglru, ntsync e serviços desnecessários aplicados."
 }
@@ -481,37 +483,7 @@ create_common_scripts_and_services() {
         _log "variáveis de ambiente configuradas em /etc/environment.d/turbodecky-game.conf"
     fi
     
-    # --- 3. SCRIPT THP (Valores base + alloc_sleep fix) ---
-    cat <<'THP' > "${turbodecky_bin}/thp-config.sh"
-#!/usr/bin/env bash
-echo "madvise" > /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || true
-echo "defer+madvise" > /sys/kernel/mm/transparent_hugepage/defrag 2>/dev/null || true
-echo "advise" > /sys/kernel/mm/transparent_hugepage/shmem_enabled 2>/dev/null || true
-echo 0 > /sys/kernel/mm/transparent_hugepage/khugepaged/defrag 2>/dev/null || true
-echo 409 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none 2>/dev/null || true
-echo 0 > /sys/kernel/mm/ksm/run 2>/dev/null || true
-THP
-    chmod +x "${turbodecky_bin}/thp-config.sh"
-
-       
-    # --- 7. CRIAÇÃO DOS SERVICES SYSTEMD ---
-    for service_name in thp-config; do
-        cat <<UNIT > /etc/systemd/system/${service_name}.service
-[Unit]
-Description=TurboDecky ${service_name} persistence
-After=local-fs.target
-[Service]
-Type=oneshot
-ExecStart=${turbodecky_bin}/${service_name}.sh
-RemainAfterExit=true
-[Install]
-WantedBy=multi-user.target
-UNIT
-    done
-
-   systemctl daemon-reload || true
-systemctl enable --now thp-config.service || true 
-
+    
 }
 
 install_io_boost_uadev() {
@@ -553,6 +525,7 @@ _executar_reversao() {
     rm -f /etc/systemd/system/mglru-tune.service
     rm -f /etc/systemd/system/zram-preconfig.service
     rm -f /usr/local/bin/zram-preconfig.sh
+    rm - f /etc/tmpfiles.d/TdMemoryTweak.conf || true
 
     
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
@@ -935,7 +908,6 @@ echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
 sysctl -w vm.swappiness=100 || true
-echo 8 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -951,7 +923,7 @@ RemainAfterExit=true
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload || true
-    systemctl enable --now "${otimization_services[@]}" zswap-config.service || true
+    systemctl enable --now zswap-config.service || true
    
 
     systemctl enable --now fstrim.timer
@@ -999,7 +971,7 @@ create_persistent_configs
     cat <<'ZRAM_SCRIPT' > "${turbodecky_bin}/zram-config.sh"
 #!/usr/bin/env bash
 
-echo 256 > /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap 2>/dev/null || true
+
 sysctl -w vm.swappiness=110 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
