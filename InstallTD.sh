@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - 03-05 Timeless Child"
+versao="3.4 - 03-05 R1 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -525,7 +525,7 @@ _executar_reversao() {
     rm -f /etc/systemd/system/mglru-tune.service
     rm -f /etc/systemd/system/zram-preconfig.service
     rm -f /usr/local/bin/zram-preconfig.sh
-    rm - f /etc/tmpfiles.d/TdMemoryTweak.conf || true
+    rm -f /etc/tmpfiles.d/TdMemoryTweak.conf || true
 
     
     # --- 1. LIMPEZA DE ARQUIVOS DE CONFIGURAÇÃO CRIADOS ---
