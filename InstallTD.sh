@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - 03-05 Timeless Child"
+versao="3.4 - 03-05 R1 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -446,7 +446,7 @@ w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise
 w! /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
-w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 16
+w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 32
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
 w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
