@@ -25,8 +25,8 @@ readonly turbodecky_bin="${turbodecky_dir}/bin"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
     "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=2000"       
-    "vm.dirty_writeback_centisecs=500"      
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=1500"      
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=50"
     # --- Scheduler (scx_lavd friendly) ---
@@ -449,7 +449,7 @@ w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 32
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
-w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 100
+w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
 EOF
 
 # Aplicação imediata
