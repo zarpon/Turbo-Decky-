@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - 05-05 R3 Timeless Child"
+versao="3.5 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,7 +28,7 @@ readonly base_sysctl_params=(
     "vm.dirty_expire_centisecs=2000"       
     "vm.dirty_writeback_centisecs=800"      
     "vm.watermark_boost_factor=0"
-    "vm.watermark_scale_factor=100"
+    "vm.watermark_scale_factor=75"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
       # --- Novos Parâmetros ---
@@ -707,7 +707,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lz4 zstd(level=4)
+compression-algorithm = lz4
 swap-priority = 3000
 options = discard
 fs-type = swap
