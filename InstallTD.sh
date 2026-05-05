@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.4 - 05-05 R1 Timeless Child"
+versao="3.4 - 05-05 R2 Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -707,7 +707,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lz4 zstd(level=3)
+compression-algorithm = lz4 zstd(level=4)
 swap-priority = 3000
 options = discard
 fs-type = swap
@@ -715,9 +715,7 @@ EOF
        
 }
 
-setup_zram_boot_override() {
-    set -euo pipefail
-
+_setup_zram_preconfig() {
     local script="/usr/local/bin/zram-preconfig.sh"
     local service="/etc/systemd/system/zram-preconfig.service"
 
@@ -725,56 +723,56 @@ setup_zram_boot_override() {
 
     _steamos_readonly_disable_if_needed
 
-    # Script de preconfiguração (executa antes do generator)
     cat > "$script" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Garante que o módulo está carregado
+modprobe zram
+
 ZRAM="/sys/block/zram0"
 
-# Aguarda device aparecer (generator cria dinamicamente)
+# Aguarda device aparecer
 for i in {1..50}; do
     [[ -e "$ZRAM" ]] && break
     sleep 0.1
 done
 
-# Se não existir, sai silenciosamente
-[[ -e "$ZRAM" ]] || exit 0
+[[ -e "$ZRAM" ]] || exit 1
 
-# Garante estado limpo
-if [[ -e "$ZRAM/reset" ]]; then
-    echo 1 > "$ZRAM/reset"
-fi
+# Reset é necessário para mudar algoritmos se o disco já tiver tamanho
+echo 1 > "$ZRAM/reset"
 
-# Define algoritmos antes de uso
+# Configurações de algoritmos
 echo "lz4" > "$ZRAM/comp_algorithm"
-echo "zstd" > "$ZRAM/recomp_algorithm"
+# Recompressão (Requer kernel 6.2+)
+if [[ -e "$ZRAM/recomp_algorithm" ]]; then
+    echo "algo=zstd level=4" > "$ZRAM/recomp_algorithm"
+fi
 EOF
 
     chmod +x "$script"
 
-    # Unit systemd
     cat > "$service" <<EOF
 [Unit]
-Description=ZRAM Pre-Configuration (recompression setup)
+Description=ZRAM Pre-Configuration
 DefaultDependencies=no
-Before=systemd-zram-setup@zram0.service
 After=systemd-udev-settle.service
+Before=systemd-zram-setup@zram0.service swap.target
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 ExecStart=$script
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    # Reload + enable
-    systemctl daemon-reexec
     systemctl daemon-reload
     systemctl enable zram-preconfig.service
-
 }
+
 
 _setup_zram_recompress() {
     _log "Configurando recompressão em segundo plano do zram..."
@@ -996,7 +994,7 @@ UNIT
    
     # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
     optimize_zram
-    setup_zram_boot_override
+    _setup_zram_preconfig
    _setup_zram_recompress 
     systemctl enable --now fstrim.timer
    _instalar_kernel_customizado
