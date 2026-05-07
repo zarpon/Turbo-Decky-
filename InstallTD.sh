@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.5 - 07-05  - Timeless Child"
+versao="3.5 - 07-05 R1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -34,7 +34,7 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=409430400"
-    "vm.vfs_cache_pressure=75"
+    "vm.vfs_cache_pressure=85"
 )
 
 
@@ -836,8 +836,8 @@ EOF
 Description=TurboDecky ZRAM recompression timer
 
 [Timer]
-OnBootSec=10min
-OnUnitActiveSec=10min
+OnBootSec=2min
+OnUnitActiveSec=30min
 AccuracySec=1min
 Unit=zram-recompress.service
 
