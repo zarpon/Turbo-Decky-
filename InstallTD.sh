@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.5 - 07-05 R2 - Timeless Child"
+versao="3.5 - 07-05 R3 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -858,7 +858,6 @@ aplicar_zswap() {
     _configure_ulimits
     create_common_scripts_and_services
     install_io_boost_uadev
-    _setup_lavd_scheduler
     systemctl stop systemd-zram-setup@zram0.service 2>/dev/null || true
     systemctl mask systemd-zram-setup@zram0.service 2>/dev/null || true
     _log "Serviço systemd-zram-setup@zram0.service mascarado."
@@ -932,13 +931,11 @@ UNIT
 aplicar_zram() {
     _log "Aplicando otimizações (ZRAM)"
 
-    _steamos_readonly_disable_if_needed
-
+ _steamos_readonly_disable_if_needed
     _executar_reversao
     _configure_ulimits
     create_common_scripts_and_services
    install_io_boost_uadev
-    _setup_lavd_scheduler
     _apply_fstab_tweak_if_ext4
 
     _write_sysctl_file /etc/sysctl.d/99-sdweak-performance.conf "${base_sysctl_params[@]}"
