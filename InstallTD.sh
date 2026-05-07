@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.5 - Timeless Child"
+versao="3.5 - 07-05  - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -707,7 +707,7 @@ optimize_zram() {
     cat > "$gen_conf" <<EOF
 [zram0]
 zram-size = ram * 1.5
-compression-algorithm = lz4
+compression-algorithm = lz4 zstd
 swap-priority = 3000
 options = discard
 fs-type = swap
@@ -747,7 +747,7 @@ echo 1 > "$ZRAM/reset"
 echo "lz4" > "$ZRAM/comp_algorithm"
 # Recompressão (Requer kernel 6.2+)
 if [[ -e "$ZRAM/recomp_algorithm" ]]; then
-    echo "algo=zstd level=4" > "$ZRAM/recomp_algorithm"
+    echo "algo=zstd priority=1" > "$ZRAM/recomp_algorithm"
 fi
 EOF
 
