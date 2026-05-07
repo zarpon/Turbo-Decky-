@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.5 - 07-05 R1 - Timeless Child"
+versao="3.5 - 07-05 R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -25,16 +25,16 @@ readonly turbodecky_bin="${turbodecky_dir}/bin"
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
     "vm.compaction_proactiveness=15"
-    "vm.dirty_expire_centisecs=2000"       
-    "vm.dirty_writeback_centisecs=800"      
+    "vm.dirty_expire_centisecs=1500"       
+    "vm.dirty_writeback_centisecs=1500"      
     "vm.watermark_boost_factor=0"
-    "vm.watermark_scale_factor=75"
+    "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=409430400"
-    "vm.vfs_cache_pressure=85"
+    "vm.vfs_cache_pressure=66"
 )
 
 
