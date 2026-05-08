@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.5 - 07-05 R3 - Timeless Child"
+versao="3.5 - 07-05 R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,7 +24,7 @@ readonly turbodecky_bin="${turbodecky_dir}/bin"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
-    "vm.compaction_proactiveness=15"
+    "vm.compaction_proactiveness=10"
     "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=1500"      
     "vm.watermark_boost_factor=0"
@@ -446,10 +446,10 @@ w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise
 w! /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
-w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 32
+w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 128
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
-w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
+w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 250
 EOF
 
 # Aplicação imediata
@@ -901,7 +901,7 @@ echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=100 || true
+sysctl -w vm.swappiness=70 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -964,7 +964,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=110 || true
+sysctl -w vm.swappiness=85 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
