@@ -49,7 +49,6 @@ readonly unnecessary_services=(
 # --- variáveis de ambiente (Configuração de Jogos) ---
 # Nota: DXVK_STATE_CACHE_PATH usa a variável definida acima
 readonly game_env_vars=(
-    "RADV_PERFTEST=aco"
     "MESA_SHADER_CACHE_MAX_SIZE=10G"
      "MESA_DISK_CACHE_DATABASE=1"    
 )  
