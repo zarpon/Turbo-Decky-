@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - - Timeless Child"
+versao="3.6 - R1 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -24,9 +24,9 @@ readonly turbodecky_bin="${turbodecky_dir}/bin"
 # --- parâmetros sysctl base (ATUALIZADO PARA LATÊNCIA E SCHEDULER) ---
 readonly base_sysctl_params=(
     "vm.min_free_kbytes=65536" 
-    "vm.compaction_proactiveness=10"
+    "vm.compaction_proactiveness=15"
     "vm.dirty_expire_centisecs=1500"       
-    "vm.dirty_writeback_centisecs=1500"      
+    "vm.dirty_writeback_centisecs=1000"      
     "vm.watermark_boost_factor=0"
     "vm.watermark_scale_factor=125"
     # --- Scheduler (scx_lavd friendly) ---
@@ -449,7 +449,7 @@ w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 8
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
-w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 350
+w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
 EOF
 
 # Aplicação imediata
@@ -494,10 +494,10 @@ install_io_boost_uadev() {
     cat << 'EOF' > /etc/udev/rules.d/99-turbodecky-io.rules
 
 # 1. NVMe Interno: Tunables universais + Scheduler condicional
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 256 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
+ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 512 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo none > /sys/block/%k/queue/scheduler; fi'"
 
 # 2. MicroSD/SD Cards: Tunables universais + Scheduler e parâmetros iosched condicionais
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 512 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
+ACTION=="add|change", KERNEL=="mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 1024 > /sys/block/%k/queue/read_ahead_kb; echo 0 > /sys/block/%k/queue/rotational; if ! grep -q \"\\[adios\\]\" /sys/block/%k/queue/scheduler 2>/dev/null; then echo mq-deadline > /sys/block/%k/queue/scheduler; echo 200 > /sys/block/%k/queue/iosched/read_expire; echo 8000 > /sys/block/%k/queue/iosched/write_expire; echo 2 > /sys/block/%k/queue/iosched/writes_starved; echo 4 > /sys/block/%k/queue/iosched/fifo_batch; fi'"
 
 # 3. Otimizações Gerais de Overhead (Sempre aplicadas após o delay de 1s)
 ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", RUN+="/usr/bin/systemd-run --no-block /usr/bin/bash -c 'sleep 1; echo 0 > /sys/block/%k/queue/iostats; echo 0 > /sys/block/%k/queue/add_random;'"
@@ -902,7 +902,7 @@ echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=75 || true
+sysctl -w vm.swappiness=80 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
