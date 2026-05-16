@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.5 - 16-05 - Timeless Child"
+versao="3.6 - - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -34,7 +34,7 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=409430400"
-    "vm.vfs_cache_pressure=66"
+    "vm.vfs_cache_pressure=85"
 )
 
 
@@ -446,7 +446,7 @@ w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise
 w! /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
-w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 32
+w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 8
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
 w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 350
@@ -639,7 +639,7 @@ _instalar_kernel_customizado() {
     fi
 
     if [[ "$resp_kernel" =~ $REGEX_YES ]]; then
-        local REPO="V10lator/linux-charcoal"
+        local REPO="zarpon/linux-charcoal-TD"
         local DEST_DIR="./kernel"
 
         _log "Preparando diretório de download do Kernel..."
@@ -694,6 +694,7 @@ _instalar_kernel_customizado() {
   rm -rf "$DEST_DIR"
     fi
 }
+
 
 optimize_zram() {
     local gen_dir="/etc/systemd/zram-generator.conf.d"
@@ -901,7 +902,7 @@ echo 40 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=45 || true
+sysctl -w vm.swappiness=75 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -964,7 +965,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=40 || true
+sysctl -w vm.swappiness=70 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
