@@ -1,3 +1,6 @@
+[Apoie o desenvolvedor] 
+(https://ko-fi.com/zarpon) 
+
 # Turbo-Decky-
 Script de otimização do SteamOs 
 
@@ -67,6 +70,7 @@ Sinceros Agradecimentos á V10lator pelo desenvolvimento de seu Kernel Customiza
 
 Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
 
-# Video com benchmark comparativo no canal do YouTube, se inscreva! 
+Ou
 
-https://youtu.be/lf2oYmHiYD8?si=Uo1esBPQuwG6jMG9
+[Apoie o desenvolvedor] 
+(https://ko-fi.com/zarpon) 
