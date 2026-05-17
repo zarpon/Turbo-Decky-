@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - R6 - Timeless Child"
+versao="3.6 - 17-05 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -35,6 +35,7 @@ readonly base_sysctl_params=(
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=409430400"
     "vm.vfs_cache_pressure=85"
+    "vm.kcompressd=256"
 )
 
 
