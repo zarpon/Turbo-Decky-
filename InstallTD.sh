@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - R4 - Timeless Child"
+versao="3.6 - R5 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -626,12 +626,12 @@ _instalar_kernel_customizado() {
     local REPO="zarpon/linux-charcoal-TD"
     local DEST_DIR="./kernel"
 
-    # --- INTEGRAÇÃO ZENITY ---
     if command -v zenity &>/dev/null; then
-        if zenity --question --title="$STR_KERNEL_TITLE" --text="$install_msg\n\n$STR_KERNEL_Q_ZENITY" --width=500; then
+        if zenity --question \
+            --title="$STR_KERNEL_TITLE" \
+            --text="$install_msg\n\n$STR_KERNEL_Q_ZENITY" \
+            --width=500; then
             resp_kernel="s"
-        else
-            resp_kernel="n"
         fi
     else
         echo -e "\n------------------------------------------------------------"
@@ -641,71 +641,86 @@ _instalar_kernel_customizado() {
         resp_kernel="$input_val"
     fi
 
-    if [[ ! "$resp_kernel" =~ $REGEX_YES ]]; then
-        return 0
-    fi
+    [[ ! "$resp_kernel" =~ $REGEX_YES ]] && return 0
 
-    _log "Preparando diretório de download do Kernel..."
+    _log "Preparando diretório..."
     rm -rf "$DEST_DIR"
     mkdir -p "$DEST_DIR"
-    chown -R deck:deck "$DEST_DIR" 2>/dev/null || true
 
-    _log "Buscando o último release de $REPO..."
-    local DOWNLOAD_URLS
-    DOWNLOAD_URLS="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-        | grep -oE '"browser_download_url":[[:space:]]*"[^"]+"' \
+    _log "Buscando último release..."
+
+    local DOWNLOAD_URL
+    DOWNLOAD_URL="$(curl -fsSL \
+        "https://api.github.com/repos/$REPO/releases/latest" \
+        | grep -oE '"browser_download_url":[[:space:]]*"[^"]+\.zip"' \
         | cut -d '"' -f 4 \
-        | grep -E '\.pkg\.tar\.zst$' || true)"
+        | head -n1)"
 
-    if [[ -z "$DOWNLOAD_URLS" ]]; then
+    if [[ -z "$DOWNLOAD_URL" ]]; then
         _ui_info "erro" "$STR_KERNEL_ERR_NO_PKG"
-        rm -rf "$DEST_DIR"
         return 1
     fi
 
-    while IFS= read -r url; do
-        [[ -z "$url" ]] && continue
-        local filename
-        filename="$(basename "$url")"
+    local ZIP_FILE="$DEST_DIR/kernel.zip"
 
-        _log "Baixando: $filename"
-        echo "$STR_KERNEL_DOWNLOADING $filename..."
+    _log "Baixando release ZIP..."
+    echo "$STR_KERNEL_DOWNLOADING"
 
-        if ! wget -q --show-progress -P "$DEST_DIR" "$url"; then
-            _ui_info "erro" "$STR_KERNEL_ERR_DL $filename."
-            rm -rf "$DEST_DIR"
-            return 1
-        fi
-    done <<< "$DOWNLOAD_URLS"
+    if ! wget -O "$ZIP_FILE" "$DOWNLOAD_URL"; then
+        _ui_info "erro" "$STR_KERNEL_ERR_DL"
+        return 1
+    fi
 
-    _log "Download do Kernel concluído."
+    _log "Extraindo ZIP..."
 
-    _log "Iniciando instalação do kernel customizado..."
+    if ! unzip -o "$ZIP_FILE" -d "$DEST_DIR"; then
+        _ui_info "erro" "Falha ao extrair ZIP."
+        return 1
+    fi
+
+    local PKGS
+    PKGS=$(find "$DEST_DIR" -type f -name "*.pkg.tar.zst")
+
+    if [[ -z "$PKGS" ]]; then
+        _ui_info "erro" "Nenhum pacote .pkg.tar.zst encontrado."
+        return 1
+    fi
+
+    _log "Iniciando instalação..."
     _steamos_readonly_disable_if_needed
-    steamos-devmode enable --no-prompt
-    echo "$STR_KERNEL_INSTALLING"
 
-    if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
-        _log "Kernel customizado instalado com sucesso."
-        update-grub &>/dev/null || true
+    steamos-devmode enable --no-prompt
+
+    if pacman -U --noconfirm $PKGS; then
+        _log "Kernel instalado com sucesso."
+
+        if command -v update-grub &>/dev/null; then
+            update-grub
+        else
+            steamos-update-grub &>/dev/null || true
+        fi
+
         mkinitcpio -P &>/dev/null || true
+
     else
         _ui_info "erro" "$STR_KERNEL_ERR_FAIL_REINSTALL"
 
         if pacman -S --noconfirm --needed linux-neptune; then
-            _log "linux-neptune instalado com sucesso."
+
             if command -v update-grub &>/dev/null; then
                 update-grub
             else
                 steamos-update-grub &>/dev/null || true
             fi
+
             mkinitcpio -P &>/dev/null || true
+
             _ui_info "sucesso" "$STR_SUCCESS_RESTORE_KERNEL"
         fi
     fi
 
     rm -rf "$DEST_DIR"
-}        
+}
 
 
 
