@@ -619,67 +619,7 @@ _log "zram-recompress timer/service removidos na reversão"
     _log "reversão concluída."
 }
 
-_instalar_kernel_customizado() {
-    local install_msg="$STR_KERNEL_MSG"
-    local resp_kernel="n"
 
-    # --- INTEGRAÇÃO ZENITY ---
-    if command -v zenity &>/dev/null; then
-        if zenity --question --title="$STR_KERNEL_TITLE" --text="$install_msg\n\n$STR_KERNEL_Q_ZENITY" --width=500; then
-            resp_kernel="s"
-        else
-            resp_kernel="n"
-        fi
-    else
-        echo -e "\n------------------------------------------------------------"
-        echo -e "$install_msg"
-        echo "------------------------------------------------------------"
-        read -rp "$STR_KERNEL_Q_CLI" input_val
-        resp_kernel="$input_val"
-    fi
-
-    if [[ "$resp_kernel" =~ $REGEX_YES ]]; then
-        local REPO="zarpon/linux-charcoal-TD"
-        local DEST_DIR="./kernel"
-
-        _log "Preparando diretório de download do Kernel..."
-        if [ -d "$DEST_DIR" ]; then rm -rf "$DEST_DIR"; fi
-        mkdir -p "$DEST_DIR"
-        chown -R deck:deck "$DEST_DIR" 2>/dev/null || true
-
-        _log "Buscando o último release de $REPO..."
-        local DOWNLOAD_URLS
-        DOWNLOAD_URLS=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" \
-            | grep "browser_download_url" \
-            | cut -d '"' -f 4 \
-            | grep "\.pkg\.tar\.zst$")
-
-        if [ -z "$DOWNLOAD_URLS" ]; then
-            _ui_info "erro" "$STR_KERNEL_ERR_NO_PKG"
-            return 1
-        fi
-
-        for url in $DOWNLOAD_URLS; do
-            local filename
-            filename=$(basename "$url")
-            _log "Baixando: $filename"
-            echo "$STR_KERNEL_DOWNLOADING $filename..."
-            if ! wget -q --show-progress -P "$DEST_DIR" "$url"; then
-                _ui_info "erro" "$STR_KERNEL_ERR_DL $filename."
-                return 1
-            fi
-        done
-        _log "Download do Kernel concluído."
-
-        _log "Iniciando instalação do kernel customizado..."
-        _steamos_readonly_disable_if_needed
-        steamos-devmode enable --no-prompt
-        echo "$STR_KERNEL_INSTALLING" 
-             
-        if pacman -U "$DEST_DIR"/*.pkg.tar.zst; then
-             
-             _log "Kernel customizado instalado com sucesso."
-             update-grub &>/dev/null || true
 _instalar_kernel_customizado() {
     local install_msg="$STR_KERNEL_MSG"
     local resp_kernel="n"
@@ -765,7 +705,8 @@ _instalar_kernel_customizado() {
     fi
 
     rm -rf "$DEST_DIR"
-}
+}        
+
 
 
 optimize_zram() {
