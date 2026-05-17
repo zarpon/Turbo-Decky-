@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - R3 - Timeless Child"
+versao="3.6 - R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
