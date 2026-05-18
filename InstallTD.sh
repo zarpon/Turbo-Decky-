@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 17-05 - Timeless Child"
+versao="3.6 - 18-05 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -706,7 +706,7 @@ _instalar_kernel_customizado() {
     else
         _ui_info "erro" "$STR_KERNEL_ERR_FAIL_REINSTALL"
 
-        if pacman -S --noconfirm --needed linux-neptune; then
+        if pacman -S --noconfirm --needed linux-neptune-616; then
 
             if command -v update-grub &>/dev/null; then
                 update-grub
@@ -1057,7 +1057,7 @@ _restore_kernel_to_neptune() {
     fi
 
     _log "Instalando linux-neptune..."
-    if pacman -S --noconfirm linux-neptune; then
+    if pacman -S --noconfirm linux-neptune-616; then
         _log "linux-neptune instalado com sucesso."
         if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
         mkinitcpio -P &>/dev/null || true
