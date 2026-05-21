@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 18-05 - Timeless Child"
+versao="3.6 - 21-05 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -692,7 +692,7 @@ _instalar_kernel_customizado() {
 
     steamos-devmode enable --no-prompt
 
-    if pacman -U --noconfirm $PKGS; then
+    if pacman -U $PKGS; then
         _log "Kernel instalado com sucesso."
 
         if command -v update-grub &>/dev/null; then
