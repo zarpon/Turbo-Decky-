@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 29-05 R1 - Timeless Child"
+versao="3.6 - 29-05 R2 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -708,11 +708,13 @@ _instalar_kernel_customizado() {
 
         if pacman -S --noconfirm --needed linux-neptune-616; then
 
-            if command -v update-grub &>/dev/null; then
-                update-grub
-            else
-                steamos-update-grub &>/dev/null || true
-            fi
+            if command -v grub-mkconfig &>/dev/null; then
+    if [ -d /efi/EFI/steamos ]; then
+        grub-mkconfig -o /efi/EFI/steamos/grub.cfg
+    fi
+else
+    steamos-update-grub &>/dev/null || true
+fi
 
             mkinitcpio -P &>/dev/null || true
 
