@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 28-05 R1 - Timeless Child"
+versao="3.6 - 29-05 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -28,7 +28,7 @@ readonly base_sysctl_params=(
     "vm.dirty_expire_centisecs=1500"       
     "vm.dirty_writeback_centisecs=1000"      
     "vm.watermark_boost_factor=0"
-    "vm.watermark_scale_factor=125"
+    "vm.watermark_scale_factor=85"
     # --- Scheduler (scx_lavd friendly) ---
     "kernel.split_lock_mitigate=0"
       # --- Novos Parâmetros ---
@@ -450,7 +450,7 @@ w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 8
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
-w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 200
+w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
 EOF
 
 # Aplicação imediata
@@ -931,7 +931,7 @@ echo 35 > /sys/module/zswap/parameters/max_pool_percent 2>/dev/null || true
 echo zsmalloc > /sys/module/zswap/parameters/zpool 2>/dev/null || true
 echo 1 > /sys/module/zswap/parameters/shrinker_enabled 2>/dev/null || true
 sysctl -w vm.page-cluster=0 || true
-sysctl -w vm.swappiness=40 || true
+sysctl -w vm.swappiness=100 || true
 ZSWAP_SCRIPT
     chmod +x "${turbodecky_bin}/zswap-config.sh"
 
@@ -994,7 +994,7 @@ create_persistent_configs
 #!/usr/bin/env bash
 
 
-sysctl -w vm.swappiness=50 || true
+sysctl -w vm.swappiness=120 || true
 sysctl -w vm.page-cluster=0 || true
 echo "=== ZRAM STATUS ===" >> /var/log/turbodecky.log
 zramctl >> /var/log/turbodecky.log
