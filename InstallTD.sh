@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 29-05 R3 - Timeless Child"
+versao="3.6 - 29-05 R4 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -239,6 +239,21 @@ _steamos_readonly_disable_if_needed() {
         trap 'true' EXIT
     fi
 }
+
+_update_grub() {
+    if command -v grub-mkconfig &>/dev/null; then
+        if [ -d /efi/EFI/steamos ]; then
+            grub-mkconfig -o /efi/EFI/steamos/grub.cfg
+        else
+            grub-mkconfig -o /boot/grub/grub.cfg
+        fi
+    elif command -v steamos-update-grub &>/dev/null; then
+        steamos-update-grub
+    elif command -v update-grub &>/dev/null; then
+        update-grub
+    fi
+}
+
 
 # --- Nova: detecta o tipo de sistema de arquivos para um caminho ---
 _get_fstype_for_path() {
@@ -596,7 +611,7 @@ _executar_reversao() {
     _restore_file /etc/sysctl.d/99-sdweak-performance.conf || rm -f /etc/sysctl.d/99-sdweak-performance.conf
     _restore_file "$grub_config" || true
 
-    if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
+    _update_grub || true
     mkinitcpio -P &>/dev/null || true
 
     # --- 6. APLICAÇÃO FINAL ---
@@ -695,13 +710,7 @@ _instalar_kernel_customizado() {
     if pacman -U $PKGS; then
         _log "Kernel instalado com sucesso."
 
-        if command -v grub-mkconfig &>/dev/null; then
-    if [ -d /efi/EFI/steamos ]; then
-        grub-mkconfig -o /efi/EFI/steamos/grub.cfg
-    fi
-else
-    steamos-update-grub &>/dev/null || true
-fi
+        _update_grub || true
 
         mkinitcpio -P &>/dev/null || true
 
@@ -710,13 +719,7 @@ fi
 
         if pacman -S --noconfirm --needed linux-neptune-616; then
 
-            if command -v grub-mkconfig &>/dev/null; then
-    if [ -d /efi/EFI/steamos ]; then
-        grub-mkconfig -o /efi/EFI/steamos/grub.cfg
-    fi
-else
-    steamos-update-grub &>/dev/null || true
-fi
+            _update_grub || true
 
             mkinitcpio -P &>/dev/null || true
 
@@ -849,7 +852,7 @@ write_sysfs "${ZRAM_DEV}/recompress" "type=idle threshold=2048" || exit 0
 exit 0
 EOF
 
-    chmod +x "$recompress_script"
+    chmod +x "${recompress_script}"
 
     cat > /etc/systemd/system/zram-recompress.service <<EOF
 [Unit]
@@ -922,7 +925,7 @@ aplicar_zswap() {
 
 create_persistent_configs
 
-    steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
+    _update_grub || true
     mkinitcpio -P &>/dev/null || true
 
     
@@ -989,7 +992,7 @@ aplicar_zram() {
 
 create_persistent_configs
 
-    steamos-update-grub &>/dev/null || update-grub &>/dev/null || true
+    _update_grub || true
     mkinitcpio -P &>/dev/null || true
 
     
@@ -1063,7 +1066,7 @@ _restore_kernel_to_neptune() {
     _log "Instalando linux-neptune..."
     if pacman -S --noconfirm linux-neptune-616; then
         _log "linux-neptune instalado com sucesso."
-        if command -v update-grub &>/dev/null; then update-grub; else steamos-update-grub &>/dev/null || true; fi
+        _update_grub || true
         mkinitcpio -P &>/dev/null || true
         _ui_info "sucesso" "$STR_SUCCESS_RESTORE_KERNEL"
         return 0
