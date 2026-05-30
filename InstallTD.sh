@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 29-05 R5 - Timeless Child"
+versao="3.6 - 29-05 R6 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -465,7 +465,7 @@ w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 8
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
-w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 1000
+w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 250
 EOF
 
 # Aplicação imediata
