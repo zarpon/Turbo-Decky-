@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 29-05 R4 - Timeless Child"
+versao="3.6 - 29-05 R5 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -1029,7 +1029,7 @@ UNIT
     # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
     optimize_zram
     _setup_zram_preconfig
-   _setup_zram_recompress 
+   # _setup_zram_recompress 
     systemctl enable --now fstrim.timer
    _instalar_kernel_customizado
     _ui_info "aviso" "$STR_WARN_REBOOT_SHORT"
