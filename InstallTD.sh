@@ -3,7 +3,7 @@ set -euo pipefail
 
 # --- versão e autor do script ---
 
-versao="3.6 - 29-05 R6 - Timeless Child"
+versao="3.6 - 29-05 R7 - Timeless Child"
 autor="Jorge Luis"
 pix_doacao="jorgezarpon@msn.com"
 
@@ -34,7 +34,7 @@ readonly base_sysctl_params=(
       # --- Novos Parâmetros ---
     "vm.dirty_background_bytes=209715200"
     "vm.dirty_bytes=409430400"
-    "vm.vfs_cache_pressure=85"
+    "vm.vfs_cache_pressure=125"
     "vm.kcompressd=256"
 )
 
@@ -465,7 +465,7 @@ w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409
 w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 8
 w! /sys/kernel/mm/ksm/run - - - - 0
 w! /sys/kernel/mm/lru_gen/enabled - - - - 7
-w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 250
+w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 0
 EOF
 
 # Aplicação imediata
