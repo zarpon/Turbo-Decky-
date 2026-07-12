@@ -67,8 +67,4 @@ Sinceros Agradecimentos á V10lator pelo desenvolvimento de seu Kernel Customiza
 
 # Contribua se puder
 
-Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com.
-
-Ou
-
-[Apoie o desenvolvedor](https://ko-fi.com/zarpon) 
+Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com
