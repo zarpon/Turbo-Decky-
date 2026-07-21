@@ -620,14 +620,12 @@ _executar_reversao() {
     systemctl daemon-reload || true
     manage_unnecessary_services "enable"
 
-    # --- LIMPEZA ZRAM RECOMPRESS (TurboDecky) ---
-systemctl disable --now zram-recompress.timer 2>/dev/null || true
-rm -f /etc/systemd/system/zram-recompress.timer
-rm -f /etc/systemd/system/zram-recompress.service
-systemctl disable --now zram-recompress.timer 2>/dev/null || true
-
-rm -f "${turbodecky_bin}/zram-recompress.sh"
-_log "zram-recompress timer/service removidos na reversão"
+    # --- LIMPEZA DE UNIDADES LEGADAS DE RECOMPRESSÃO ZRAM ---
+    systemctl disable --now zram-recompress.timer 2>/dev/null || true
+    rm -f /etc/systemd/system/zram-recompress.timer
+    rm -f /etc/systemd/system/zram-recompress.service
+    rm -f "${turbodecky_bin}/zram-recompress.sh"
+    _log "Unidades legadas de recompressão ZRAM removidas na reversão"
 
     rm -rf "${turbodecky_bin}" 2>/dev/null || true
     rm -rf "${turbodecky_dir}" 2>/dev/null || true
@@ -780,12 +778,8 @@ done
 # Reset é necessário para mudar algoritmos se o disco já tiver tamanho
 echo 1 > "$ZRAM/reset"
 
-# Configurações de algoritmos
+# Configuração do algoritmo primário
 echo "lz4" > "$ZRAM/comp_algorithm"
-# Recompressão (Requer kernel 6.2+)
-if [[ -e "$ZRAM/recomp_algorithm" ]]; then
-    echo "algo=zstd level=4 priority=1" > "$ZRAM/recomp_algorithm"
-fi
 EOF
 
     chmod +x "$script"
@@ -809,83 +803,6 @@ EOF
     systemctl daemon-reload
     systemctl enable zram-preconfig.service
 }
-
-
-_setup_zram_recompress() {
-    _log "Configurando recompressão em segundo plano do zram..."
-
-    local recompress_script="${turbodecky_bin}/zram-recompress.sh"
-
-    mkdir -p "${turbodecky_bin}"
-
-    cat > "$recompress_script" <<'EOF'
-#!/usr/bin/env bash
-set -u
-
-ZRAM_DEV="/sys/block/zram0"
-LOCK_FILE="/tmp/zram-recompress.lock"
-
-# Evita execução concorrente
-exec 9>"$LOCK_FILE"
-flock -n 9 || exit 0
-
-# Verificações de suporte
-[[ -e "${ZRAM_DEV}/recompress" ]] || exit 0
-[[ -e "${ZRAM_DEV}/idle" ]] || exit 0
-
-# Confirma uso como swap
-grep -q '^/dev/zram0' /proc/swaps 2>/dev/null || exit 0
-
-# Função segura para sysfs
-write_sysfs() {
-    local path="$1"
-    local value="$2"
-    printf '%s\n' "$value" > "$path" 2>/dev/null || return 1
-}
-
-# Marca páginas como idle
-write_sysfs "${ZRAM_DEV}/idle" "all" || exit 0
-
-# Dispara recompressão (pode falhar se busy → comportamento esperado)
-write_sysfs "${ZRAM_DEV}/recompress" "type=idle threshold=2048" || exit 0
-
-exit 0
-EOF
-
-    chmod +x "${recompress_script}"
-
-    cat > /etc/systemd/system/zram-recompress.service <<EOF
-[Unit]
-Description=TurboDecky ZRAM background recompression
-ConditionPathExists=/sys/block/zram0/recompress
-ConditionPathExists=/sys/block/zram0/idle
-After=local-fs.target
-
-[Service]
-Type=oneshot
-Nice=19
-IOSchedulingClass=idle
-ExecStart=${recompress_script}
-EOF
-
-    cat > /etc/systemd/system/zram-recompress.timer <<'EOF'
-[Unit]
-Description=TurboDecky ZRAM recompression timer
-
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=30min
-AccuracySec=1min
-Unit=zram-recompress.service
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    systemctl daemon-reload || true
-    systemctl enable --now zram-recompress.timer || true
-}
-
 aplicar_zswap() {
     _log "Aplicando otimizações"
 
@@ -1029,7 +946,6 @@ UNIT
     # CORREÇÃO DE LÓGICA: optimize_zram deve ser chamado para configurar o dispositivo ZRAM
     optimize_zram
     _setup_zram_preconfig
-   # _setup_zram_recompress 
     systemctl enable --now fstrim.timer
    _instalar_kernel_customizado
     _ui_info "aviso" "$STR_WARN_REBOOT_SHORT"
