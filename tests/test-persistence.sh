@@ -61,6 +61,7 @@ for file in \
   [[ -s "$file" ]] || { printf 'arquivo persistente ausente: %s\n' "$file" >&2; exit 1; }
 done
 
+! grep -Eq '^[[:space:]]*vm\.swappiness[[:space:]]*=' "$SYSCTL_FILE"
 grep -Fqx 'zswap.enabled=0' <(tr ' ' '\n' < "$GRUB_FILE")
 grep -Fqx 'compression-algorithm = lz4 zstd' "$ZRAM_FILE"
 grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise' "$MEMORY_FILE"
@@ -76,6 +77,7 @@ grep -Fqx 'zram' "$PROFILE_STATE"
 apply_zswap_profile
 
 [[ ! -e "$ZRAM_FILE" ]]
+! grep -Eq '^[[:space:]]*vm\.swappiness[[:space:]]*=' "$SYSCTL_FILE"
 assert_swapfile_8g
 grep -Fqx 'zswap' "$PROFILE_STATE"
 for token in \
