@@ -1,4 +1,3 @@
-[Apoie o desenvolvedor](https://ko-fi.com/zarpon) 
 
 # Turbo-Decky-
 Script de otimização do SteamOs 
