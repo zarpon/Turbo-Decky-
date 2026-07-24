@@ -23,7 +23,7 @@ source "$SCRIPT"
 
 # Backup e restauração devem preservar exatamente o arquivo preexistente.
 write_charcoal_sysctl
-grep -Fqx 'vm.swappiness=1' "$SYSCTL_FILE"
+! grep -Eq '^[[:space:]]*vm\.swappiness[[:space:]]*=' "$SYSCTL_FILE"
 restore_files
 grep -Fqx 'original=1' "$SYSCTL_FILE"
 
@@ -36,7 +36,6 @@ write_zram_config
 validate_generated_profile
 
 required_sysctl=(
-  'vm.swappiness=1'
   'vm.page-cluster=0'
   'vm.min_free_kbytes=262144'
   'vm.compaction_proactiveness=15'
@@ -50,6 +49,7 @@ required_sysctl=(
   'vm.vfs_cache_pressure=125'
 )
 for line in "${required_sysctl[@]}"; do grep -Fqx "$line" "$SYSCTL_FILE"; done
+! grep -Eq '^[[:space:]]*vm\.swappiness[[:space:]]*=' "$SYSCTL_FILE"
 ! grep -Fq 'zram_recomp' "$SYSCTL_FILE"
 
 required_memory=(
@@ -190,6 +190,8 @@ for generated in \
   "$CYCLE_ROOT/etc/systemd/zram-generator.conf.d/00-turbodecky.conf"; do
   [[ -s "$generated" ]]
 done
+! grep -Eq '^[[:space:]]*vm\.swappiness[[:space:]]*=' \
+  "$CYCLE_ROOT/etc/sysctl.d/99-turbodecky.conf"
 TURBODECKY_LIBRARY=0 TURBODECKY_ROOTFS="$CYCLE_ROOT" \
   TURBODECKY_DRY_RUN=1 TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
   bash "$SCRIPT" --revert >/dev/null
