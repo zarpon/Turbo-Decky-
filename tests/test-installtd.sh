@@ -23,7 +23,7 @@ source "$SCRIPT"
 
 # Backup e restauração devem preservar exatamente o arquivo preexistente.
 write_charcoal_sysctl
-grep -Fqx 'vm.swappiness=200' "$SYSCTL_FILE"
+grep -Fqx 'vm.swappiness=1' "$SYSCTL_FILE"
 restore_files
 grep -Fqx 'original=1' "$SYSCTL_FILE"
 
@@ -36,22 +36,21 @@ write_zram_config
 validate_generated_profile
 
 required_sysctl=(
-  'vm.compaction_proactiveness=10'
-  'vm.swappiness=200'
+  'vm.swappiness=1'
   'vm.page-cluster=0'
-  'vm.vfs_cache_pressure=50'
-  'vm.dirty_background_bytes=268435456'
-  'vm.dirty_bytes=1073741824'
-  'vm.dirty_expire_centisecs=3000'
+  'vm.min_free_kbytes=262144'
+  'vm.compaction_proactiveness=15'
+  'vm.dirty_expire_centisecs=3500'
   'vm.dirty_writeback_centisecs=500'
-  'vm.max_map_count=2147483642'
-  'kernel.sched_autogroup_enabled=0'
-  'fs.inotify.max_user_watches=1048576'
-  'fs.inotify.max_user_instances=8192'
-  'fs.file-max=2097152'
-  'net.core.default_qdisc=fq'
+  'vm.watermark_boost_factor=0'
+  'vm.watermark_scale_factor=125'
+  'kernel.split_lock_mitigate=0'
+  'vm.dirty_background_bytes=209715200'
+  'vm.dirty_bytes=409430400'
+  'vm.vfs_cache_pressure=125'
 )
 for line in "${required_sysctl[@]}"; do grep -Fqx "$line" "$SYSCTL_FILE"; done
+! grep -Fq 'zram_recomp' "$SYSCTL_FILE"
 
 required_memory=(
   'w! /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise'
