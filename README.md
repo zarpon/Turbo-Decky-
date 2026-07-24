@@ -1,3 +1,4 @@
+[Apoie o desenvolvedor](https://ko-fi.com/zarpon) 
 
 # Turbo-Decky-
 Script de otimização do SteamOs 
@@ -44,19 +45,51 @@ Tudo é feito automaticamente — basta escolher a opção e deixar o script tra
 
 # Como Instalar e Executar
 
-1 - Vá para o modo desktop no Steam Deck;
+## Método recomendado: AppImage
 
-2 - Baixe o arquivo TurboDecky.desktop da página de Releases;
+1. No Steam Deck, entre no **Modo Desktop**.
+2. Baixe o arquivo mais recente:
 
-https://github.com/zarpon/Turbo-Decky-/releases/download/Latest/TurboDecky.desktop
+   **[Baixar TurboDecky-x86_64.AppImage](https://github.com/zarpon/Turbo-Decky-/releases/download/Latest/TurboDecky-x86_64.AppImage)**
 
-3 - Clique e execute o arquivo.
+3. No Dolphin, clique com o botão direito no arquivo, abra **Propriedades > Permissões** e marque **É executável**.
+4. Abra o AppImage com dois cliques.
+5. Escolha a otimização desejada. A senha administrativa será solicitada somente quando a ação precisar alterar o sistema.
+6. Reinicie o Steam Deck depois de aplicar ou reverter otimizações que alterem memória, GRUB ou kernel.
 
-4 - Insira a Senha de super usuário e siga as instruções no menu.
+## Instalação pelo terminal
 
-5 - Reinicie o Steam Deck!
+```bash
+curl --fail --location --retry 3 \
+  -o TurboDecky-x86_64.AppImage \
+  https://github.com/zarpon/Turbo-Decky-/releases/download/Latest/TurboDecky-x86_64.AppImage
+chmod +x TurboDecky-x86_64.AppImage
+./TurboDecky-x86_64.AppImage
+```
 
-Atenção! , é necessário reaplicar as otimizações sempre que a versão do SteamOs atualizar. 
+## Verificar a integridade do download
+
+```bash
+curl --fail --location --retry 3 \
+  -O https://github.com/zarpon/Turbo-Decky-/releases/download/Latest/TurboDecky-x86_64.AppImage.sha256
+sha256sum -c TurboDecky-x86_64.AppImage.sha256
+```
+
+O workflow do repositório recompila, testa e publica automaticamente o AppImage e seu SHA-256 na Release `Latest` após alterações aprovadas na branch `main`.
+
+## Persistência após reiniciar
+
+As configurações aplicadas são persistentes em uma reinicialização normal:
+
+- sysctl em `/etc/sysctl.d/99-turbodecky.conf`;
+- THP, KSM e MGLRU em `/etc/tmpfiles.d/99-turbodecky-memory.conf`;
+- ZRAM em `/etc/systemd/zram-generator.conf.d/00-turbodecky.conf`;
+- ZSWAP e parâmetros de kernel em `/etc/default/grub`;
+- swapfile ZSWAP em `/etc/fstab`;
+- regras udev, limites, variáveis de ambiente e estados systemd;
+- SCX LAVD e `fstrim.timer` quando ativados.
+
+Uma atualização do SteamOS pode substituir configurações, pacotes ou o kernel e exigir nova aplicação. A reversão restaura o snapshot capturado antes da primeira aplicação; a restauração do kernel é uma ação separada.
 
 # Agradecimentos
 
