@@ -27,7 +27,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Validate source and reversal
+      - name: Validate source, persistence and reversal
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -37,6 +37,7 @@ jobs:
             bash -n "$file"
           done
           bash tests/test-installtd.sh ./InstallTD.sh
+          bash tests/test-persistence.sh ./InstallTD.sh
           bash tests/test-appimage-layout.sh
 
       - name: Build AppImage
