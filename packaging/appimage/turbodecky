@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+APPDIR="${APPDIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+SOURCE_DIR="$APPDIR/usr/lib/turbodecky"
+BACKEND="$SOURCE_DIR/InstallTD.sh"
+
+show_info() {
+  local text="$1"
+  printf -v text '%b' "$text"
+  if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    yad --info --title="Turbo Decky" --width=620 --text="$text" 2>/dev/null || true
+  elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    zenity --info --title="Turbo Decky" --width=620 --text="$text" 2>/dev/null || true
+  elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    kdialog --title "Turbo Decky" --msgbox "$text" 2>/dev/null || true
+  else
+    printf '\n%s\n' "$text"
+  fi
+}
+
+show_error() {
+  local text="$1"
+  printf -v text '%b' "$text"
+  if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    yad --error --title="Turbo Decky" --width=680 --text="$text" 2>/dev/null || true
+  elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    zenity --error --title="Turbo Decky" --width=680 --text="$text" 2>/dev/null || true
+  elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    kdialog --title "Turbo Decky" --error "$text" 2>/dev/null || true
+  else
+    printf '\nERRO: %s\n' "$text" >&2
+  fi
+}
+
+confirm_action() {
+  local text="$1" answer
+  if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    yad --question --title="Turbo Decky" --width=620 --text="$text" 2>/dev/null
+  elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    zenity --question --title="Turbo Decky" --width=620 --text="$text" 2>/dev/null
+  elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    kdialog --title "Turbo Decky" --yesno "$text" 2>/dev/null
+  else
+    read -r -p "$text [s/N]: " answer
+    [[ "$answer" =~ ^[sSyY]$ ]]
+  fi
+}
+
+select_action() {
+  if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    yad --list --title="Turbo Decky" --width=820 --height=540 \
+      --text="Selecione uma ação. As operações administrativas solicitarão autenticação." \
+      --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 \
+      apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
+      apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
+      status "Exibir diagnóstico dos parâmetros efetivos" \
+      setup-lavd "Instalar ou ativar SCX LAVD" \
+      install-kernel "Instalar o kernel Charcoal mais recente" \
+      restore-kernel "Restaurar o kernel padrão do SteamOS" \
+      revert "Reverter alterações gerenciadas pelo Turbo Decky" \
+      exit "Sair" 2>/dev/null || printf 'exit\n'
+  elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    zenity --list --title="Turbo Decky" --width=820 --height=540 \
+      --text="Selecione uma ação. As operações administrativas solicitarão autenticação." \
+      --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 \
+      apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
+      apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
+      status "Exibir diagnóstico dos parâmetros efetivos" \
+      setup-lavd "Instalar ou ativar SCX LAVD" \
+      install-kernel "Instalar o kernel Charcoal mais recente" \
+      restore-kernel "Restaurar o kernel padrão do SteamOS" \
+      revert "Reverter alterações gerenciadas pelo Turbo Decky" \
+      exit "Sair" 2>/dev/null || printf 'exit\n'
+  elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    kdialog --title "Turbo Decky" --menu "Selecione uma ação" \
+      apply-zram "Perfil Charcoal com ZRAM" \
+      apply-zswap "Perfil Charcoal com ZSWAP" \
+      status "Diagnóstico" \
+      setup-lavd "Ativar SCX LAVD" \
+      install-kernel "Instalar kernel Charcoal" \
+      restore-kernel "Restaurar kernel padrão" \
+      revert "Reverter alterações" \
+      exit "Sair" 2>/dev/null || printf 'exit\n'
+  else
+    cat <<'MENU'
+1) Aplicar perfil Charcoal com ZRAM padrão
+2) Aplicar perfil Charcoal com ZSWAP
+3) Exibir diagnóstico
+4) Instalar ou ativar SCX LAVD
+5) Instalar kernel Charcoal
+6) Restaurar kernel padrão
+7) Reverter alterações
+8) Sair
+MENU
+    local answer
+    read -r -p "Opção: " answer
+    case "$answer" in
+      1) printf '%s\n' apply-zram ;;
+      2) printf '%s\n' apply-zswap ;;
+      3) printf '%s\n' status ;;
+      4) printf '%s\n' setup-lavd ;;
+      5) printf '%s\n' install-kernel ;;
+      6) printf '%s\n' restore-kernel ;;
+      7) printf '%s\n' revert ;;
+      *) printf 'exit\n' ;;
+    esac
+  fi
+}
+
+stage_payload() {
+  STAGED_DIR="$(mktemp -d /tmp/turbodecky-appimage.XXXXXX)"
+  install -d -m 0755 "$STAGED_DIR/lib"
+  install -m 0755 "$BACKEND" "$STAGED_DIR/InstallTD.sh"
+  cp -a "$SOURCE_DIR/lib/." "$STAGED_DIR/lib/"
+  find "$STAGED_DIR/lib" -type d -exec chmod 0755 {} +
+  find "$STAGED_DIR/lib" -type f -exec chmod 0644 {} +
+}
+
+cleanup() {
+  [[ -z "${STAGED_DIR:-}" ]] || rm -rf -- "$STAGED_DIR"
+  [[ -z "${ACTION_LOG:-}" ]] || rm -f -- "$ACTION_LOG"
+}
+trap cleanup EXIT INT TERM
+
+run_unprivileged() {
+  /usr/bin/bash "$BACKEND" "$@"
+}
+
+run_privileged() {
+  local action="$1" status=0
+  stage_payload
+  ACTION_LOG="$(mktemp /tmp/turbodecky-action.XXXXXX.log)"
+  show_info "A operação será iniciada. Autorize a solicitação administrativa e aguarde a conclusão."
+
+  if (( EUID == 0 )); then
+    TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
+      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$ACTION_LOG" 2>&1 || status=$?
+  elif command -v pkexec >/dev/null 2>&1; then
+    /usr/bin/pkexec /usr/bin/env \
+      TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
+      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$ACTION_LOG" 2>&1 || status=$?
+  elif command -v kdesu >/dev/null 2>&1; then
+    local command_line
+    printf -v command_line '%q ' /usr/bin/env TURBODECKY_UI=terminal \
+      TURBODECKY_ASSUME_YES=1 /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action"
+    kdesu -c "$command_line" >"$ACTION_LOG" 2>&1 || status=$?
+  elif command -v sudo >/dev/null 2>&1 && [[ -t 0 ]]; then
+    sudo /usr/bin/env TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
+      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$ACTION_LOG" 2>&1 || status=$?
+  else
+    show_error "Nenhum agente de autenticação compatível foi encontrado. Instale ou habilite pkexec/polkit e execute novamente."
+    return 1
+  fi
+
+  local summary
+  summary="$(tail -n 30 "$ACTION_LOG" 2>/dev/null || true)"
+  if (( status == 0 )); then
+    show_info "Operação concluída.\n\n${summary:-Sem mensagens adicionais.}"
+  else
+    show_error "A operação falhou com código $status.\n\n${summary:-Consulte /var/log/turbodecky.log.}"
+  fi
+  return "$status"
+}
+
+confirmation_text() {
+  case "$1" in
+    --apply-zram) printf '%s' "Aplicar o perfil Charcoal com ZRAM padrão? O sistema solicitará autenticação e poderá exigir reinicialização." ;;
+    --apply-zswap) printf '%s' "Aplicar o perfil Charcoal com ZSWAP? Pode ser criado um swapfile de 8 GiB e será necessária reinicialização." ;;
+    --setup-lavd) printf '%s' "Instalar e ativar SCX LAVD pelo gerenciador de pacotes?" ;;
+    --install-kernel) printf '%s' "Instalar o kernel Charcoal mais recente? Esta operação altera o kernel do sistema." ;;
+    --restore-kernel) printf '%s' "Remover o kernel Charcoal e restaurar o kernel padrão do SteamOS?" ;;
+    --revert) printf '%s' "Reverter as alterações gerenciadas pelo Turbo Decky usando os snapshots existentes?" ;;
+    *) printf '%s' "Executar esta operação administrativa?" ;;
+  esac
+}
+
+run_action() {
+  local action="$1" backend_action
+  case "$action" in
+    version|--version)
+      run_unprivileged --version
+      ;;
+    help|--help|-h)
+      run_unprivileged --help
+      ;;
+    status|--status)
+      local output
+      output="$(run_unprivileged --status 2>&1)" || {
+        show_error "$output"
+        return 1
+      }
+      show_info "$output"
+      ;;
+    apply-zram|--apply-zram) backend_action=--apply-zram ;;
+    apply-zswap|--apply-zswap) backend_action=--apply-zswap ;;
+    setup-lavd|--setup-lavd) backend_action=--setup-lavd ;;
+    install-kernel|--install-kernel) backend_action=--install-kernel ;;
+    restore-kernel|--restore-kernel) backend_action=--restore-kernel ;;
+    revert|--revert) backend_action=--revert ;;
+    *)
+      show_error "Ação inválida: $action"
+      return 2
+      ;;
+  esac
+
+  if [[ -n "${backend_action:-}" ]]; then
+    confirm_action "$(confirmation_text "$backend_action")" || return 0
+    run_privileged "$backend_action"
+  fi
+}
+
+[[ -r "$BACKEND" ]] || {
+  show_error "O pacote está incompleto: InstallTD.sh não foi encontrado."
+  exit 1
+}
+
+if (($# > 0)); then
+  run_action "$1"
+  exit $?
+fi
+
+while :; do
+  action="$(select_action)"
+  [[ "$action" != exit ]] || exit 0
+  run_action "$action" || true
+done
