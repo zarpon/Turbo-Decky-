@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.zarpon.TurboDecky</id>
+  <name>Turbo Decky</name>
+  <summary>Perfis de desempenho reversíveis para SteamOS</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Interface para aplicar, diagnosticar e reverter os perfis ZRAM, ZSWAP, THP e sysctl do Turbo Decky.</p>
+  </description>
+  <launchable type="desktop-id">turbodecky.desktop</launchable>
+  <url type="homepage">https://github.com/zarpon/Turbo-Decky-</url>
+  <provides>
+    <binary>turbodecky</binary>
+  </provides>
+  <releases>
+    <release version="4.0.0-test" date="2026-07-24"/>
+  </releases>
+</component>
