@@ -63,10 +63,10 @@ if (
   }
   configure_zswap_runtime
 ); then
-  printf 'configure_zswap_runtime aceitou enabled=N\n' >&2
+  printf 'configure_zswap_runtime aceitou estado desativado\n' >&2
   exit 1
 fi
-grep -Fqx 'N' "$ZSWAP_SYSFS_DIR/enabled"
+! grep -Eq '^(Y|1)$' "$ZSWAP_SYSFS_DIR/enabled"
 
 declare -f apply_zswap_profile | grep -Fq 'write_zswap_runtime_service'
 declare -f apply_zram_profile | grep -Fq 'remove_zswap_runtime_service'
