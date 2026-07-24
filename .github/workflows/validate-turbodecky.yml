@@ -46,6 +46,12 @@ jobs:
           set -Eeuo pipefail
           bash tests/test-persistence.sh ./InstallTD.sh
 
+      - name: Validate ZSWAP runtime guard
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash tests/test-zswap-runtime-guard.sh ./InstallTD.sh
+
       - name: Validate AppImage layout
         shell: bash
         run: |
