@@ -70,5 +70,10 @@ rm -f -- "$OUTPUT"
 ARCH="$ARCH" VERSION="$VERSION" APPIMAGE_EXTRACT_AND_RUN=1 \
   "$APPIMAGETOOL" "$APPDIR" "$OUTPUT"
 chmod 0755 "$OUTPUT"
-sha256sum "$OUTPUT" > "$OUTPUT.sha256"
+output_dir="$(dirname "$OUTPUT")"
+output_name="$(basename "$OUTPUT")"
+(
+  cd "$output_dir"
+  sha256sum "$output_name" > "$output_name.sha256"
+)
 printf '%s\n' "$OUTPUT"
