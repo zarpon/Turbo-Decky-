@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'validation/**'
+      - 'feature/**'
   pull_request:
   workflow_dispatch:
 
@@ -28,7 +29,7 @@ jobs:
           set -Eeuo pipefail
           bash -n InstallTD.sh
           for file in lib/*.sh tests/*.sh packaging/appimage/AppRun \
-            packaging/appimage/turbodecky packaging/appimage/build-appimage.sh; do
+            packaging/appimage/turbodecky packaging/appimage/*.sh; do
             bash -n "$file"
           done
 
@@ -88,6 +89,18 @@ jobs:
           ! grep -q '/' "dist/$image_name.sha256"
           (cd dist && sha256sum -c "$image_name.sha256")
           APPIMAGE_EXTRACT_AND_RUN=1 "$image" --version | grep -Eq '^[0-9]+\.[0-9]+'
+
+      - name: Validate release assets
+        shell: bash
+        env:
+          DRY_RUN: '1'
+          RELEASE_TAG: Latest
+        run: |
+          set -Eeuo pipefail
+          bash packaging/appimage/publish-release.sh
+          [[ -x dist/TurboDecky-x86_64.AppImage ]]
+          ! grep -q '/' dist/TurboDecky-x86_64.AppImage.sha256
+          (cd dist && sha256sum -c TurboDecky-x86_64.AppImage.sha256)
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4
