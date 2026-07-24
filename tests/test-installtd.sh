@@ -93,4 +93,29 @@ status_report | grep -Fq 'Root de teste:'
 TURBODECKY_LIBRARY=0 TURBODECKY_ROOTFS="$ROOT" TURBODECKY_DRY_RUN=1 \
   bash "$SCRIPT" --version | grep -Fqx '4.0.0-test'
 
+# Ciclo completo em root isolado: aplica, cria os arquivos e reverte ao baseline.
+CYCLE_ROOT="$TMP/cycle-root"
+mkdir -p "$CYCLE_ROOT/etc/default" "$CYCLE_ROOT/etc/systemd/system" \
+  "$CYCLE_ROOT/usr/local/bin" "$CYCLE_ROOT/var/log"
+printf 'GRUB_CMDLINE_LINUX="quiet"\n' > "$CYCLE_ROOT/etc/default/grub"
+TURBODECKY_LIBRARY=0 TURBODECKY_ROOTFS="$CYCLE_ROOT" \
+  TURBODECKY_DRY_RUN=1 TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
+  bash "$SCRIPT" --apply-zram >/dev/null
+for generated in \
+  "$CYCLE_ROOT/etc/sysctl.d/99-turbodecky.conf" \
+  "$CYCLE_ROOT/etc/tmpfiles.d/99-turbodecky-memory.conf" \
+  "$CYCLE_ROOT/etc/systemd/zram-generator.conf.d/00-turbodecky.conf"; do
+  [[ -s "$generated" ]]
+done
+TURBODECKY_LIBRARY=0 TURBODECKY_ROOTFS="$CYCLE_ROOT" \
+  TURBODECKY_DRY_RUN=1 TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
+  bash "$SCRIPT" --revert >/dev/null
+for generated in \
+  "$CYCLE_ROOT/etc/sysctl.d/99-turbodecky.conf" \
+  "$CYCLE_ROOT/etc/tmpfiles.d/99-turbodecky-memory.conf" \
+  "$CYCLE_ROOT/etc/systemd/zram-generator.conf.d/00-turbodecky.conf"; do
+  [[ ! -e "$generated" ]]
+done
+grep -Fqx 'GRUB_CMDLINE_LINUX="quiet"' "$CYCLE_ROOT/etc/default/grub"
+
 printf 'Turbo Decky local validation passed\n'
