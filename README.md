@@ -35,9 +35,9 @@ Ajusta limites do sistema para evitar gargalos em jogos.
 
 Permite a instalação de um Kernel Customizado para melhor desempenho.
 
-O Turbo Decky agora permite a instalação do Kernel Customizado Charcoal.
-Esse kernel foi desenvolvido por V10lator. Todos os creditos, bem como os agradecimentos são para o desenvolvedor.
-Atenção! A compatibilidade do Kernel atualmente é apenas com a versão 3.8.* do SteamOs. 
+O Turbo Decky permite a instalação do Kernel Customizado Charcoal-vulcano.
+Essa é uma Versão customizada do kernel desenvolvido por V10lator.
+Atenção! A compatibilidade do Kernel atualmente é apenas com a versão 3.8.* do SteamOs, canal estável. 
 
 Esse é o github do charcoal Kernel: https://github.com/V10lator/linux-charcoal
 
