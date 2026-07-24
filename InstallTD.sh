@@ -14,6 +14,8 @@ source "$SCRIPT_DIR/lib/30-hardening.sh"
 source "$SCRIPT_DIR/lib/40-source-sync.sh"
 # shellcheck source=lib/50-memory-mode-safety.sh
 source "$SCRIPT_DIR/lib/50-memory-mode-safety.sh"
+# shellcheck source=lib/60-swapfile-safety.sh
+source "$SCRIPT_DIR/lib/60-swapfile-safety.sh"
 
 if [[ "${TURBODECKY_LIBRARY:-0}" != 1 ]]; then
   main "$@"
