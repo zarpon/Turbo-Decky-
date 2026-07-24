@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Turbo Decky
+GenericName=Otimizador do SteamOS
+Comment=Aplicar e reverter perfis de desempenho do SteamOS
+Exec=turbodecky
+Icon=turbodecky
+Terminal=false
+Categories=System;Settings;
+Keywords=SteamOS;Steam Deck;ZRAM;ZSWAP;Kernel;Performance;
+StartupNotify=true
+X-AppImage-Version=4.0.0-test
