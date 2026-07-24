@@ -1,0 +1,55 @@
+name: Publish Turbo Decky AppImage
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'InstallTD.sh'
+      - 'lib/**'
+      - 'packaging/appimage/**'
+      - 'tests/**'
+      - '.github/workflows/publish-appimage-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: turbodecky-appimage-release
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate source and reversal
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash -n InstallTD.sh
+          for file in lib/*.sh tests/*.sh packaging/appimage/*.sh \
+            packaging/appimage/AppRun packaging/appimage/turbodecky; do
+            bash -n "$file"
+          done
+          bash tests/test-installtd.sh ./InstallTD.sh
+          bash tests/test-appimage-layout.sh
+
+      - name: Build AppImage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash packaging/appimage/build-appimage.sh
+
+      - name: Publish assets to Latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: Latest
+        run: |
+          set -Eeuo pipefail
+          bash packaging/appimage/publish-release.sh
