@@ -1,70 +1,118 @@
-[Apoie o desenvolvedor](https://ko-fi.com/zarpon) 
+# Turbo Decky
 
-# Turbo-Decky-
-Script de otimização do SteamOs 
+Utilitário de otimização para SteamOS e distribuições Arch Linux compatíveis. A versão 4 reorganiza o código para tornar aplicação, diagnóstico e reversão determinísticos.
 
-O script deve funcionar em qualquer aparelho que utiliza o SteamOs e também distribuições baseadas em arch linux. 
+## Principais mudanças da versão 4
 
-# O que é o Turbo Decky?
+- perfil `sysctl` sincronizado com `zarpon/linux-charcoal-vulcano`;
+- política THP/memória sincronizada com `99-charcoal-memory.conf` do kernel Charcoal;
+- ZRAM gerenciado apenas pelo `zram-generator`, sem timer, serviço ou comando de recompressão;
+- interface com suporte a YAD, Zenity, KDialog, Dialog e terminal;
+- modo de diagnóstico que exibe kernel, ZRAM, sysctl e THP efetivos;
+- snapshots dos arquivos, valores de runtime e estados dos serviços antes da primeira aplicação;
+- reversão restrita aos recursos gerenciados pelo Turbo Decky;
+- comandos não interativos para validação e automação;
+- instalação do kernel Charcoal separada da aplicação das otimizações.
 
-O Turbo Decky é um utilitário criado para melhorar o desempenho do SteamOS (usado no Steam Deck) e deixar o sistema mais rápido, fluido e estável — especialmente em jogos.
+## Perfis disponíveis
 
-Ele faz ajustes automáticos no sistema para aproveitar melhor a memória, o processador, o armazenamento e a placa de vídeo.
-Essas otimizações são seguras, reversíveis e voltadas para quem quer mais desempenho sem precisar entender de configurações técnicas.
+### ZRAM padrão
 
+Mantém o ZRAM do sistema por meio de `/etc/systemd/zram-generator.conf.d/00-turbodecky.conf`:
 
----
+- tamanho: `ram * 1.5`;
+- algoritmos aceitos, em ordem: `lz4 zstd`;
+- prioridade de swap: `3000`;
+- sem recompressão temporizada ou imediata.
 
-# O que ele faz?
+### ZSWAP
 
-O Turbo Decky aplica uma série de melhorias internas, como:
+Configura ZSWAP com LZ4, zsmalloc e pool de 35%, além de um swapfile de 8 GiB quando ainda não existe um swapfile compatível.
 
-Acelera o carregamento de jogos e reduz micro travamentos.
+## Perfil sysctl sincronizado
 
-Faz com que o sistema gerencie melhor a memória (RAM).
+```text
+vm.compaction_proactiveness=10
+vm.swappiness=200
+vm.page-cluster=0
+vm.vfs_cache_pressure=50
+vm.dirty_background_bytes=268435456
+vm.dirty_bytes=1073741824
+vm.dirty_expire_centisecs=3000
+vm.dirty_writeback_centisecs=500
+vm.max_map_count=2147483642
+kernel.sched_autogroup_enabled=0
+fs.inotify.max_user_watches=1048576
+fs.inotify.max_user_instances=8192
+fs.file-max=2097152
+net.core.default_qdisc=fq
+```
 
-Usa o Zswap, que ajuda a evitar quedas de desempenho quando a RAM está cheia.
+## Perfil THP/memória sincronizado
 
-Ajusta a forma como o SteamOS grava e lê arquivos, tornando o sistema mais ágil.
+```text
+THP enabled=madvise
+THP defrag=defer
+THP shmem_enabled=advise
+khugepaged defrag=0
+khugepaged max_ptes_none=64
+khugepaged max_ptes_swap=0
+KSM run=0
+MGLRU enabled=7
+MGLRU min_ttl_ms=0
+```
 
-Otimiza o comportamento da placa de vídeo (AMDGPU).
+## Execução
 
-Desativa serviços do sistema que consomem recursos desnecessariamente.
+Interface automática:
 
-Ajusta limites do sistema para evitar gargalos em jogos.
+```bash
+sudo bash InstallTD.sh --gui
+```
 
-Permite a instalação de um Kernel Customizado para melhor desempenho.
+Comandos diretos:
 
-O Turbo Decky agora permite a instalação do Kernel Customizado Charcoal.
-Esse kernel foi desenvolvido por V10lator. Todos os creditos, bem como os agradecimentos são para o desenvolvedor.
-Atenção! A compatibilidade do Kernel atualmente é apenas com a versão 3.8.* do SteamOs. 
+```bash
+sudo bash InstallTD.sh --apply-zram
+sudo bash InstallTD.sh --apply-zswap
+bash InstallTD.sh --status
+sudo bash InstallTD.sh --revert
+sudo bash InstallTD.sh --setup-lavd
+sudo bash InstallTD.sh --install-kernel
+sudo bash InstallTD.sh --restore-kernel
+```
 
-Esse é o github do charcoal Kernel: https://github.com/V10lator/linux-charcoal
+## Reversão
 
-Tudo é feito automaticamente — basta escolher a opção e deixar o script trabalhar.
+Na primeira aplicação, o script registra:
 
-# Como Instalar e Executar
+- conteúdo original dos arquivos alterados;
+- valores sysctl e THP em runtime;
+- estado habilitado/mascarado e ativo/inativo dos serviços gerenciados;
+- criação do swapfile pelo Turbo Decky.
 
-1 - Vá para o modo desktop no Steam Deck;
+A reversão restaura esses snapshots em vez de presumir valores padrão. Resíduos das antigas unidades de recompressão ZRAM são removidos durante aplicação e reversão.
 
-2 - Baixe o arquivo TurboDecky.desktop da página de Releases;
+## Validação local
 
-https://github.com/zarpon/Turbo-Decky-/releases/download/Latest/TurboDecky.desktop
+```bash
+bash -n InstallTD.sh
+bash -n tests/test-installtd.sh
+bash tests/test-installtd.sh
+```
 
-3 - Clique e execute o arquivo.
+O teste usa um root temporário, não altera o sistema local e valida:
 
-4 - Insira a Senha de super usuário e siga as instruções no menu.
+- todos os valores sysctl e THP;
+- criação do perfil ZRAM sem recompressão;
+- edição idempotente do GRUB;
+- remoção de resíduos antigos;
+- backup e restauração de arquivos;
+- ciclo completo de aplicação e reversão em modo isolado.
 
-5 - Reinicie o Steam Deck!
+## Limitações
 
-Atenção! , é necessário reaplicar as otimizações sempre que a versão do SteamOs atualizar. 
-
-# Agradecimentos
-
-Agradecemos a toda a comunidade Linux, especialmente desenvolvedores como o time do sdweak e cryoutilities que foram grande inspiração para esse projeto. 
-
-Sinceros Agradecimentos á V10lator pelo desenvolvimento de seu Kernel Customizado para o Steam Deck.
-
-# Contribua se puder
-
-Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com
+- requer SteamOS ou uma distribuição compatível com `systemd`, `sysctl` e ferramentas Arch para funções de kernel/LAVD;
+- a alteração do kernel exige `pacman` e deve ser usada somente em sistemas compatíveis;
+- `mitigations=off` reduz proteções contra vulnerabilidades de CPU em troca de menor overhead;
+- as otimizações não garantem ganho de FPS em todos os jogos; o efeito depende de hardware, carga e versão do SteamOS.
