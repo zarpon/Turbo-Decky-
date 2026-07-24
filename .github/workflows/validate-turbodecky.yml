@@ -39,6 +39,12 @@ jobs:
           set -Eeuo pipefail
           bash tests/test-installtd.sh ./InstallTD.sh
 
+      - name: Validate reboot persistence
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash tests/test-persistence.sh ./InstallTD.sh
+
       - name: Validate AppImage layout
         shell: bash
         run: |
