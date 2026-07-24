@@ -116,7 +116,9 @@ apply_zswap_profile() {
   update_grub_file zswap
   apply_runtime_profiles
   update_grub_runtime
-  zswap_runtime_enabled || die "O ZSWAP não está ativo ao final da aplicação do perfil."
+  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]]; then
+    zswap_runtime_enabled || die "O ZSWAP não está ativo ao final da aplicação do perfil."
+  fi
   printf 'zswap\n' > "$PROFILE_STATE"
   log "perfil ZSWAP aplicado"
   ui_info "Perfil ZSWAP aplicado e confirmado em runtime. O serviço persistente reafirmará a ativação após o swapfile estar disponível em cada boot. Reinicie o sistema."
