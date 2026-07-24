@@ -7,6 +7,7 @@ BACKEND="$SOURCE_DIR/InstallTD.sh"
 
 show_info() {
   local text="$1"
+  printf -v text '%b' "$text"
   if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
     yad --info --title="Turbo Decky" --width=620 --text="$text" 2>/dev/null || true
   elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
@@ -20,6 +21,7 @@ show_info() {
 
 show_error() {
   local text="$1"
+  printf -v text '%b' "$text"
   if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
     yad --error --title="Turbo Decky" --width=680 --text="$text" 2>/dev/null || true
   elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
@@ -50,35 +52,35 @@ select_action() {
     yad --list --title="Turbo Decky" --width=820 --height=540 \
       --text="Selecione uma ação. As operações administrativas solicitarão autenticação." \
       --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 \
-      --apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
-      --apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
-      --status "Exibir diagnóstico dos parâmetros efetivos" \
-      --setup-lavd "Instalar ou ativar SCX LAVD" \
-      --install-kernel "Instalar o kernel Charcoal mais recente" \
-      --restore-kernel "Restaurar o kernel padrão do SteamOS" \
-      --revert "Reverter alterações gerenciadas pelo Turbo Decky" \
+      apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
+      apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
+      status "Exibir diagnóstico dos parâmetros efetivos" \
+      setup-lavd "Instalar ou ativar SCX LAVD" \
+      install-kernel "Instalar o kernel Charcoal mais recente" \
+      restore-kernel "Restaurar o kernel padrão do SteamOS" \
+      revert "Reverter alterações gerenciadas pelo Turbo Decky" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
     zenity --list --title="Turbo Decky" --width=820 --height=540 \
       --text="Selecione uma ação. As operações administrativas solicitarão autenticação." \
       --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 \
-      --apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
-      --apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
-      --status "Exibir diagnóstico dos parâmetros efetivos" \
-      --setup-lavd "Instalar ou ativar SCX LAVD" \
-      --install-kernel "Instalar o kernel Charcoal mais recente" \
-      --restore-kernel "Restaurar o kernel padrão do SteamOS" \
-      --revert "Reverter alterações gerenciadas pelo Turbo Decky" \
+      apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
+      apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
+      status "Exibir diagnóstico dos parâmetros efetivos" \
+      setup-lavd "Instalar ou ativar SCX LAVD" \
+      install-kernel "Instalar o kernel Charcoal mais recente" \
+      restore-kernel "Restaurar o kernel padrão do SteamOS" \
+      revert "Reverter alterações gerenciadas pelo Turbo Decky" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
     kdialog --title "Turbo Decky" --menu "Selecione uma ação" \
-      --apply-zram "Perfil Charcoal com ZRAM" \
-      --apply-zswap "Perfil Charcoal com ZSWAP" \
-      --status "Diagnóstico" \
-      --setup-lavd "Ativar SCX LAVD" \
-      --install-kernel "Instalar kernel Charcoal" \
-      --restore-kernel "Restaurar kernel padrão" \
-      --revert "Reverter alterações" \
+      apply-zram "Perfil Charcoal com ZRAM" \
+      apply-zswap "Perfil Charcoal com ZSWAP" \
+      status "Diagnóstico" \
+      setup-lavd "Ativar SCX LAVD" \
+      install-kernel "Instalar kernel Charcoal" \
+      restore-kernel "Restaurar kernel padrão" \
+      revert "Reverter alterações" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   else
     cat <<'MENU'
@@ -94,13 +96,13 @@ MENU
     local answer
     read -r -p "Opção: " answer
     case "$answer" in
-      1) printf '%s\n' --apply-zram ;;
-      2) printf '%s\n' --apply-zswap ;;
-      3) printf '%s\n' --status ;;
-      4) printf '%s\n' --setup-lavd ;;
-      5) printf '%s\n' --install-kernel ;;
-      6) printf '%s\n' --restore-kernel ;;
-      7) printf '%s\n' --revert ;;
+      1) printf '%s\n' apply-zram ;;
+      2) printf '%s\n' apply-zswap ;;
+      3) printf '%s\n' status ;;
+      4) printf '%s\n' setup-lavd ;;
+      5) printf '%s\n' install-kernel ;;
+      6) printf '%s\n' restore-kernel ;;
+      7) printf '%s\n' revert ;;
       *) printf 'exit\n' ;;
     esac
   fi
@@ -174,12 +176,15 @@ confirmation_text() {
 }
 
 run_action() {
-  local action="$1"
+  local action="$1" backend_action
   case "$action" in
-    --version|--help|-h)
-      run_unprivileged "$action"
+    version|--version)
+      run_unprivileged --version
       ;;
-    --status)
+    help|--help|-h)
+      run_unprivileged --help
+      ;;
+    status|--status)
       local output
       output="$(run_unprivileged --status 2>&1)" || {
         show_error "$output"
@@ -187,15 +192,22 @@ run_action() {
       }
       show_info "$output"
       ;;
-    --apply-zram|--apply-zswap|--setup-lavd|--install-kernel|--restore-kernel|--revert)
-      confirm_action "$(confirmation_text "$action")" || return 0
-      run_privileged "$action"
-      ;;
+    apply-zram|--apply-zram) backend_action=--apply-zram ;;
+    apply-zswap|--apply-zswap) backend_action=--apply-zswap ;;
+    setup-lavd|--setup-lavd) backend_action=--setup-lavd ;;
+    install-kernel|--install-kernel) backend_action=--install-kernel ;;
+    restore-kernel|--restore-kernel) backend_action=--restore-kernel ;;
+    revert|--revert) backend_action=--revert ;;
     *)
       show_error "Ação inválida: $action"
       return 2
       ;;
   esac
+
+  if [[ -n "${backend_action:-}" ]]; then
+    confirm_action "$(confirmation_text "$backend_action")" || return 0
+    run_privileged "$backend_action"
+  fi
 }
 
 [[ -r "$BACKEND" ]] || {
