@@ -1,7 +1,12 @@
-# Turbo-Decky-
-Script de otimização do SteamOs 
 
-O script deve funcionar em qualquer aparelho que utiliza o SteamOs e também distribuições baseadas em arch linux. 
+# Contribua se puder
+
+Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com
+
+# Turbo-Decky-
+ Otimização do SteamOs 
+
+O APP deve funcionar em qualquer aparelho que utiliza o SteamOs e também distribuições baseadas em arch linux. 
 
 # O que é o Turbo Decky?
 
@@ -95,6 +100,4 @@ Agradecemos a toda a comunidade Linux, especialmente desenvolvedores como o time
 
 Sinceros Agradecimentos á V10lator pelo desenvolvimento de seu Kernel Customizado para o Steam Deck.
 
-# Contribua se puder
 
-Caso goste do resultado obtido com esse aplicativo, considere fazer uma doação de qualquer valor para o pix jorgezarpon@msn.com
