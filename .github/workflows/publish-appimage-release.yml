@@ -38,6 +38,7 @@ jobs:
           done
           bash tests/test-installtd.sh ./InstallTD.sh
           bash tests/test-persistence.sh ./InstallTD.sh
+          bash tests/test-zswap-runtime-guard.sh ./InstallTD.sh
           bash tests/test-appimage-layout.sh
 
       - name: Build AppImage
