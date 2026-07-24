@@ -100,3 +100,5 @@ Uma atualização do SteamOS pode substituir configurações, pacotes ou o kerne
 Agradecemos a toda a comunidade Linux, especialmente desenvolvedores como o time do sdweak e cryoutilities que foram grande inspiração para esse projeto. 
 
 Sinceros Agradecimentos á V10lator pelo desenvolvimento de seu Kernel Customizado para o Steam Deck.
+
+
