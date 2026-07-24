@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: turbodecky-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-24.04
@@ -23,7 +27,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           bash -n InstallTD.sh
-          for file in lib/*.sh tests/*.sh; do
+          for file in lib/*.sh tests/*.sh packaging/appimage/AppRun \
+            packaging/appimage/turbodecky packaging/appimage/build-appimage.sh; do
             bash -n "$file"
           done
 
@@ -33,12 +38,18 @@ jobs:
           set -Eeuo pipefail
           bash tests/test-installtd.sh ./InstallTD.sh
 
+      - name: Validate AppImage layout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash tests/test-appimage-layout.sh
+
       - name: Reject ZRAM recompression runtime
         shell: bash
         run: |
           set -Eeuo pipefail
           ! grep -RniE 'OnUnitActiveSec=|OnCalendar=|recomp_algorithm|recompress=' \
-            InstallTD.sh lib tests
+            InstallTD.sh lib packaging/appimage/AppRun packaging/appimage/turbodecky
           grep -Fq 'compression-algorithm = lz4 zstd' lib/10-profiles.sh
 
       - name: Verify Charcoal profile anchors
@@ -52,3 +63,36 @@ jobs:
           grep -Fq 'transparent_hugepage/defrag - - - - defer' lib/00-core.sh
           grep -Fq 'max_ptes_none - - - - 64' lib/00-core.sh
           grep -Fq 'max_ptes_swap - - - - 0' lib/00-core.sh
+
+  package-appimage:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build AppImage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash packaging/appimage/build-appimage.sh
+
+      - name: Smoke-test generated AppImage
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          image="$(find dist -maxdepth 1 -type f -name 'TurboDecky-*-x86_64.AppImage' -print -quit)"
+          [[ -n "$image" && -x "$image" ]]
+          sha256sum -c "$image.sha256"
+          APPIMAGE_EXTRACT_AND_RUN=1 "$image" --version | grep -Eq '^[0-9]+\.[0-9]+'
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurboDecky-AppImage-${{ github.sha }}
+          path: |
+            dist/*.AppImage
+            dist/*.AppImage.sha256
+          if-no-files-found: error
+          retention-days: 14
