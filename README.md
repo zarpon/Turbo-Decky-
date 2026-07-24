@@ -32,21 +32,23 @@ Configura ZSWAP com LZ4, zsmalloc e pool de 35%, além de um swapfile de 8 GiB q
 ## Perfil sysctl sincronizado
 
 ```text
-vm.compaction_proactiveness=10
-vm.swappiness=200
+vm.swappiness=1
 vm.page-cluster=0
-vm.vfs_cache_pressure=50
-vm.dirty_background_bytes=268435456
-vm.dirty_bytes=1073741824
-vm.dirty_expire_centisecs=3000
+vm.min_free_kbytes=262144
+vm.compaction_proactiveness=15
+vm.dirty_expire_centisecs=3500
 vm.dirty_writeback_centisecs=500
-vm.max_map_count=2147483642
-kernel.sched_autogroup_enabled=0
-fs.inotify.max_user_watches=1048576
-fs.inotify.max_user_instances=8192
-fs.file-max=2097152
-net.core.default_qdisc=fq
+vm.watermark_boost_factor=0
+vm.watermark_scale_factor=125
+kernel.split_lock_mitigate=0
+vm.dirty_background_bytes=209715200
+vm.dirty_bytes=409430400
+vm.vfs_cache_pressure=125
 ```
+
+O `linux-charcoal-vulcano` também possui um ajuste opcional específico do
+ZRAM-IR. Ele não é copiado pelo Turbo Decky porque esta branch remove a lógica
+de recompressão e conserva somente o perfil padrão do `zram-generator`.
 
 ## Perfil THP/memória sincronizado
 
