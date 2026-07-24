@@ -77,16 +77,19 @@ sha256sum -c TurboDecky-x86_64.AppImage.sha256
 
 O workflow do repositório recompila, testa e publica automaticamente o AppImage e seu SHA-256 na Release `Latest` após alterações aprovadas na branch `main`.
 
-# ZRAM, ZSWAP e reversão
+## Persistência após reiniciar
 
-- O perfil **ZSWAP** interrompe e mascara `systemd-zram-setup@zram0.service`, impedindo que o ZRAM volte no próximo boot, e ativa o ZSWAP com um swapfile real.
-- O perfil **ZRAM** desativa o ZSWAP imediatamente em runtime, grava `zswap.enabled=0` no GRUB e reativa o serviço padrão de ZRAM.
-- A opção **Reverter alterações** restaura os arquivos, parâmetros sysctl/THP, estado runtime do ZSWAP, GRUB, swapfile criado pelo Turbo Decky e estados anteriores dos serviços usando o snapshot salvo antes da primeira aplicação.
-- A reversão restaura o **estado anterior**, que é mais seguro do que aplicar valores genéricos de fábrica em sistemas SteamOS diferentes.
-- A instalação ou remoção de kernel é uma operação separada. Para voltar ao kernel do SteamOS, use **Restaurar kernel padrão**.
-- Pacotes opcionais instalados pelo gerenciador, como `scx-scheds`, não são removidos automaticamente pela reversão; o serviço criado pelo Turbo Decky é restaurado ou removido conforme o snapshot.
+As configurações aplicadas são persistentes em uma reinicialização normal:
 
-Atenção: é necessário reaplicar as otimizações quando uma atualização do SteamOS substituir configurações gerenciadas pelo sistema.
+- sysctl em `/etc/sysctl.d/99-turbodecky.conf`;
+- THP, KSM e MGLRU em `/etc/tmpfiles.d/99-turbodecky-memory.conf`;
+- ZRAM em `/etc/systemd/zram-generator.conf.d/00-turbodecky.conf`;
+- ZSWAP e parâmetros de kernel em `/etc/default/grub`;
+- swapfile ZSWAP em `/etc/fstab`;
+- regras udev, limites, variáveis de ambiente e estados systemd;
+- SCX LAVD e `fstrim.timer` quando ativados.
+
+Uma atualização do SteamOS pode substituir configurações, pacotes ou o kernel e exigir nova aplicação. A reversão restaura o snapshot capturado antes da primeira aplicação; a restauração do kernel é uma ação separada.
 
 # Agradecimentos
 
