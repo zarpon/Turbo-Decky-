@@ -163,8 +163,9 @@ grep -Fqx 'mask example.service' "$SYSTEMCTL_LOG"
 grep -Fqx 'stop example.service' "$SYSTEMCTL_LOG"
 
 # A limpeza de legado não pode desmascarar o ZRAM antes de seu estado ser salvo.
-! grep -Fq 'unmask systemd-zram-setup@zram0.service' \
-  "$(dirname "$SCRIPT")/lib/50-memory-mode-safety.sh"
+! awk '/^cleanup_legacy_installation\(\)/,/^}/' \
+  "$(dirname "$SCRIPT")/lib/50-memory-mode-safety.sh" | \
+  grep -Fq 'unmask systemd-zram-setup@zram0.service'
 
 PATH="$OLD_PATH"
 ROOTFS="$ROOT"
