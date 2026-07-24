@@ -8,6 +8,8 @@ source "$SCRIPT_DIR/lib/00-core.sh"
 source "$SCRIPT_DIR/lib/10-profiles.sh"
 # shellcheck source=lib/20-actions.sh
 source "$SCRIPT_DIR/lib/20-actions.sh"
+# shellcheck source=lib/30-hardening.sh
+source "$SCRIPT_DIR/lib/30-hardening.sh"
 
 if [[ "${TURBODECKY_LIBRARY:-0}" != 1 ]]; then
   main "$@"
