@@ -5,6 +5,7 @@ on:
     branches:
       - 'validation/**'
       - 'feature/**'
+      - 'fix/**'
   pull_request:
   workflow_dispatch:
 
@@ -63,7 +64,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          grep -Fq 'vm.swappiness=1' lib/40-source-sync.sh
+          ! grep -Eq '^[[:space:]]*"vm\.swappiness=' lib/40-source-sync.sh
           grep -Fq 'vm.min_free_kbytes=262144' lib/40-source-sync.sh
           grep -Fq 'vm.dirty_background_bytes=209715200' lib/40-source-sync.sh
           grep -Fq 'kernel.split_lock_mitigate=0' lib/40-source-sync.sh

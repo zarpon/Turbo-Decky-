@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "$SCRIPT")" && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf -- "$TMP"' EXIT
 ROOT="$TMP/root"
+readonly EXPECTED_SWAP_BYTES=$((8 * 1024 * 1024 * 1024))
 
 mkdir -p \
   "$ROOT/etc/default" \
@@ -33,6 +34,19 @@ export TURBODECKY_ASSUME_YES=1
 # shellcheck source=/dev/null
 source "$SCRIPT"
 
+assert_swapfile_8g() {
+  [[ -f "$SWAPFILE" ]]
+  [[ "$(stat -Lc '%s' "$SWAPFILE")" == "$EXPECTED_SWAP_BYTES" ]]
+  [[ -f "$STATE_DIR/swapfile-created" ]]
+  [[ "$(awk -v path="$SWAPFILE" '$1 == path {count++} END {print count+0}' "$FSTAB_FILE")" == 1 ]]
+  grep -Fqx "$SWAPFILE none swap sw,pri=-2 0 0" "$FSTAB_FILE"
+}
+
+# Aplicar um perfil não pode chamar a reversão completa. A troca de modo usa
+# somente a limpeza específica do recurso incompatível.
+! declare -f apply_zram_profile | grep -Fq 'revert_all'
+! declare -f apply_zswap_profile | grep -Fq 'revert_all'
+
 # ZRAM: tudo que precisa sobreviver ao reboot deve estar em configuração
 # persistente, e o GRUB deve impedir que o ZSWAP volte no próximo boot.
 apply_zram_profile
@@ -47,6 +61,7 @@ for file in \
   [[ -s "$file" ]] || { printf 'arquivo persistente ausente: %s\n' "$file" >&2; exit 1; }
 done
 
+! grep -Eq '^[[:space:]]*vm\.swappiness[[:space:]]*=' "$SYSCTL_FILE"
 grep -Fqx 'zswap.enabled=0' <(tr ' ' '\n' < "$GRUB_FILE")
 grep -Fqx 'compression-algorithm = lz4 zstd' "$ZRAM_FILE"
 grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise' "$MEMORY_FILE"
@@ -56,13 +71,14 @@ grep -Fqx 'zram' "$PROFILE_STATE"
 ! grep -RniE 'OnUnitActiveSec=|OnCalendar=|recomp_algorithm|recompress=' \
   "$SYSCTL_FILE" "$MEMORY_FILE" "$ZRAM_FILE"
 
-# ZSWAP: parâmetros de boot ficam no GRUB, o ZRAM gerenciado é removido e um
-# backing swap persistente é preparado. No sistema real, a entrada é gravada
-# no fstab; a âncora é conferida abaixo porque o root isolado não executa swap.
+# Reproduz o defeito anterior: um arquivo vazio existente era aceito como swap.
+# A nova implementação deve substituí-lo por um arquivo aparente de 8 GiB.
+: > "$SWAPFILE"
 apply_zswap_profile
 
 [[ ! -e "$ZRAM_FILE" ]]
-[[ -e "$SWAPFILE" ]]
+! grep -Eq '^[[:space:]]*vm\.swappiness[[:space:]]*=' "$SYSCTL_FILE"
+assert_swapfile_8g
 grep -Fqx 'zswap' "$PROFILE_STATE"
 for token in \
   zswap.enabled=1 \
@@ -73,12 +89,24 @@ for token in \
   grep -Fqx "$token" <(tr ' ' '\n' < "$GRUB_FILE")
 done
 
+# Trocar para ZRAM remove somente o swapfile criado pelo Turbo Decky. Voltar ao
+# ZSWAP precisa recriar exatamente 8 GiB, sem executar a reversão geral.
+apply_zram_profile
+[[ ! -e "$SWAPFILE" ]]
+! grep -Fq "$SWAPFILE none swap" "$FSTAB_FILE"
+apply_zswap_profile
+assert_swapfile_8g
+
 # Âncoras de persistência executadas no sistema real.
 grep -Fq 'systemctl mask --now systemd-zram-setup@zram0.service' \
   "$REPO_ROOT/lib/50-memory-mode-safety.sh"
+grep -Fq 'swapfile_size_is_8g' "$REPO_ROOT/lib/60-swapfile-safety.sh"
+grep -Fq 'swapfile_has_swap_signature' "$REPO_ROOT/lib/60-swapfile-safety.sh"
+grep -Fq 'swapfile_is_active' "$REPO_ROOT/lib/60-swapfile-safety.sh"
+grep -Fq 'swapon --priority -2' "$REPO_ROOT/lib/60-swapfile-safety.sh"
 grep -Fq 'systemctl enable --now fstrim.timer' "$REPO_ROOT/lib/10-profiles.sh"
 grep -Fq 'systemctl enable --now scx_lavd.service' "$REPO_ROOT/lib/20-actions.sh"
-grep -Fq "printf '%s none swap sw,pri=-2 0 0" "$REPO_ROOT/lib/30-hardening.sh"
+grep -Fq "printf '%s none swap sw,pri=-2 0 0" "$REPO_ROOT/lib/60-swapfile-safety.sh"
 grep -Fq 'steamos-update-grub' "$REPO_ROOT/lib/10-profiles.sh"
 grep -Fq 'mkinitcpio -P' "$REPO_ROOT/lib/10-profiles.sh"
 grep -Fq '/etc/systemd/zram-generator.conf.d/00-turbodecky.conf' "$REPO_ROOT/lib/00-core.sh"
