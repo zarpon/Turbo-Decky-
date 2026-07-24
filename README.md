@@ -1,3 +1,4 @@
+[Apoie o desenvolvedor](https://ko-fi.com/zarpon) 
 
 # Turbo-Decky-
 Script de otimização do SteamOs 
@@ -75,6 +76,15 @@ sha256sum -c TurboDecky-x86_64.AppImage.sha256
 ```
 
 O workflow do repositório recompila, testa e publica automaticamente o AppImage e seu SHA-256 na Release `Latest` após alterações aprovadas na branch `main`.
+
+# ZRAM, ZSWAP e reversão
+
+- O perfil **ZSWAP** interrompe e mascara `systemd-zram-setup@zram0.service`, impedindo que o ZRAM volte no próximo boot, e ativa o ZSWAP com um swapfile real.
+- O perfil **ZRAM** desativa o ZSWAP imediatamente em runtime, grava `zswap.enabled=0` no GRUB e reativa o serviço padrão de ZRAM.
+- A opção **Reverter alterações** restaura os arquivos, parâmetros sysctl/THP, estado runtime do ZSWAP, GRUB, swapfile criado pelo Turbo Decky e estados anteriores dos serviços usando o snapshot salvo antes da primeira aplicação.
+- A reversão restaura o **estado anterior**, que é mais seguro do que aplicar valores genéricos de fábrica em sistemas SteamOS diferentes.
+- A instalação ou remoção de kernel é uma operação separada. Para voltar ao kernel do SteamOS, use **Restaurar kernel padrão**.
+- Pacotes opcionais instalados pelo gerenciador, como `scx-scheds`, não são removidos automaticamente pela reversão; o serviço criado pelo Turbo Decky é restaurado ou removido conforme o snapshot.
 
 Atenção: é necessário reaplicar as otimizações quando uma atualização do SteamOS substituir configurações gerenciadas pelo sistema.
 
