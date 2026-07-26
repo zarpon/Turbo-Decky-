@@ -34,6 +34,37 @@ remove_zswap_runtime_service
 [[ ! -e "$ZSWAP_RUNTIME_HELPER" ]]
 [[ ! -e "$ZSWAP_RUNTIME_SERVICE" ]]
 
+# A zram device reported by zramctl is not necessarily an active swap. The
+# guard must consult swapon first and avoid a false-positive failure.
+MOCK_BIN="$TMP/mock-bin"
+SYSTEMCTL_LOG="$TMP/systemctl.log"
+mkdir -p "$MOCK_BIN"
+cat > "$MOCK_BIN/systemctl" <<'EOF_SYSTEMCTL'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${SYSTEMCTL_LOG:?}"
+exit 0
+EOF_SYSTEMCTL
+cat > "$MOCK_BIN/swapon" <<'EOF_SWAPON'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --show=NAME ]]; then
+  exit 0
+fi
+exit 0
+EOF_SWAPON
+cat > "$MOCK_BIN/zramctl" <<'EOF_ZRAMCTL'
+#!/usr/bin/env bash
+printf '/dev/zram0\n'
+EOF_ZRAMCTL
+chmod +x "$MOCK_BIN/systemctl" "$MOCK_BIN/swapon" "$MOCK_BIN/zramctl"
+export SYSTEMCTL_LOG
+OLD_PATH="$PATH"
+PATH="$MOCK_BIN:$PATH"
+ROOTFS=""
+DRY_RUN=0
+remove_managed_zram
+grep -Fqx 'mask --now systemd-zram-setup@zram0.service' "$SYSTEMCTL_LOG"
+PATH="$OLD_PATH"
+
 ROOTFS=""
 DRY_RUN=0
 ZSWAP_SYSFS_DIR="$TMP/zswap"
@@ -62,10 +93,11 @@ if (
     printf '%s\n' "$value" > "$file"
   }
   configure_zswap_runtime
-); then
+) 2> "$TMP/configure-failure.err"; then
   printf 'configure_zswap_runtime aceitou estado desativado\n' >&2
   exit 1
 fi
+grep -Fq 'O kernel manteve o ZSWAP desativado' "$TMP/configure-failure.err"
 ! grep -Eq '^(Y|1)$' "$ZSWAP_SYSFS_DIR/enabled"
 
 declare -f apply_zswap_profile | grep -Fq 'write_zswap_runtime_service'

@@ -58,8 +58,12 @@ Tudo é feito automaticamente — basta escolher a opção e deixar o script tra
 
 3. No Dolphin, clique com o botão direito no arquivo, abra **Propriedades > Permissões** e marque **É executável**.
 4. Abra o AppImage com dois cliques.
-5. Escolha a otimização desejada. A senha administrativa será solicitada somente quando a ação precisar alterar o sistema.
+5. Escolha a otimização desejada. Durante cada procedimento, uma janela de progresso mostra a etapa atual e a porcentagem concluída; em caso de erro, a etapa interrompida é identificada. A senha administrativa será solicitada somente quando a ação precisar alterar o sistema.
 6. Reinicie o Steam Deck depois de aplicar ou reverter otimizações que alterem memória, GRUB ou kernel.
+
+### Instalação do kernel Charcoal
+
+Na primeira instalação do kernel Charcoal, uma confirmação específica sempre será exibida, explicando que o kernel stock do SteamOS precisa ser removido antes da instalação; mantê-lo pode fazer a instalação falhar. O aplicativo verifica os pacotes instalados, remove todos os `linux-neptune*` detectados somente depois da confirmação e instala o Charcoal apenas após validar o arquivo baixado e cada pacote. Atualizações também removem o stock restante antes de instalar os novos pacotes.
 
 ## Instalação pelo terminal
 
@@ -100,5 +104,3 @@ Uma atualização do SteamOS pode substituir configurações, pacotes ou o kerne
 Agradecemos a toda a comunidade Linux, especialmente desenvolvedores como o time do sdweak e cryoutilities que foram grande inspiração para esse projeto. 
 
 Sinceros Agradecimentos á V10lator pelo desenvolvimento de seu Kernel Customizado para o Steam Deck.
-
-

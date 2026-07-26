@@ -10,23 +10,51 @@ DRY_RUN="${TURBODECKY_DRY_RUN:-0}"
 UI_BACKEND="${TURBODECKY_UI:-auto}"
 LOGFILE="${TURBODECKY_LOGFILE:-/var/log/turbodecky.log}"
 
-# Perfil copiado do linux-charcoal-vulcano. Estes valores são deliberadamente
-# fixos para impedir divergência entre o kernel e o utilitário de instalação.
+# A dry run without an explicitly supplied root must never write to the live
+# system. Use a disposable root so the normal file-generation paths are still
+# exercised without special-casing every write and remove operation.
+TURBODECKY_DRY_RUN_SANDBOX=0
+TURBODECKY_DRY_RUN_ROOT=""
+if [[ "$DRY_RUN" == 1 && -z "$ROOTFS" ]]; then
+  TURBODECKY_DRY_RUN_SANDBOX=1
+  TURBODECKY_DRY_RUN_ROOT="$(mktemp -d /tmp/turbodecky-dry-run.XXXXXX)"
+  ROOTFS="$TURBODECKY_DRY_RUN_ROOT"
+  if [[ "${TURBODECKY_LIBRARY:-0}" != 1 ]]; then
+    trap 'rm -rf -- "$TURBODECKY_DRY_RUN_ROOT"' EXIT
+  fi
+fi
+
+# The progress channel is deliberately separate from the regular log.  The
+# AppImage launcher consumes these records while direct executions render the
+# same updates in a terminal or a native progress dialog.
+PROGRESS_ACTIVE=0
+PROGRESS_CURRENT=0
+PROGRESS_TOTAL=100
+PROGRESS_TITLE=""
+PROGRESS_PID=""
+PROGRESS_FD=""
+PROGRESS_DBUS_REF=""
+PROGRESS_DBUS_TOOL=""
+declare -a PROGRESS_DBUS_ARGS=()
+PROGRESS_MODE="terminal"
+PROGRESS_PROTOCOL="${TURBODECKY_PROGRESS_PROTOCOL:-0}"
+
+# Perfil de runtime sincronizado com linux-charcoal-vulcano. Esta é a única
+# fonte dos valores de sysctl usados pelo Turbo Decky; manter uma segunda lista
+# em outro módulo permitia gerar arquivos diferentes do diagnóstico e do
+# snapshot de reversão.
 readonly CHARCOAL_SYSCTL=(
-  "vm.compaction_proactiveness=10"
-  "vm.swappiness=200"
   "vm.page-cluster=0"
-  "vm.vfs_cache_pressure=50"
-  "vm.dirty_background_bytes=268435456"
-  "vm.dirty_bytes=1073741824"
-  "vm.dirty_expire_centisecs=3000"
+  "vm.min_free_kbytes=262144"
+  "vm.compaction_proactiveness=15"
+  "vm.dirty_expire_centisecs=3500"
   "vm.dirty_writeback_centisecs=500"
-  "vm.max_map_count=2147483642"
-  "kernel.sched_autogroup_enabled=0"
-  "fs.inotify.max_user_watches=1048576"
-  "fs.inotify.max_user_instances=8192"
-  "fs.file-max=2097152"
-  "net.core.default_qdisc=fq"
+  "vm.watermark_boost_factor=0"
+  "vm.watermark_scale_factor=125"
+  "kernel.split_lock_mitigate=0"
+  "vm.dirty_background_bytes=209715200"
+  "vm.dirty_bytes=409430400"
+  "vm.vfs_cache_pressure=125"
 )
 
 readonly CHARCOAL_MEMORY_TMPFILES=(
@@ -96,11 +124,17 @@ log() {
   local message="$*" real_log="$LOGFILE"
   [[ -n "$ROOTFS" ]] && real_log="$(p "$LOGFILE")"
   mkdir -p "$(dirname "$real_log")" 2>/dev/null || true
+  if [[ "${PROGRESS_ACTIVE:-0}" == 1 && "$UI_BACKEND" == terminal && \
+    "$PROGRESS_PROTOCOL" != 1 ]]; then
+    printf '\n' >&2
+  fi
   printf '%s - %s\n' "$(date '+%F %T')" "$message" | tee -a "$real_log" >&2
 }
 
 die() {
+  ui_progress_fail "$*"
   ui_error "$*"
+  cleanup_dry_run_sandbox 2>/dev/null || true
   exit 1
 }
 
@@ -121,6 +155,186 @@ detect_ui() {
   else
     UI_BACKEND=terminal
   fi
+}
+
+ui_confirm_required() {
+  local text="$*"
+  [[ "${TURBODECKY_ASSUME_YES:-0}" == 1 ]] && return 0
+  detect_ui
+  case "$UI_BACKEND" in
+    yad) yad --question --title="Turbo Decky" --width=620 --text="$text" 2>/dev/null ;;
+    zenity) zenity --question --title="Turbo Decky" --width=620 --text="$text" 2>/dev/null ;;
+    kdialog) kdialog --title "Turbo Decky" --yesno "$text" 2>/dev/null ;;
+    dialog) dialog --title "Turbo Decky" --yesno "$text" 12 76 2>/dev/tty ;;
+    *)
+      local answer
+      read -r -p "$text [s/N]: " answer
+      [[ "$answer" =~ ^[sSyY]$ ]]
+      ;;
+  esac
+}
+
+ui_progress_sanitize() {
+  local text="$*"
+  text="${text//$'\n'/ }"
+  text="${text//$'\t'/ }"
+  printf '%s' "$text"
+}
+
+ui_progress_close() {
+  [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
+
+  if [[ -n "${PROGRESS_FD:-}" ]]; then
+    eval "exec ${PROGRESS_FD}>&-" 2>/dev/null || true
+    PROGRESS_FD=""
+  fi
+  if [[ -n "${PROGRESS_DBUS_REF:-}" && -n "${PROGRESS_DBUS_TOOL:-}" ]]; then
+    "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" close >/dev/null 2>&1 || true
+    PROGRESS_DBUS_REF=""
+    PROGRESS_DBUS_TOOL=""
+    PROGRESS_DBUS_ARGS=()
+  fi
+  if [[ -n "${PROGRESS_PID:-}" ]]; then
+    kill "$PROGRESS_PID" 2>/dev/null || true
+    wait "$PROGRESS_PID" 2>/dev/null || true
+    PROGRESS_PID=""
+  fi
+
+  if [[ "$PROGRESS_MODE" == terminal ]]; then
+    printf '\n' >&2
+  fi
+
+  PROGRESS_ACTIVE=0
+  PROGRESS_CURRENT=0
+  PROGRESS_TOTAL=100
+  PROGRESS_TITLE=""
+  PROGRESS_MODE="terminal"
+}
+
+ui_progress_qdbus() {
+  local command
+  for command in qdbus qdbus-qt5 qdbus6; do
+    if command -v "$command" >/dev/null 2>&1; then
+      command -v "$command"
+      return 0
+    fi
+  done
+  return 1
+}
+
+ui_progress_start() {
+  local title="$1" total="${2:-100}"
+  detect_ui
+  PROGRESS_ACTIVE=1
+  PROGRESS_CURRENT=0
+  PROGRESS_TOTAL="$total"
+  PROGRESS_TITLE="$title"
+  PROGRESS_DBUS_REF=""
+  PROGRESS_DBUS_TOOL=""
+  PROGRESS_DBUS_ARGS=()
+
+  if [[ "$PROGRESS_PROTOCOL" == 1 ]]; then
+    PROGRESS_MODE="protocol"
+    printf 'TURBODECKY_PROGRESS\t0\t%s\n' "$(ui_progress_sanitize "$title")"
+    return 0
+  fi
+
+  case "$UI_BACKEND" in
+    kdialog)
+      PROGRESS_DBUS_TOOL="$(ui_progress_qdbus 2>/dev/null || true)"
+      if [[ -n "$PROGRESS_DBUS_TOOL" ]]; then
+        PROGRESS_DBUS_REF="$(kdialog --progressbar "$title" "$total" 2>/dev/null || true)"
+        if [[ -n "$PROGRESS_DBUS_REF" ]]; then
+          read -r -a PROGRESS_DBUS_ARGS <<< "$PROGRESS_DBUS_REF"
+          PROGRESS_MODE="kdialog"
+        else
+          PROGRESS_DBUS_TOOL=""
+        fi
+      fi
+      [[ "$PROGRESS_MODE" == kdialog ]] || printf '\n%s\n' "$title" >&2
+      ;;
+    yad|zenity|dialog)
+      case "$UI_BACKEND" in
+        yad)
+          coproc TURBODECKY_PROGRESS_UI {
+            yad --progress --title="Turbo Decky" --width=700 --height=180 \
+            --percentage=0 --auto-close --no-buttons --text="$title" \
+              >/dev/null 2>&1
+          }
+          ;;
+        zenity)
+          coproc TURBODECKY_PROGRESS_UI {
+            zenity --progress --title="Turbo Decky" --width=700 --height=180 \
+            --percentage=0 --auto-close --no-cancel --text="$title" \
+              >/dev/null 2>&1
+          }
+          ;;
+        dialog)
+          coproc TURBODECKY_PROGRESS_UI {
+            dialog --gauge "$title" 10 82 0 >/dev/tty 2>/dev/tty
+          }
+          ;;
+      esac
+      PROGRESS_PID="$TURBODECKY_PROGRESS_UI_PID"
+      PROGRESS_FD="${TURBODECKY_PROGRESS_UI[1]}"
+      PROGRESS_MODE="pipe"
+      ;;
+    *)
+      printf '\n%s\n' "$title" >&2
+      ;;
+  esac
+}
+
+ui_progress_update() {
+  local percent="$1" message="$2"
+  [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
+  (( percent < 0 )) && percent=0
+  (( percent > 100 )) && percent=100
+  PROGRESS_CURRENT="$percent"
+  message="$(ui_progress_sanitize "$message")"
+
+  if [[ "$PROGRESS_PROTOCOL" == 1 ]]; then
+    printf 'TURBODECKY_PROGRESS\t%s\t%s\n' "$percent" "$message"
+    return 0
+  fi
+
+  case "$UI_BACKEND" in
+    yad|zenity)
+      if [[ -n "${PROGRESS_FD:-}" ]]; then
+        printf '%s\n#%s\n' "$percent" "$message" >&"$PROGRESS_FD" 2>/dev/null || true
+      fi
+      ;;
+    kdialog)
+      if [[ -n "${PROGRESS_DBUS_REF:-}" && -n "${PROGRESS_DBUS_TOOL:-}" ]]; then
+        "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" setLabelText "$message" >/dev/null 2>&1 || true
+        "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" Set "" value "$percent" >/dev/null 2>&1 || true
+      else
+        printf '\r[%3d%%] %s' "$percent" "$message" >&2
+      fi
+      ;;
+    dialog)
+      if [[ -n "${PROGRESS_FD:-}" ]]; then
+        printf 'XXX\n%s\n%s\nXXX\n' "$message" "$percent" >&"$PROGRESS_FD" 2>/dev/null || true
+      fi
+      ;;
+    *)
+      printf '\r[%3d%%] %s' "$percent" "$message" >&2
+      ;;
+  esac
+}
+
+ui_progress_finish() {
+  local message="${1:-Concluído}"
+  [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
+  ui_progress_update 100 "$message"
+  ui_progress_close 0
+}
+
+ui_progress_fail() {
+  local message="${1:-Falha na operação}"
+  [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
+  ui_progress_update "$PROGRESS_CURRENT" "Falha: $message"
+  ui_progress_close 1
 }
 
 ui_info() {
@@ -273,8 +487,15 @@ restore_files() {
   local file backup existed
   while IFS=$'\t' read -r file backup existed; do
     [[ -n "$file" ]] || continue
+    case "$file" in
+      "$(p /etc/)"*|"$(p /var/lib/turbodecky/)"*) ;;
+      *)
+        log "snapshot ignorado por caminho não gerenciado: $file"
+        continue
+        ;;
+    esac
     rm -rf -- "$file"
-    if [[ "$existed" == 1 && -e "$backup" ]]; then
+    if [[ "$existed" == 1 && ( -e "$backup" || -L "$backup" ) ]]; then
       mkdir -p "$(dirname "$file")"
       cp -a "$backup" "$file"
     fi
@@ -292,29 +513,6 @@ selector_value() {
   fi
 }
 
-snapshot_runtime_once() {
-  [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
-  [[ -f "$RUNTIME_SNAPSHOT" ]] && return 0
-  mkdir -p "$STATE_DIR"
-  : > "$RUNTIME_SNAPSHOT"
-  local pair key value relative file
-  for pair in "${CHARCOAL_SYSCTL[@]}"; do
-    key="${pair%%=*}"
-    value="$(sysctl -n "$key" 2>/dev/null || true)"
-    [[ -n "$value" ]] && printf 'sysctl\t%s\t%s\n' "$key" "$value" >> "$RUNTIME_SNAPSHOT"
-  done
-  for relative in \
-    transparent_hugepage/enabled transparent_hugepage/defrag \
-    transparent_hugepage/shmem_enabled transparent_hugepage/khugepaged/defrag \
-    transparent_hugepage/khugepaged/max_ptes_none \
-    transparent_hugepage/khugepaged/max_ptes_swap ksm/run \
-    lru_gen/enabled lru_gen/min_ttl_ms; do
-    file="/sys/kernel/mm/$relative"
-    value="$(selector_value "$file" 2>/dev/null || true)"
-    [[ -n "$value" ]] && printf 'sysfs\t%s\t%s\n' "$file" "$value" >> "$RUNTIME_SNAPSHOT"
-  done
-}
-
 snapshot_services_once() {
   [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
   [[ -f "$SERVICE_SNAPSHOT" ]] && return 0
@@ -328,36 +526,6 @@ snapshot_services_once() {
   done
 }
 
-restore_runtime() {
-  [[ -f "$RUNTIME_SNAPSHOT" ]] || return 0
-  [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
-  local type key value
-  while IFS=$'\t' read -r type key value; do
-    case "$type" in
-      sysctl) sysctl -q -w "$key=$value" 2>/dev/null || true ;;
-      sysfs) [[ -w "$key" ]] && printf '%s' "$value" > "$key" || true ;;
-    esac
-  done < "$RUNTIME_SNAPSHOT"
-}
-
-restore_services() {
-  [[ -f "$SERVICE_SNAPSHOT" ]] || return 0
-  [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
-  local service enabled active
-  while IFS=$'\t' read -r service enabled active; do
-    case "$enabled" in
-      enabled|enabled-runtime|linked|linked-runtime|alias) systemctl unmask "$service" 2>/dev/null || true; systemctl enable "$service" 2>/dev/null || true ;;
-      masked|masked-runtime) systemctl mask "$service" 2>/dev/null || true ;;
-      disabled) systemctl unmask "$service" 2>/dev/null || true; systemctl disable "$service" 2>/dev/null || true ;;
-    esac
-    if [[ "$active" == active ]]; then
-      systemctl start "$service" 2>/dev/null || true
-    else
-      systemctl stop "$service" 2>/dev/null || true
-    fi
-  done < "$SERVICE_SNAPSHOT"
-}
-
 unlock_steamos() {
   [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
   command -v steamos-readonly >/dev/null 2>&1 || return 0
@@ -369,9 +537,19 @@ unlock_steamos() {
   fi
 }
 
+cleanup_dry_run_sandbox() {
+  [[ -n "${TURBODECKY_DRY_RUN_ROOT:-}" ]] || return 0
+  rm -rf -- "$TURBODECKY_DRY_RUN_ROOT"
+  TURBODECKY_DRY_RUN_ROOT=""
+}
+
 restore_steamos_readonly() {
-  [[ "${STEAMOS_WAS_READONLY:-0}" == 1 ]] || return 0
-  steamos-readonly enable 2>/dev/null || true
+  ui_progress_fail "A operação foi interrompida" 2>/dev/null || true
+  if [[ "${STEAMOS_WAS_READONLY:-0}" == 1 ]]; then
+    steamos-readonly enable 2>/dev/null || true
+  fi
+  STEAMOS_WAS_READONLY=0
+  cleanup_dry_run_sandbox
 }
 
 cleanup_legacy_recompression() {
@@ -384,20 +562,22 @@ cleanup_legacy_recompression() {
   done
 }
 
-write_charcoal_sysctl() {
-  backup_file_once "$SYSCTL_FILE"
-  {
-    printf '# Turbo Decky - perfil sincronizado com linux-charcoal-vulcano\n'
-    printf '%s\n' "${CHARCOAL_SYSCTL[@]}"
-  } | atomic_write "$SYSCTL_FILE" 0644
-}
-
 write_charcoal_memory() {
   backup_file_once "$MEMORY_FILE"
   {
     printf '# Turbo Decky - perfil de memória sincronizado com linux-charcoal-vulcano\n'
     printf '%s\n' "${CHARCOAL_MEMORY_TMPFILES[@]}"
   } | atomic_write "$MEMORY_FILE" 0644
+}
+
+write_charcoal_sysctl() {
+  backup_file_once "$SYSCTL_FILE"
+  {
+    printf '# Turbo Decky - perfil sincronizado com linux-charcoal-vulcano\n'
+    printf '# vm.swappiness permanece sob controle do SteamOS ou do usuário.\n'
+    printf '# Ajustes opcionais de recompressão não fazem parte deste perfil.\n'
+    printf '%s\n' "${CHARCOAL_SYSCTL[@]}"
+  } | atomic_write "$SYSCTL_FILE" 0644
 }
 
 write_common_files() {
@@ -417,9 +597,9 @@ EOF_ENV
 
   backup_file_once "$UDEV_FILE"
   cat <<'EOF_UDEV' | atomic_write "$UDEV_FILE" 0644
-# Turbo Decky: ajustes conservadores, sem substituir ADIOS quando ele está ativo.
-ACTION=="add|change", KERNEL=="nvme[0-9]n[0-9]", ATTR{queue/read_ahead_kb}="512", ATTR{queue/rotational}="0"
-ACTION=="add|change", KERNEL=="mmcblk[0-9]*", ATTR{queue/read_ahead_kb}="1024", ATTR{queue/rotational}="0"
-ACTION=="add|change", KERNEL=="nvme[0-9]*|sd[a-z]|mmcblk[0-9]*", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0"
+# Turbo Decky: ajustes conservadores, sem substituir o scheduler do kernel.
+ACTION=="add|change", KERNEL=="nvme*n*", ATTR{queue/read_ahead_kb}="512", ATTR{queue/rotational}="0", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0"
+ACTION=="add|change", KERNEL=="mmcblk*", ATTR{queue/read_ahead_kb}="1024", ATTR{queue/rotational}="0", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0"
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0"
 EOF_UDEV
 }

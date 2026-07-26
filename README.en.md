@@ -53,8 +53,12 @@ Everything is automated. Select an option and let the application complete the p
 
 3. In Dolphin, right-click the file, open **Properties > Permissions**, and enable **Is executable**.
 4. Open the AppImage by double-clicking it.
-5. Select the desired optimization. Administrative authentication is requested only when the selected action needs to modify the system.
+5. Select the desired optimization. During each procedure, a progress window shows the current stage and completion percentage; if something fails, the interrupted stage is identified. Administrative authentication is requested only when the selected action needs to modify the system.
 6. Restart the Steam Deck after applying or reverting optimizations that change memory settings, GRUB, or the kernel.
+
+### Charcoal kernel installation
+
+On the first Charcoal kernel installation, a dedicated confirmation is always shown, explaining that the SteamOS stock kernel must be removed before installation; keeping it can make the installation fail. The application checks installed packages, removes every detected `linux-neptune*` package only after confirmation, and installs Charcoal only after validating the downloaded archive and each package. Updates also remove any remaining stock package before installing the new packages.
 
 ## Install from the terminal
 
