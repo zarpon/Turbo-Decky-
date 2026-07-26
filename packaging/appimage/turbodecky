@@ -251,7 +251,9 @@ run_privileged() {
       /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
     child_pid=$!
   elif command -v pkexec >/dev/null 2>&1; then
-    /usr/bin/pkexec /usr/bin/env \
+    local pkexec_bin
+    pkexec_bin="$(command -v pkexec)"
+    "$pkexec_bin" /usr/bin/env \
       TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
       TURBODECKY_PROGRESS_PROTOCOL=1 \
       TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
