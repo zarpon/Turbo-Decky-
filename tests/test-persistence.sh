@@ -25,6 +25,8 @@ mkdir -p \
 printf 'GRUB_CMDLINE_LINUX="quiet splash"\n' > "$ROOT/etc/default/grub"
 printf '# baseline fstab\n' > "$ROOT/etc/fstab"
 printf 'baseline=1\n' > "$ROOT/etc/sysctl.d/99-turbodecky.conf"
+printf '# pre-existing user zram configuration\n' > \
+  "$ROOT/etc/systemd/zram-generator.conf.d/00-turbodecky.conf"
 
 export TURBODECKY_ROOTFS="$ROOT"
 export TURBODECKY_DRY_RUN=1
@@ -117,14 +119,55 @@ grep -Fq '/etc/systemd/zram-generator.conf.d/00-turbodecky.conf' "$REPO_ROOT/lib
 grep -Fq '/etc/tmpfiles.d/99-turbodecky-memory.conf' "$REPO_ROOT/lib/00-core.sh"
 grep -Fq '/etc/sysctl.d/99-turbodecky.conf' "$REPO_ROOT/lib/00-core.sh"
 
+# A Btrfs-style managed symlink must remove both the link and its known target
+# when switching back to ZRAM or reverting from an isolated root.
+SYMLINK_ROOT="$TMP/symlink-root"
+mkdir -p "$SYMLINK_ROOT/etc" "$SYMLINK_ROOT/home/.swap" \
+  "$SYMLINK_ROOT/var/lib/turbodecky/state"
+ROOTFS="$SYMLINK_ROOT"
+init_paths
+truncate -s "$EXPECTED_SWAP_BYTES" "$(p /home/.swap/turbodecky.swap)"
+ln -s "$(p /home/.swap/turbodecky.swap)" "$SWAPFILE"
+printf '1\n' > "$STATE_DIR/swapfile-created"
+printf '%s.backup none swap sw 0 0\n' "$SWAPFILE" > "$FSTAB_FILE"
+printf '%s none swap sw,pri=-2 0 0\n' "$SWAPFILE" >> "$FSTAB_FILE"
+remove_created_swapfile
+[[ ! -e "$SWAPFILE" && ! -e "$(p /home/.swap/turbodecky.swap)" ]]
+[[ ! -e "$STATE_DIR/swapfile-created" ]]
+! grep -Fq "$SWAPFILE none swap" "$FSTAB_FILE"
+grep -Fqx "$SWAPFILE.backup none swap sw 0 0" "$FSTAB_FILE"
+
+ROOTFS="$ROOT"
+init_paths
+
+# Snapshot restoration must also recover a broken symbolic link. A plain -e
+# check misses that case because the link target intentionally does not exist.
+SNAPSHOT_ROOT="$TMP/snapshot-root"
+mkdir -p "$SNAPSHOT_ROOT/etc" "$SNAPSHOT_ROOT/var/lib/turbodecky/state"
+ROOTFS="$SNAPSHOT_ROOT"
+init_paths
+SNAPSHOT_TARGET="$(p /etc/turbodecky-broken-link)"
+ln -s /target-that-does-not-exist "$SNAPSHOT_TARGET"
+backup_file_once "$SNAPSHOT_TARGET"
+rm -f "$SNAPSHOT_TARGET"
+printf 'managed replacement\n' > "$SNAPSHOT_TARGET"
+restore_files
+[[ -L "$SNAPSHOT_TARGET" ]]
+[[ "$(readlink "$SNAPSHOT_TARGET")" == /target-that-does-not-exist ]]
+
+ROOTFS="$ROOT"
+init_paths
+
 # A reversão deve remover os artefatos gerenciados e restaurar o baseline.
 revert_all
 
 grep -Fqx 'GRUB_CMDLINE_LINUX="quiet splash"' "$GRUB_FILE"
 grep -Fqx 'baseline=1' "$SYSCTL_FILE"
-for generated in "$MEMORY_FILE" "$LIMITS_FILE" "$ENV_FILE" "$UDEV_FILE" "$ZRAM_FILE"; do
+grep -Fqx '# pre-existing user zram configuration' "$ZRAM_FILE"
+for generated in "$MEMORY_FILE" "$LIMITS_FILE" "$ENV_FILE" "$UDEV_FILE"; do
   [[ ! -e "$generated" ]] || { printf 'resíduo após reversão: %s\n' "$generated" >&2; exit 1; }
 done
+grep -Fqx '# pre-existing user zram configuration' "$ZRAM_FILE"
 [[ ! -e "$SWAPFILE" ]]
 [[ ! -e "$STATE_DIR" ]]
 

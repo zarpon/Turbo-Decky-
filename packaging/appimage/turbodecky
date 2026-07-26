@@ -47,6 +47,107 @@ confirm_action() {
   fi
 }
 
+PROGRESS_ACTIVE=0
+PROGRESS_PID=""
+PROGRESS_FD=""
+PROGRESS_DBUS_REF=""
+PROGRESS_DBUS_TOOL=""
+declare -a PROGRESS_DBUS_ARGS=()
+PROGRESS_MODE="terminal"
+PROGRESS_CURRENT=0
+ACTION_FIFO_DIR=""
+
+progress_qdbus() {
+  local command
+  for command in qdbus qdbus-qt5 qdbus6; do
+    if command -v "$command" >/dev/null 2>&1; then
+      command -v "$command"
+      return 0
+    fi
+  done
+  return 1
+}
+
+progress_start() {
+  local title="$1"
+  PROGRESS_ACTIVE=1
+  PROGRESS_CURRENT=0
+  PROGRESS_MODE="terminal"
+  PROGRESS_DBUS_REF=""
+  PROGRESS_DBUS_TOOL=""
+  PROGRESS_DBUS_ARGS=()
+  if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    coproc TURBODECKY_LAUNCHER_PROGRESS {
+      yad --progress --title="Turbo Decky" --width=700 --height=180 \
+        --percentage=0 --auto-close --no-buttons --text="$title" >/dev/null 2>&1
+    }
+    PROGRESS_PID="$TURBODECKY_LAUNCHER_PROGRESS_PID"
+    PROGRESS_FD="${TURBODECKY_LAUNCHER_PROGRESS[1]}"
+    PROGRESS_MODE="pipe"
+  elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    coproc TURBODECKY_LAUNCHER_PROGRESS {
+      zenity --progress --title="Turbo Decky" --width=700 --height=180 \
+        --percentage=0 --auto-close --no-cancel --text="$title" >/dev/null 2>&1
+    }
+    PROGRESS_PID="$TURBODECKY_LAUNCHER_PROGRESS_PID"
+    PROGRESS_FD="${TURBODECKY_LAUNCHER_PROGRESS[1]}"
+    PROGRESS_MODE="pipe"
+  elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    PROGRESS_DBUS_TOOL="$(progress_qdbus 2>/dev/null || true)"
+    if [[ -n "$PROGRESS_DBUS_TOOL" ]]; then
+      PROGRESS_DBUS_REF="$(kdialog --progressbar "$title" 100 2>/dev/null || true)"
+      if [[ -n "$PROGRESS_DBUS_REF" ]]; then
+        read -r -a PROGRESS_DBUS_ARGS <<< "$PROGRESS_DBUS_REF"
+        PROGRESS_MODE="kdialog"
+      else
+        PROGRESS_DBUS_TOOL=""
+      fi
+    fi
+    [[ "$PROGRESS_MODE" == kdialog ]] || printf '\n%s\n' "$title" >&2
+  else
+    printf '\n%s\n' "$title" >&2
+  fi
+}
+
+progress_update() {
+  local percent="$1" message="$2"
+  [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
+  PROGRESS_CURRENT="$percent"
+  if [[ -n "${PROGRESS_FD:-}" ]]; then
+    printf '%s\n#%s\n' "$percent" "$message" >&"$PROGRESS_FD" 2>/dev/null || true
+  elif [[ -n "${PROGRESS_DBUS_REF:-}" && -n "${PROGRESS_DBUS_TOOL:-}" ]]; then
+    "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" setLabelText "$message" >/dev/null 2>&1 || true
+    "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" Set "" value "$percent" >/dev/null 2>&1 || true
+  else
+    printf '\r[%3d%%] %s' "$percent" "$message" >&2
+  fi
+}
+
+progress_close() {
+  [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
+  local was_terminal=0
+  [[ "$PROGRESS_MODE" == terminal ]] && was_terminal=1
+  if [[ -n "${PROGRESS_FD:-}" ]]; then
+    eval "exec ${PROGRESS_FD}>&-" 2>/dev/null || true
+    PROGRESS_FD=""
+  fi
+  if [[ -n "${PROGRESS_DBUS_REF:-}" && -n "${PROGRESS_DBUS_TOOL:-}" ]]; then
+    "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" close >/dev/null 2>&1 || true
+    PROGRESS_DBUS_REF=""
+    PROGRESS_DBUS_TOOL=""
+    PROGRESS_DBUS_ARGS=()
+  fi
+  if [[ -n "${PROGRESS_PID:-}" ]]; then
+    kill "$PROGRESS_PID" 2>/dev/null || true
+    wait "$PROGRESS_PID" 2>/dev/null || true
+    PROGRESS_PID=""
+  fi
+  (( was_terminal == 1 )) && printf '\n' >&2
+  PROGRESS_ACTIVE=0
+  PROGRESS_CURRENT=0
+  PROGRESS_MODE="terminal"
+}
+
 select_action() {
   if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
     yad --list --title="Turbo Decky" --width=820 --height=540 \
@@ -118,40 +219,88 @@ stage_payload() {
 }
 
 cleanup() {
+  progress_close
+  [[ -z "${ACTION_FIFO_DIR:-}" ]] || rm -rf -- "$ACTION_FIFO_DIR"
   [[ -z "${STAGED_DIR:-}" ]] || rm -rf -- "$STAGED_DIR"
   [[ -z "${ACTION_LOG:-}" ]] || rm -f -- "$ACTION_LOG"
 }
 trap cleanup EXIT INT TERM
 
 run_unprivileged() {
-  /usr/bin/bash "$BACKEND" "$@"
+  # Status/version are captured by the launcher so the launcher can present a
+  # single dialog. Force the backend to emit text instead of opening a second
+  # graphical dialog inside the command substitution.
+  TURBODECKY_UI=terminal /usr/bin/bash "$BACKEND" "$@"
 }
 
 run_privileged() {
-  local action="$1" status=0
+  local action="$1" kernel_confirmed="${2:-0}" status=0
+  local child_pid line output_fifo failure_message=""
   stage_payload
   ACTION_LOG="$(mktemp /tmp/turbodecky-action.XXXXXX.log)"
-  show_info "A operação será iniciada. Autorize a solicitação administrativa e aguarde a conclusão."
+  ACTION_FIFO_DIR="$(mktemp -d /tmp/turbodecky-output.XXXXXX)"
+  output_fifo="$ACTION_FIFO_DIR/events"
+  mkfifo "$output_fifo"
+  progress_start "Aguardando autorização administrativa para: $action"
+  progress_update 3 "Aguardando autorização administrativa"
 
   if (( EUID == 0 )); then
     TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
-      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$ACTION_LOG" 2>&1 || status=$?
+      TURBODECKY_PROGRESS_PROTOCOL=1 \
+      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
+      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
+    child_pid=$!
   elif command -v pkexec >/dev/null 2>&1; then
-    /usr/bin/pkexec /usr/bin/env \
+    local pkexec_bin
+    pkexec_bin="$(command -v pkexec)"
+    "$pkexec_bin" /usr/bin/env \
       TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
-      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$ACTION_LOG" 2>&1 || status=$?
+      TURBODECKY_PROGRESS_PROTOCOL=1 \
+      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
+      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
+    child_pid=$!
   elif command -v kdesu >/dev/null 2>&1; then
     local command_line
     printf -v command_line '%q ' /usr/bin/env TURBODECKY_UI=terminal \
-      TURBODECKY_ASSUME_YES=1 /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action"
-    kdesu -c "$command_line" >"$ACTION_LOG" 2>&1 || status=$?
+      TURBODECKY_ASSUME_YES=1 TURBODECKY_PROGRESS_PROTOCOL=1 \
+      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
+      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action"
+    kdesu -c "$command_line" >"$output_fifo" 2>&1 &
+    child_pid=$!
   elif command -v sudo >/dev/null 2>&1 && [[ -t 0 ]]; then
     sudo /usr/bin/env TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
-      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$ACTION_LOG" 2>&1 || status=$?
+      TURBODECKY_PROGRESS_PROTOCOL=1 \
+      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
+      /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
+    child_pid=$!
   else
+    rm -f -- "$output_fifo"
     show_error "Nenhum agente de autenticação compatível foi encontrado. Instale ou habilite pkexec/polkit e execute novamente."
+    progress_close
     return 1
   fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == $'TURBODECKY_PROGRESS\t'* ]]; then
+      IFS=$'\t' read -r _ percent message <<< "$line"
+      progress_update "${percent:-0}" "${message:-Processando...}"
+    else
+      if [[ "$line" == ERRO:* ]]; then
+        failure_message="$line"
+      fi
+      printf '%s\n' "$line" >> "$ACTION_LOG"
+    fi
+  done < "$output_fifo"
+  wait "$child_pid" || status=$?
+  rm -rf -- "$ACTION_FIFO_DIR"
+  ACTION_FIFO_DIR=""
+  if (( status == 0 )); then
+    progress_update 100 "Operação concluída"
+  else
+    progress_update "${PROGRESS_CURRENT:-0}" \
+      "${failure_message:-Falha na operação (código $status)}"
+  fi
+  progress_close
 
   local summary
   summary="$(tail -n 30 "$ACTION_LOG" 2>/dev/null || true)"
@@ -173,6 +322,38 @@ confirmation_text() {
     --revert) printf '%s' "Reverter as alterações gerenciadas pelo Turbo Decky usando os snapshots existentes?" ;;
     *) printf '%s' "Executar esta operação administrativa?" ;;
   esac
+}
+
+kernel_stock_present() {
+  if ! command -v pacman >/dev/null 2>&1; then
+    # A missing package database must not skip the safety confirmation; the
+    # privileged backend performs the authoritative check before removal.
+    return 0
+  fi
+  local installed
+  installed="$(pacman -Qq 2>/dev/null)" || return 0
+  grep -Eq '^linux-neptune($|[-.])' <<< "$installed"
+}
+
+kernel_charcoal_present() {
+  command -v pacman >/dev/null 2>&1 || return 1
+  local installed
+  installed="$(pacman -Qq 2>/dev/null || true)"
+  grep -Eq '^linux-charcoal($|[-.])' <<< "$installed"
+}
+
+kernel_install_confirmation() {
+  if ! kernel_charcoal_present; then
+    if kernel_stock_present; then
+      printf '%s' "Esta é a primeira instalação do kernel Charcoal. Para evitar falha, o kernel stock do SteamOS será removido obrigatoriamente antes da instalação. Continuar?"
+    else
+      printf '%s' "Esta é a primeira instalação do kernel Charcoal. Nenhum kernel stock foi detectado; se existir um pacote fora do banco do pacman, ele também deverá ser removido para evitar conflito. Continuar?"
+    fi
+  elif kernel_stock_present; then
+    printf '%s' "O kernel stock do SteamOS está instalado. Ele será removido obrigatoriamente antes da atualização do kernel Charcoal; mantê-lo pode causar falha. Continuar?"
+  else
+    confirmation_text --install-kernel
+  fi
 }
 
 run_action() {
@@ -205,8 +386,15 @@ run_action() {
   esac
 
   if [[ -n "${backend_action:-}" ]]; then
-    confirm_action "$(confirmation_text "$backend_action")" || return 0
-    run_privileged "$backend_action"
+    local kernel_confirmed=0 confirmation
+    if [[ "$backend_action" == --install-kernel ]]; then
+      confirmation="$(kernel_install_confirmation)"
+      confirm_action "$confirmation" || return 0
+      kernel_confirmed=1
+    else
+      confirm_action "$(confirmation_text "$backend_action")" || return 0
+    fi
+    run_privileged "$backend_action" "$kernel_confirmed"
   fi
 }
 

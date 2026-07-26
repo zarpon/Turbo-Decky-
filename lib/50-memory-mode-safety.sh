@@ -14,9 +14,12 @@ write_runtime_value() {
 disable_zswap_runtime() {
   [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
   local enabled="$ZSWAP_SYSFS_DIR/enabled"
-  if [[ -e "$enabled" ]]; then
-    write_runtime_value "$enabled" 0 || log "não foi possível desativar o ZSWAP em runtime"
-  fi
+  [[ -e "$enabled" ]] || return 0
+  write_runtime_value "$enabled" 0 || die "Não foi possível desativar o ZSWAP em runtime."
+  case "$(cat "$enabled" 2>/dev/null || true)" in
+    N|0) ;;
+    *) die "O ZSWAP permaneceu ativo depois da tentativa de desativação." ;;
+  esac
 }
 
 configure_zswap_runtime() {
@@ -44,7 +47,7 @@ snapshot_runtime_once() {
   : > "$RUNTIME_SNAPSHOT"
 
   local pair key value relative file
-  for pair in "${CHARCOAL_SYSCTL_ACTIVE[@]}"; do
+  for pair in "${CHARCOAL_SYSCTL[@]}"; do
     key="${pair%%=*}"
     value="$(sysctl -n "$key" 2>/dev/null || true)"
     [[ -n "$value" ]] && printf 'sysctl\t%s\t%s\n' "$key" "$value" >> "$RUNTIME_SNAPSHOT"
@@ -142,46 +145,53 @@ cleanup_legacy_installation() {
   fi
 }
 
+zram_runtime_devices() {
+  local device
+  if command -v swapon >/dev/null 2>&1; then
+    if swapon --show=NAME --noheadings --raw 2>/dev/null | while IFS= read -r device; do
+      if [[ "$device" =~ (^|/)zram[0-9]+$ ]]; then
+        printf '%s\n' "$device"
+      fi
+    done; then
+      return 0
+    fi
+  fi
+  if command -v zramctl >/dev/null 2>&1; then
+    zramctl --noheadings --output NAME 2>/dev/null | while IFS= read -r device; do
+      if [[ "$device" =~ (^|/)zram[0-9]+$ ]]; then
+        printf '%s\n' "$device"
+      fi
+    done
+  fi
+}
+
+zram_runtime_active() {
+  [[ -n "$(zram_runtime_devices)" ]]
+}
+
 remove_managed_zram() {
   [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
   # Masking is required: stopping alone allows the generator-created unit to
   # return on the next boot when a vendor ZRAM configuration still exists.
-  systemctl mask --now systemd-zram-setup@zram0.service 2>/dev/null || true
+  systemctl mask --now systemd-zram-setup@zram0.service 2>/dev/null || \
+    die "Não foi possível mascarar e parar a ZRAM antes de ativar o ZSWAP."
+  if zram_runtime_active; then
+    while IFS= read -r device; do
+      [[ -n "$device" ]] || continue
+      swapoff "$device" 2>/dev/null || true
+    done < <(zram_runtime_devices)
+    zram_runtime_active && die "A ZRAM permaneceu ativa depois da tentativa de desativação."
+  fi
 }
 
 activate_zram() {
   [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
   disable_zswap_runtime
-  systemctl daemon-reload
-  systemctl unmask systemd-zram-setup@zram0.service 2>/dev/null || true
-  systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || true
-}
-
-apply_zram_profile() {
-  prepare_apply zram
-  remove_created_swapfile
-  write_zram_config
-  update_grub_file zram
-  apply_runtime_profiles
-  disable_zswap_runtime
-  activate_zram
-  update_grub_runtime
-  printf 'zram\n' > "$PROFILE_STATE"
-  log "perfil ZRAM aplicado"
-  ui_info "Perfil ZRAM aplicado. O ZSWAP foi desativado em runtime e no próximo boot. Não há timer, serviço ou rotina de recompressão. Reinicie o sistema."
-}
-
-apply_zswap_profile() {
-  prepare_apply zswap
-  remove_managed_zram
-  backup_file_once "$ZRAM_FILE"
-  rm -f "$ZRAM_FILE"
-  ensure_swapfile
-  configure_zswap_runtime
-  update_grub_file zswap
-  apply_runtime_profiles
-  update_grub_runtime
-  printf 'zswap\n' > "$PROFILE_STATE"
-  log "perfil ZSWAP aplicado"
-  ui_info "Perfil ZSWAP aplicado. O ZRAM foi interrompido e mascarado para permanecer desativado no próximo boot. Reinicie o sistema."
+  systemctl daemon-reload || die "Não foi possível recarregar as unidades da ZRAM."
+  systemctl unmask systemd-zram-setup@zram0.service || \
+    die "Não foi possível liberar a unidade da ZRAM."
+  systemctl restart systemd-zram-setup@zram0.service || \
+    die "Não foi possível ativar a ZRAM em runtime."
+  systemctl is-active --quiet systemd-zram-setup@zram0.service || \
+    die "A unidade da ZRAM não ficou ativa após a reinicialização."
 }

@@ -15,6 +15,10 @@ swapfile_resolved_path() {
   fi
 }
 
+managed_swapfile_target() {
+  p /home/.swap/turbodecky.swap
+}
+
 swapfile_size_is_8g() {
   local path="$1" size
   [[ -f "$path" ]] || return 1
@@ -41,9 +45,8 @@ swapfile_is_active() {
 
 swapfile_is_managed() {
   [[ -f "$STATE_DIR/swapfile-created" ]] && return 0
-  [[ -f "$PROFILE_STATE" && "$(cat "$PROFILE_STATE" 2>/dev/null || true)" == zswap ]] && return 0
   if [[ -L "$SWAPFILE" ]]; then
-    [[ "$(readlink -f -- "$SWAPFILE" 2>/dev/null || true)" == /home/.swap/turbodecky.swap ]] && return 0
+    [[ "$(readlink -f -- "$SWAPFILE" 2>/dev/null || true)" == "$(managed_swapfile_target)" ]] && return 0
   fi
   return 1
 }
@@ -59,15 +62,39 @@ write_swapfile_fstab_entry() {
   } | atomic_write "$FSTAB_FILE" 0644
 }
 
+remove_swapfile_fstab_entry() {
+  [[ -f "$FSTAB_FILE" ]] || return 0
+  backup_file_once "$FSTAB_FILE"
+  awk -v path="$SWAPFILE" 'NF == 0 || $1 != path { print }' "$FSTAB_FILE" |
+    atomic_write "$FSTAB_FILE" 0644
+}
+
 remove_invalid_managed_swapfile() {
   local actual=""
   actual="$(swapfile_resolved_path "$SWAPFILE" 2>/dev/null || true)"
   swapoff "$SWAPFILE" 2>/dev/null || true
   [[ -z "$actual" || "$actual" == "$SWAPFILE" ]] || swapoff "$actual" 2>/dev/null || true
   rm -f -- "$SWAPFILE"
-  if [[ "$actual" == /home/.swap/turbodecky.swap ]]; then
+  if [[ "$actual" == "$(managed_swapfile_target)" ]]; then
     rm -f -- "$actual"
   fi
+}
+
+remove_created_swapfile() {
+  [[ -f "$STATE_DIR/swapfile-created" ]] || return 0
+  remove_swapfile_fstab_entry
+
+  local actual=""
+  actual="$(swapfile_resolved_path "$SWAPFILE" 2>/dev/null || true)"
+  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]]; then
+    swapoff "$SWAPFILE" 2>/dev/null || true
+    [[ -z "$actual" || "$actual" == "$SWAPFILE" ]] || swapoff "$actual" 2>/dev/null || true
+  fi
+  rm -f -- "$SWAPFILE"
+  if [[ "$actual" == "$(managed_swapfile_target)" ]]; then
+    rm -f -- "$actual"
+  fi
+  rm -f -- "$STATE_DIR/swapfile-created"
 }
 
 activate_verified_swapfile() {

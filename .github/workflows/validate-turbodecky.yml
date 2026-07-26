@@ -52,6 +52,12 @@ jobs:
           set -Eeuo pipefail
           bash tests/test-zswap-runtime-guard.sh ./InstallTD.sh
 
+      - name: Validate progress UI and kernel installation safety
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash tests/test-progress-ui.sh ./InstallTD.sh
+
       - name: Validate AppImage layout
         shell: bash
         run: |
@@ -70,10 +76,10 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ! grep -Eq '^[[:space:]]*"vm\.swappiness=' lib/40-source-sync.sh
-          grep -Fq 'vm.min_free_kbytes=262144' lib/40-source-sync.sh
-          grep -Fq 'vm.dirty_background_bytes=209715200' lib/40-source-sync.sh
-          grep -Fq 'kernel.split_lock_mitigate=0' lib/40-source-sync.sh
+          ! grep -Eq '^[[:space:]]*"vm\.swappiness=' lib/00-core.sh
+          grep -Fq 'vm.min_free_kbytes=262144' lib/00-core.sh
+          grep -Fq 'vm.dirty_background_bytes=209715200' lib/00-core.sh
+          grep -Fq 'kernel.split_lock_mitigate=0' lib/00-core.sh
           grep -Fq 'transparent_hugepage/defrag - - - - defer+madvise' lib/00-core.sh
           grep -Fq 'max_ptes_none - - - - 384' lib/00-core.sh
           grep -Fq 'max_ptes_swap - - - - 16' lib/00-core.sh
