@@ -54,11 +54,11 @@ for line in "${required_sysctl[@]}"; do grep -Fqx "$line" "$SYSCTL_FILE"; done
 
 required_memory=(
   'w! /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise'
-  'w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer'
+  'w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise'
   'w! /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise'
   'w! /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0'
-  'w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 64'
-  'w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 0'
+  'w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 384'
+  'w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 16'
   'w! /sys/kernel/mm/ksm/run - - - - 0'
   'w! /sys/kernel/mm/lru_gen/enabled - - - - 7'
   'w! /sys/kernel/mm/lru_gen/min_ttl_ms - - - - 0'

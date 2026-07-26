@@ -74,9 +74,9 @@ jobs:
           grep -Fq 'vm.min_free_kbytes=262144' lib/40-source-sync.sh
           grep -Fq 'vm.dirty_background_bytes=209715200' lib/40-source-sync.sh
           grep -Fq 'kernel.split_lock_mitigate=0' lib/40-source-sync.sh
-          grep -Fq 'transparent_hugepage/defrag - - - - defer' lib/00-core.sh
-          grep -Fq 'max_ptes_none - - - - 64' lib/00-core.sh
-          grep -Fq 'max_ptes_swap - - - - 0' lib/00-core.sh
+          grep -Fq 'transparent_hugepage/defrag - - - - defer+madvise' lib/00-core.sh
+          grep -Fq 'max_ptes_none - - - - 384' lib/00-core.sh
+          grep -Fq 'max_ptes_swap - - - - 16' lib/00-core.sh
 
   package-appimage:
     needs: validate

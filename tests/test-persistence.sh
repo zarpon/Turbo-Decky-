@@ -65,7 +65,11 @@ done
 grep -Fqx 'zswap.enabled=0' <(tr ' ' '\n' < "$GRUB_FILE")
 grep -Fqx 'compression-algorithm = lz4 zstd' "$ZRAM_FILE"
 grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise' "$MEMORY_FILE"
-grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer' "$MEMORY_FILE"
+grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise' "$MEMORY_FILE"
+grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise' "$MEMORY_FILE"
+grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0' "$MEMORY_FILE"
+grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 384' "$MEMORY_FILE"
+grep -Fqx 'w! /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 16' "$MEMORY_FILE"
 grep -Fqx 'w! /sys/kernel/mm/lru_gen/enabled - - - - 7' "$MEMORY_FILE"
 grep -Fqx 'zram' "$PROFILE_STATE"
 ! grep -RniE 'OnUnitActiveSec=|OnCalendar=|recomp_algorithm|recompress=' \
