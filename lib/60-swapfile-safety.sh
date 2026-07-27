@@ -43,14 +43,6 @@ swapfile_is_active() {
   return 1
 }
 
-swapfile_is_managed() {
-  [[ -f "$STATE_DIR/swapfile-created" ]] && return 0
-  if [[ -L "$SWAPFILE" ]]; then
-    [[ "$(readlink -f -- "$SWAPFILE" 2>/dev/null || true)" == "$(managed_swapfile_target)" ]] && return 0
-  fi
-  return 1
-}
-
 write_swapfile_fstab_entry() {
   backup_file_once "$FSTAB_FILE"
   mkdir -p "$(dirname "$FSTAB_FILE")"
@@ -69,11 +61,29 @@ remove_swapfile_fstab_entry() {
     atomic_write "$FSTAB_FILE" 0644
 }
 
-remove_invalid_managed_swapfile() {
+remove_existing_swapfile() {
   local actual=""
   actual="$(swapfile_resolved_path "$SWAPFILE" 2>/dev/null || true)"
-  swapoff "$SWAPFILE" 2>/dev/null || true
-  [[ -z "$actual" || "$actual" == "$SWAPFILE" ]] || swapoff "$actual" 2>/dev/null || true
+
+  # An existing swapfile may be active even when its size or signature is
+  # wrong for this profile. Never unlink an active swapfile until swapoff has
+  # succeeded and the kernel no longer reports it in swapon --show.
+  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]] &&
+     command -v swapon >/dev/null 2>&1 && command -v swapoff >/dev/null 2>&1; then
+    if swapfile_is_active "$SWAPFILE"; then
+      swapoff "$SWAPFILE" 2>/dev/null || true
+      if swapfile_is_active "$SWAPFILE" &&
+         [[ -n "$actual" && "$actual" != "$SWAPFILE" ]]; then
+        swapoff "$actual" 2>/dev/null || true
+      fi
+      swapfile_is_active "$SWAPFILE" &&
+        die "Não foi possível desativar o swapfile existente em $SWAPFILE."
+    fi
+  fi
+
+  # Do not leave a boot-time entry pointing to the file while it is being
+  # replaced. A fresh entry is written only after the new swapfile validates.
+  remove_swapfile_fstab_entry
   rm -f -- "$SWAPFILE"
   if [[ "$actual" == "$(managed_swapfile_target)" ]]; then
     rm -f -- "$actual"
@@ -82,18 +92,7 @@ remove_invalid_managed_swapfile() {
 
 remove_created_swapfile() {
   [[ -f "$STATE_DIR/swapfile-created" ]] || return 0
-  remove_swapfile_fstab_entry
-
-  local actual=""
-  actual="$(swapfile_resolved_path "$SWAPFILE" 2>/dev/null || true)"
-  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]]; then
-    swapoff "$SWAPFILE" 2>/dev/null || true
-    [[ -z "$actual" || "$actual" == "$SWAPFILE" ]] || swapoff "$actual" 2>/dev/null || true
-  fi
-  rm -f -- "$SWAPFILE"
-  if [[ "$actual" == "$(managed_swapfile_target)" ]]; then
-    rm -f -- "$actual"
-  fi
+  remove_existing_swapfile
   rm -f -- "$STATE_DIR/swapfile-created"
 }
 
@@ -141,11 +140,11 @@ create_real_swapfile() {
   fi
 
   swapfile_size_is_8g "$SWAPFILE" || {
-    remove_invalid_managed_swapfile
+    remove_existing_swapfile
     die "O arquivo criado não possui exatamente 8 GiB."
   }
   swapfile_has_swap_signature "$SWAPFILE" || {
-    remove_invalid_managed_swapfile
+    remove_existing_swapfile
     die "O arquivo criado não possui uma assinatura swap válida."
   }
   activate_verified_swapfile
@@ -183,10 +182,8 @@ ensure_swapfile() {
       return 0
     fi
 
-    swapfile_is_managed || die \
-      "Já existe $SWAPFILE, mas ele não é um swapfile válido de 8 GiB. Renomeie ou remova o arquivo e execute novamente."
-    log "swapfile gerenciado inválido detectado; recriando com 8 GiB"
-    remove_invalid_managed_swapfile
+    log "swapfile existente inválido ou com tamanho diferente; removendo e recriando com 8 GiB"
+    remove_existing_swapfile
   fi
 
   create_real_swapfile
