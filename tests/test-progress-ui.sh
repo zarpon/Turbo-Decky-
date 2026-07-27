@@ -127,7 +127,7 @@ PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
   TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
-  bash -c 'source "$1"; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" > "$kernel_output" 2> "$TMP/kernel.err"
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" > "$kernel_output" 2> "$TMP/kernel.err"
 grep -Fq $'TURBODECKY_PROGRESS\t68\tRemovendo o kernel stock: linux-neptune-616' "$kernel_output"
 grep -Fqx 'remove' "$PACMAN_LOG"
 grep -Fqx 'install' "$PACMAN_LOG"
@@ -143,7 +143,7 @@ if PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" 
   DEVMODE_LOG="$DEVMODE_LOG" DEVMODE_FAIL=1 TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
-  bash -c 'source "$1"; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
   > "$TMP/devmode-failure.out" 2> "$TMP/devmode-failure.err"; then
   printf 'falha do modo desenvolvedor foi ignorada\n' >&2
   exit 1
@@ -173,7 +173,7 @@ if PATH="$MOCK_BIN:$PATH" PACMAN_INVALID=1 \
   TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
-  bash -c 'source "$1"; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
   > "$TMP/invalid-kernel.out" 2> "$TMP/invalid-kernel.err"; then
   printf 'pacote inválido foi aceito\n' >&2
   exit 1
@@ -189,7 +189,7 @@ PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
   TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_ASSUME_YES=1 \
   TURBODECKY_PROGRESS_PROTOCOL=1 \
-  bash -c 'source "$1"; update_grub_runtime() { :; }; restore_stock_kernel' _ "$SCRIPT" \
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; restore_stock_kernel' _ "$SCRIPT" \
   > "$TMP/restore-kernel.out" 2> "$TMP/restore-kernel.err"
 grep -Fq $'TURBODECKY_PROGRESS\t70\tInstalando linux-neptune-616' \
   "$TMP/restore-kernel.out"
