@@ -19,8 +19,8 @@ configure_zswap_runtime() {
 
   write_runtime_value "$ZSWAP_SYSFS_DIR/enabled" 0 || \
     die "Não foi possível preparar o ZSWAP para configuração."
-  write_runtime_value "$ZSWAP_SYSFS_DIR/compressor" lz4 || \
-    die "Não foi possível configurar o compressor LZ4 do ZSWAP."
+  write_runtime_value "$ZSWAP_SYSFS_DIR/compressor" "$ZSWAP_COMPRESSOR" || \
+    die "Não foi possível configurar o compressor $ZSWAP_COMPRESSOR do ZSWAP."
   write_runtime_value "$ZSWAP_SYSFS_DIR/max_pool_percent" 35 || \
     die "Não foi possível configurar o limite do pool do ZSWAP."
   write_runtime_value "$ZSWAP_SYSFS_DIR/zpool" zsmalloc || \
@@ -36,14 +36,15 @@ configure_zswap_runtime() {
 
 write_zswap_runtime_service() {
   backup_file_once "$ZSWAP_RUNTIME_HELPER"
-  cat <<'EOF_HELPER' | atomic_write "$ZSWAP_RUNTIME_HELPER" 0755
+  cat <<'EOF_HELPER' | sed "s/@TURBODECKY_ZSWAP_COMPRESSOR@/$ZSWAP_COMPRESSOR/g" | \
+    atomic_write "$ZSWAP_RUNTIME_HELPER" 0755
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
 readonly params=/sys/module/zswap/parameters
 [[ -d "$params" ]]
 printf '0\n' > "$params/enabled"
-printf 'lz4\n' > "$params/compressor"
+printf '%s\n' '@TURBODECKY_ZSWAP_COMPRESSOR@' > "$params/compressor"
 printf '35\n' > "$params/max_pool_percent"
 printf 'zsmalloc\n' > "$params/zpool"
 printf '1\n' > "$params/shrinker_enabled"

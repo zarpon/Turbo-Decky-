@@ -26,6 +26,8 @@ Turbo Decky applies several internal improvements, including:
 - Faster game loading and fewer micro-stutters.
 - Improved RAM management.
 - ZSWAP support to reduce performance drops when RAM is under pressure.
+- The ZSWAP profile uses LZ4KDR, persisted in GRUB and reaffirmed by the
+  Turbo Decky runtime service after each boot.
 - Storage read and write adjustments for a more responsive system.
 - AMDGPU behavior optimizations.
 - Disabling unnecessary system services that consume resources.

@@ -4,6 +4,7 @@ set -Eeuo pipefail
 readonly TURBODECKY_VERSION="4.0.0-test"
 readonly TURBODECKY_AUTHOR="Jorge Luis"
 readonly TURBODECKY_REPOSITORY="zarpon/Turbo-Decky-"
+readonly ZSWAP_COMPRESSOR="lz4kdr"
 
 ROOTFS="${TURBODECKY_ROOTFS:-}"
 DRY_RUN="${TURBODECKY_DRY_RUN:-0}"

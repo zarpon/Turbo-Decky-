@@ -29,6 +29,9 @@ Faz com que o sistema gerencie melhor a memória (RAM).
 
 Usa o Zswap, que ajuda a evitar quedas de desempenho quando a RAM está cheia.
 
+No perfil ZSWAP, o compressor utilizado é o LZ4KDR. A configuração é gravada
+no GRUB e reafirmada pelo serviço persistente do Turbo Decky após cada boot.
+
 Ajusta a forma como o SteamOS grava e lê arquivos, tornando o sistema mais ágil.
 
 Otimiza o comportamento da placa de vídeo (AMDGPU).

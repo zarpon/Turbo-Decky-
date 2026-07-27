@@ -88,7 +88,7 @@ assert_swapfile_8g
 grep -Fqx 'zswap' "$PROFILE_STATE"
 for token in \
   zswap.enabled=1 \
-  zswap.compressor=lz4 \
+  zswap.compressor=lz4kdr \
   zswap.max_pool_percent=35 \
   zswap.zpool=zsmalloc \
   zswap.shrinker_enabled=1; do

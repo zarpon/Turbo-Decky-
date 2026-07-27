@@ -32,7 +32,7 @@ configure_zswap_runtime() {
   # Disable first so compressor/zpool can be changed safely, then enable only
   # after a real backing swapfile has been activated.
   write_runtime_value "$ZSWAP_SYSFS_DIR/enabled" 0 || true
-  write_runtime_value "$ZSWAP_SYSFS_DIR/compressor" lz4 || true
+  write_runtime_value "$ZSWAP_SYSFS_DIR/compressor" "$ZSWAP_COMPRESSOR" || true
   write_runtime_value "$ZSWAP_SYSFS_DIR/max_pool_percent" 35 || true
   write_runtime_value "$ZSWAP_SYSFS_DIR/zpool" zsmalloc || true
   write_runtime_value "$ZSWAP_SYSFS_DIR/shrinker_enabled" 1 || true

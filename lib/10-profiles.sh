@@ -24,7 +24,7 @@ update_grub_file() {
   [[ -f "$GRUB_FILE" ]] || return 0
   command -v python3 >/dev/null 2>&1 || die "python3 é necessário para atualizar o GRUB."
   backup_file_once "$GRUB_FILE"
-  python3 - "$GRUB_FILE" "$mode" <<'PY'
+  python3 - "$GRUB_FILE" "$mode" "$ZSWAP_COMPRESSOR" <<'PY'
 from pathlib import Path
 import re
 import shlex
@@ -32,6 +32,7 @@ import sys
 
 path = Path(sys.argv[1])
 mode = sys.argv[2]
+compressor = sys.argv[3]
 text = path.read_text(encoding="utf-8")
 match = re.search(r'^GRUB_CMDLINE_LINUX="([^"]*)"', text, flags=re.M)
 current = shlex.split(match.group(1)) if match else []
@@ -48,7 +49,7 @@ current = [token for token in current if token_key(token) not in keys]
 common = ["mitigations=off", "audit=0", "nmi_watchdog=0", "nowatchdog", "split_lock_detect=off"]
 if mode == "zswap":
     common[:0] = [
-        "zswap.enabled=1", "zswap.compressor=lz4",
+        "zswap.enabled=1", f"zswap.compressor={compressor}",
         "zswap.max_pool_percent=35", "zswap.zpool=zsmalloc",
         "zswap.shrinker_enabled=1",
     ]
