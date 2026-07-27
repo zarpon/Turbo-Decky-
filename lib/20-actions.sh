@@ -42,6 +42,14 @@ kernel_package_names() {
   done
 }
 
+enable_steamos_devmode() {
+  [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
+  if command -v steamos-devmode >/dev/null 2>&1; then
+    steamos-devmode enable --no-prompt || \
+      die "Não foi possível habilitar o modo desenvolvedor do SteamOS."
+  fi
+}
+
 kernel_stock_candidate() {
   local candidates preferred
   if ! command -v pacman >/dev/null 2>&1; then
@@ -91,9 +99,9 @@ setup_lavd() {
   command -v systemctl >/dev/null 2>&1 || die "systemctl não encontrado."
   unlock_steamos
   trap restore_steamos_readonly EXIT
+  enable_steamos_devmode
   mkdir -p "$STATE_DIR" "$BACKUP_DIR"
   snapshot_services_once
-  command -v steamos-devmode >/dev/null 2>&1 && steamos-devmode enable --no-prompt || true
   [[ ! -e "$(p /var/lib/pacman/db.lck)" ]] || die "O pacman está ocupado."
   ui_progress_update 24 "Inicializando as chaves do gerenciador de pacotes"
   pacman-key --init 2>/dev/null || true
@@ -159,7 +167,7 @@ install_charcoal_kernel() {
     return 0
   fi
 
-  for command in pacman curl python3 unzip; do
+  for command in pacman curl python3; do
     command -v "$command" >/dev/null 2>&1 || die "Comando obrigatório ausente: $command"
   done
 
@@ -167,6 +175,7 @@ install_charcoal_kernel() {
   KERNEL_TMP_DIR="$tmp"
   trap 'rm -rf -- "${KERNEL_TMP_DIR:-}"; KERNEL_TMP_DIR=""; restore_steamos_readonly' EXIT
   unlock_steamos
+  enable_steamos_devmode
   json="$tmp/release.json"
   ui_progress_update 22 "Consultando a última release"
   curl --fail --location --retry 3 \
@@ -190,10 +199,36 @@ PY
   zip="$tmp/kernel.zip"
   ui_progress_update 38 "Baixando os pacotes do kernel"
   curl --fail --location --retry 3 "$url" -o "$zip"
-  ui_progress_update 52 "Validando o arquivo ZIP"
-  unzip -tq "$zip"
-  ui_progress_update 60 "Extraindo os pacotes"
-  unzip -q "$zip" -d "$tmp/packages"
+  ui_progress_update 52 "Validando e extraindo o arquivo ZIP"
+  python3 - "$zip" "$tmp/packages" <<'PY'
+from pathlib import Path, PurePosixPath
+import sys
+import zipfile
+
+archive = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+destination.mkdir(parents=True, exist_ok=True)
+
+with zipfile.ZipFile(archive) as package_zip:
+    broken = package_zip.testzip()
+    if broken is not None:
+        raise SystemExit(f"Arquivo ZIP corrompido: {broken}")
+
+    for member in package_zip.infolist():
+        if member.is_dir() or not member.filename.endswith(".pkg.tar.zst"):
+            continue
+        relative = PurePosixPath(member.filename)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise SystemExit(f"Caminho inseguro no ZIP: {member.filename}")
+        target = destination.joinpath(*relative.parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with package_zip.open(member) as source, target.open("wb") as output:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                output.write(chunk)
+PY
   mapfile -d '' -t packages < <(
     find "$tmp/packages" -type f -name '*.pkg.tar.zst' -print0
   )
@@ -220,7 +255,6 @@ PY
     ((${#remaining_stock[@]} == 0)) || die "Não foi possível remover completamente o kernel stock."
   fi
 
-  command -v steamos-devmode >/dev/null 2>&1 && steamos-devmode enable --no-prompt || true
   ui_progress_update 80 "Instalando os pacotes do kernel Charcoal"
   pacman -U --noconfirm --needed "${packages[@]}"
   kernel_charcoal_installed || die "O kernel Charcoal não foi confirmado após a instalação."
@@ -255,7 +289,7 @@ restore_stock_kernel() {
   command -v pacman >/dev/null 2>&1 || die "pacman não encontrado."
   unlock_steamos
   trap restore_steamos_readonly EXIT
-  command -v steamos-devmode >/dev/null 2>&1 && steamos-devmode enable --no-prompt || true
+  enable_steamos_devmode
   installed_packages="$(pacman_installed_packages)" || \
     die "Não foi possível consultar os pacotes instalados antes de remover o kernel Charcoal."
   mapfile -t charcoal_packages < <(

@@ -307,7 +307,11 @@ run_privileged() {
   if (( status == 0 )); then
     show_info "Operação concluída.\n\n${summary:-Sem mensagens adicionais.}"
   else
-    show_error "A operação falhou com código $status.\n\n${summary:-Consulte /var/log/turbodecky.log.}"
+    if [[ -n "$failure_message" ]]; then
+      show_error "A operação falhou com código $status.\n\n$failure_message\n\n${summary:-Consulte /var/log/turbodecky.log.}"
+    else
+      show_error "A operação falhou com código $status.\n\n${summary:-Consulte /var/log/turbodecky.log.}"
+    fi
   fi
   return "$status"
 }
