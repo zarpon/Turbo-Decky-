@@ -95,6 +95,81 @@ for token in \
   grep -Fqx "$token" <(tr ' ' '\n' < "$GRUB_FILE")
 done
 
+# Reproduz o caso do SteamOS: o arquivo existente é um swap válido, porém não
+# tem os 8 GiB exigidos. Mesmo sem o marcador interno do Turbo Decky, ele deve
+# ser desativado, removido e recriado automaticamente.
+REAL_ROOT="$TMP/real-root"
+REAL_SWAP_MOCK_BIN="$TMP/real-swap-mock-bin"
+REAL_SWAPFILE="$REAL_ROOT/home/swapfile"
+REAL_STATE_DIR="$REAL_ROOT/var/lib/turbodecky/state"
+REAL_FSTAB_FILE="$REAL_ROOT/etc/fstab"
+REAL_SWAP_LOG="$TMP/real-swap.log"
+REAL_SWAPOFF_LOG="$TMP/real-swapoff.log"
+REAL_ACTIVE_MARK="$TMP/real-swap.active"
+mkdir -p "$REAL_ROOT/home" "$REAL_ROOT/etc" "$REAL_STATE_DIR" "$REAL_SWAP_MOCK_BIN"
+printf '# real-path swapfile regression\n' > "$REAL_FSTAB_FILE"
+truncate -s 1048576 "$REAL_SWAPFILE"
+mkswap "$REAL_SWAPFILE" >/dev/null 2>&1
+printf '%s\n' "$REAL_SWAPFILE" > "$REAL_ACTIVE_MARK"
+
+cat > "$REAL_SWAP_MOCK_BIN/df" <<'EOF_DF'
+#!/usr/bin/env bash
+printf 'Avail\n1099511627776\n'
+EOF_DF
+cat > "$REAL_SWAP_MOCK_BIN/findmnt" <<'EOF_FINDMNT'
+#!/usr/bin/env bash
+printf 'ext4\n'
+EOF_FINDMNT
+cat > "$REAL_SWAP_MOCK_BIN/fallocate" <<'EOF_FALLOCATE'
+#!/usr/bin/env bash
+[[ "${1:-}" == -l && -n "${2:-}" && -n "${3:-}" ]] || exit 2
+truncate -s "$2" "$3"
+EOF_FALLOCATE
+cat > "$REAL_SWAP_MOCK_BIN/swapon" <<'EOF_SWAPON'
+#!/usr/bin/env bash
+case "${1:-}" in
+  --show=NAME)
+    [[ -f "${REAL_ACTIVE_MARK:?}" ]] && cat "$REAL_ACTIVE_MARK"
+    ;;
+  --priority)
+    printf '%s\n' "${@: -1}" >> "${REAL_SWAP_LOG:?}"
+    printf '%s\n' "${@: -1}" > "$REAL_ACTIVE_MARK"
+    ;;
+  *) exit 2 ;;
+esac
+EOF_SWAPON
+cat > "$REAL_SWAP_MOCK_BIN/swapoff" <<'EOF_SWAPOFF'
+#!/usr/bin/env bash
+printf '%s\n' "${*: -1}" >> "${REAL_SWAPOFF_LOG:?}"
+rm -f -- "${REAL_ACTIVE_MARK:?}"
+EOF_SWAPOFF
+chmod +x "$REAL_SWAP_MOCK_BIN"/*
+
+OLD_PATH="$PATH"
+PATH="$REAL_SWAP_MOCK_BIN:$PATH"
+ROOTFS=""
+DRY_RUN=0
+STATE_DIR="$REAL_STATE_DIR"
+BACKUP_DIR="$REAL_STATE_DIR/backups"
+FILE_MANIFEST="$REAL_STATE_DIR/files.tsv"
+FSTAB_FILE="$REAL_FSTAB_FILE"
+SWAPFILE="$REAL_SWAPFILE"
+LOGFILE="$REAL_ROOT/var/log/turbodecky.log"
+export REAL_ACTIVE_MARK REAL_SWAP_LOG REAL_SWAPOFF_LOG
+ensure_swapfile
+PATH="$OLD_PATH"
+
+[[ "$(stat -Lc '%s' "$REAL_SWAPFILE")" == "$EXPECTED_SWAP_BYTES" ]]
+[[ "$(blkid -p -s TYPE -o value -- "$REAL_SWAPFILE")" == swap ]]
+[[ -f "$REAL_ACTIVE_MARK" ]]
+grep -Fqx "$REAL_SWAPFILE" "$REAL_SWAP_LOG"
+grep -Fqx "$REAL_SWAPFILE" "$REAL_SWAPOFF_LOG"
+grep -Fqx "$REAL_SWAPFILE none swap sw,pri=-2 0 0" "$REAL_FSTAB_FILE"
+
+ROOTFS="$ROOT"
+DRY_RUN=1
+init_paths
+
 # Trocar para ZRAM remove somente o swapfile criado pelo Turbo Decky. Voltar ao
 # ZSWAP precisa recriar exatamente 8 GiB, sem executar a reversão geral.
 apply_zram_profile

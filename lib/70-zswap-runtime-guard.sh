@@ -127,7 +127,7 @@ apply_zswap_profile() {
   ui_progress_update 34 "Removendo a configuração persistente da ZRAM"
   backup_file_once "$ZRAM_FILE"
   rm -f "$ZRAM_FILE"
-  ui_progress_update 48 "Criando e ativando o swapfile de suporte"
+  ui_progress_update 48 "Validando ou recriando o swapfile de suporte de 8 GiB"
   ensure_swapfile
   ui_progress_update 60 "Configurando o ZSWAP em runtime"
   configure_zswap_runtime
