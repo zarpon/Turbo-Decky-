@@ -46,6 +46,7 @@ MOCK_BIN="$TMP/mock-bin"
 mkdir -p "$MOCK_BIN"
 PACMAN_STATE="$TMP/pacman.state"
 PACMAN_LOG="$TMP/pacman.log"
+DEVMODE_LOG="$TMP/devmode.log"
 printf 'stock\n' > "$PACMAN_STATE"
 cat > "$MOCK_BIN/pacman" <<'EOF_PACMAN'
 #!/usr/bin/env bash
@@ -96,29 +97,59 @@ done
 if [[ "$output" == *.json ]]; then
   printf '{"assets":[{"name":"kernel.zip","browser_download_url":"https://example.invalid/kernel.zip"}]}\n' > "$output"
 else
-  : > "$output"
+  /usr/bin/python3 - "$output" <<'PY_ZIP'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1], "w") as package_zip:
+    package_zip.writestr("linux-charcoal-616.pkg.tar.zst", b"test package")
+PY_ZIP
 fi
 EOF_CURL
 cat > "$MOCK_BIN/unzip" <<'EOF_UNZIP'
 #!/usr/bin/env bash
-set -Eeuo pipefail
-if [[ "${1:-}" == -tq ]]; then exit 0; fi
-destination="${@: -1}"
-mkdir -p "$destination"
-: > "$destination/linux-charcoal-616.pkg.tar.zst"
+printf 'unzip should not be called\n' >&2
+exit 127
 EOF_UNZIP
-chmod +x "$MOCK_BIN/pacman" "$MOCK_BIN/curl" "$MOCK_BIN/unzip"
+cat > "$MOCK_BIN/steamos-devmode" <<'EOF_DEVMODE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${DEVMODE_LOG:?}"
+if [[ "${DEVMODE_FAIL:-0}" == 1 ]]; then
+  exit 1
+fi
+exit 0
+EOF_DEVMODE
+chmod +x "$MOCK_BIN/pacman" "$MOCK_BIN/curl" "$MOCK_BIN/unzip" "$MOCK_BIN/steamos-devmode"
 
 kernel_output="$TMP/kernel.out"
 PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
+  DEVMODE_LOG="$DEVMODE_LOG" \
+  TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
-  bash -c 'source "$1"; install_charcoal_kernel' _ "$SCRIPT" > "$kernel_output" 2> "$TMP/kernel.err"
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" > "$kernel_output" 2> "$TMP/kernel.err"
 grep -Fq $'TURBODECKY_PROGRESS\t68\tRemovendo o kernel stock: linux-neptune-616' "$kernel_output"
 grep -Fqx 'remove' "$PACMAN_LOG"
 grep -Fqx 'install' "$PACMAN_LOG"
 [[ "$(sed -n '1p' "$PACMAN_LOG")" == remove ]]
 [[ "$(sed -n '2p' "$PACMAN_LOG")" == install ]]
+grep -Fqx 'enable --no-prompt' "$DEVMODE_LOG"
+
+# A failed SteamOS developer-mode transition must stop before the destructive
+# removal of the stock kernel.
+printf 'stock\n' > "$PACMAN_STATE"
+: > "$PACMAN_LOG"
+if PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
+  DEVMODE_LOG="$DEVMODE_LOG" DEVMODE_FAIL=1 TURBODECKY_ROOTFS= \
+  TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
+  TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
+  > "$TMP/devmode-failure.out" 2> "$TMP/devmode-failure.err"; then
+  printf 'falha do modo desenvolvedor foi ignorada\n' >&2
+  exit 1
+fi
+grep -Fq 'modo desenvolvedor do SteamOS' "$TMP/devmode-failure.err"
+! grep -Fq 'remove' "$PACMAN_LOG"
 
 # A first installation must still display the dedicated confirmation even when
 # no linux-neptune package appears in the pacman database.
@@ -139,9 +170,10 @@ grep -Fq 'primeira instalação do kernel Charcoal' <<< "$confirmation_text_seen
 printf 'stock\n' > "$PACMAN_STATE"
 : > "$PACMAN_LOG"
 if PATH="$MOCK_BIN:$PATH" PACMAN_INVALID=1 \
+  TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
-  bash -c 'source "$1"; install_charcoal_kernel' _ "$SCRIPT" \
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
   > "$TMP/invalid-kernel.out" 2> "$TMP/invalid-kernel.err"; then
   printf 'pacote inválido foi aceito\n' >&2
   exit 1
@@ -153,9 +185,11 @@ fi
 printf 'custom\n' > "$PACMAN_STATE"
 : > "$PACMAN_LOG"
 PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
+  DEVMODE_LOG="$DEVMODE_LOG" \
+  TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_ASSUME_YES=1 \
   TURBODECKY_PROGRESS_PROTOCOL=1 \
-  bash -c 'source "$1"; restore_stock_kernel' _ "$SCRIPT" \
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; restore_stock_kernel' _ "$SCRIPT" \
   > "$TMP/restore-kernel.out" 2> "$TMP/restore-kernel.err"
 grep -Fq $'TURBODECKY_PROGRESS\t70\tInstalando linux-neptune-616' \
   "$TMP/restore-kernel.out"
