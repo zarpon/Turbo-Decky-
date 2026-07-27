@@ -48,7 +48,7 @@ current = [token for token in current if token_key(token) not in keys]
 common = ["mitigations=off", "audit=0", "nmi_watchdog=0", "nowatchdog", "split_lock_detect=off"]
 if mode == "zswap":
     common[:0] = [
-        "zswap.enabled=1", "zswap.compressor=lz4",
+        "zswap.enabled=1", "zswap.compressor=zstd",
         "zswap.max_pool_percent=35", "zswap.zpool=zsmalloc",
         "zswap.shrinker_enabled=1",
     ]

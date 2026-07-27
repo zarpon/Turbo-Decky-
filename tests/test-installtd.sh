@@ -84,7 +84,7 @@ grep -Fq 'zswap.enabled=0' "$GRUB_FILE"
 [[ "$(grep -o 'zswap.enabled=' "$GRUB_FILE" | wc -l)" -eq 1 ]]
 update_grub_file zswap
 grep -Fq 'zswap.enabled=1' "$GRUB_FILE"
-grep -Fq 'zswap.compressor=lz4' "$GRUB_FILE"
+grep -Fq 'zswap.compressor=zstd' "$GRUB_FILE"
 [[ "$(grep -o 'zswap.enabled=' "$GRUB_FILE" | wc -l)" -eq 1 ]]
 
 # Exclusão mútua e restauração são testadas com systemctl e sysfs simulados.
@@ -117,7 +117,7 @@ grep -Fqx 'mask --now systemd-zram-setup@zram0.service' "$SYSTEMCTL_LOG"
 
 configure_zswap_runtime
 grep -Fqx '1' "$ZSWAP_SYSFS_DIR/enabled"
-grep -Fqx 'lz4' "$ZSWAP_SYSFS_DIR/compressor"
+grep -Fqx 'zstd' "$ZSWAP_SYSFS_DIR/compressor"
 grep -Fqx '35' "$ZSWAP_SYSFS_DIR/max_pool_percent"
 grep -Fqx 'zsmalloc' "$ZSWAP_SYSFS_DIR/zpool"
 grep -Fqx '1' "$ZSWAP_SYSFS_DIR/shrinker_enabled"
