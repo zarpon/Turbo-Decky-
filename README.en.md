@@ -38,7 +38,7 @@ This is a customized version of the kernel developed by V10lator.
 
 **Attention:** The kernel is currently compatible only with SteamOS version `3.8.*` on the stable channel.
 
-Original Charcoal kernel repository: https://github.com/V10lator/linux-charcoal
+Charcoal kernel repository: https://github.com/zarpon/linux-charcoal-vulcano
 
 Everything is automated. Select an option and let the application complete the process.
 
@@ -58,7 +58,7 @@ Everything is automated. Select an option and let the application complete the p
 
 ### Charcoal kernel installation
 
-On the first Charcoal kernel installation, a dedicated confirmation is always shown, explaining that the SteamOS stock kernel must be removed before installation; keeping it can make the installation fail. The application checks installed packages, removes every detected `linux-neptune*` package only after confirmation, and installs Charcoal only after validating the downloaded archive and each package. Updates also remove any remaining stock package before installing the new packages.
+On the first Charcoal kernel installation, a dedicated confirmation is always shown, explaining that the SteamOS stock kernel must be removed before installation; keeping it can make the installation fail. Type exactly `s` to continue. The application uses the same installation flow as `linux-charcoal-vulcano`, validates the release ZIP and every package checksum, removes every detected `linux-neptune*` package only after confirmation, and installs Charcoal. Updates also remove any remaining stock package before installing the new packages.
 
 ## Install from the terminal
 

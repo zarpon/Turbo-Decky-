@@ -174,6 +174,37 @@ ui_confirm_required() {
   esac
 }
 
+ui_confirm_exact_s() {
+  local text="$*" answer prompt
+  prompt="$text"$'\n\nDigite exatamente s para continuar:'
+  detect_ui
+  case "$UI_BACKEND" in
+    yad)
+      answer="$(yad --entry --title="Turbo Decky" --width=700 \
+        --text="$prompt" \
+        --entry-text="" 2>/dev/null)" || return 1
+      ;;
+    zenity)
+      answer="$(zenity --entry --title="Turbo Decky" --width=700 \
+        --text="$prompt" \
+        --entry-text="" 2>/dev/null)" || return 1
+      ;;
+    kdialog)
+      answer="$(kdialog --title "Turbo Decky" --inputbox \
+        "$prompt" "" 2>/dev/null)" || return 1
+      ;;
+    dialog)
+      answer="$(dialog --title "Turbo Decky" --inputbox \
+        "$prompt" 14 80 \
+        2>/dev/tty 2>&1)" || return 1
+      ;;
+    *)
+      read -r -p "$prompt " answer
+      ;;
+  esac
+  [[ "$answer" == "s" ]]
+}
+
 ui_progress_sanitize() {
   local text="$*"
   text="${text//$'\n'/ }"
