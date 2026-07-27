@@ -47,6 +47,7 @@ mkdir -p "$MOCK_BIN"
 PACMAN_STATE="$TMP/pacman.state"
 PACMAN_LOG="$TMP/pacman.log"
 DEVMODE_LOG="$TMP/devmode.log"
+STEAM_READONLY_LOG="$TMP/steamos-readonly.log"
 printf 'stock\n' > "$PACMAN_STATE"
 cat > "$MOCK_BIN/pacman" <<'EOF_PACMAN'
 #!/usr/bin/env bash
@@ -91,19 +92,34 @@ cat > "$MOCK_BIN/curl" <<'EOF_CURL'
 set -Eeuo pipefail
 output=""
 while (($#)); do
-  if [[ "$1" == -o ]]; then output="$2"; shift 2; continue; fi
+  if [[ "$1" == -o || "$1" == --output ]]; then output="$2"; shift 2; continue; fi
   shift
 done
 if [[ "$output" == *.json ]]; then
-  printf '{"assets":[{"name":"kernel.zip","browser_download_url":"https://example.invalid/kernel.zip"}]}\n' > "$output"
+  printf '%s\n' '{"tag_name":"v-test","draft":false,"prerelease":false,"assets":[{"name":"linux-charcoal-test.zip","browser_download_url":"https://github.com/zarpon/linux-charcoal-vulcano/releases/download/v-test/linux-charcoal-test.zip"},{"name":"RELEASE-ZIP-SHA256SUM","browser_download_url":"https://github.com/zarpon/linux-charcoal-vulcano/releases/download/v-test/RELEASE-ZIP-SHA256SUM"}]}' > "$output"
+elif [[ "$(basename "$output")" == RELEASE-ZIP-SHA256SUM ]]; then
+  sha256sum "$(cat "$TMP_CHARCOAL_ARCHIVE")" | \
+    awk '{print $1 "  linux-charcoal-test.zip"}' > "$output"
 else
   /usr/bin/python3 - "$output" <<'PY_ZIP'
-import sys
+import hashlib
 import zipfile
+import sys
 
+packages = {
+    "linux-charcoal-616.pkg.tar.zst": b"test kernel package",
+    "linux-charcoal-616-headers-1.pkg.tar.zst": b"test headers package",
+}
+manifest = "\n".join(
+    f"{hashlib.sha256(data).hexdigest()}  {name}"
+    for name, data in packages.items()
+)
 with zipfile.ZipFile(sys.argv[1], "w") as package_zip:
-    package_zip.writestr("linux-charcoal-616.pkg.tar.zst", b"test package")
+    package_zip.writestr("SHA256SUMS", manifest + "\n")
+    for name, data in packages.items():
+        package_zip.writestr(name, data)
 PY_ZIP
+  printf '%s\n' "$output" > "$TMP_CHARCOAL_ARCHIVE"
 fi
 EOF_CURL
 cat > "$MOCK_BIN/unzip" <<'EOF_UNZIP'
@@ -119,11 +135,23 @@ if [[ "${DEVMODE_FAIL:-0}" == 1 ]]; then
 fi
 exit 0
 EOF_DEVMODE
-chmod +x "$MOCK_BIN/pacman" "$MOCK_BIN/curl" "$MOCK_BIN/unzip" "$MOCK_BIN/steamos-devmode"
+cat > "$MOCK_BIN/steamos-readonly" <<'EOF_READONLY'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+case "${1:-}" in
+  status) printf 'enabled\n' ;;
+  disable) printf 'disable\n' >> "${STEAM_READONLY_LOG:?}" ;;
+  enable) printf 'enable\n' >> "${STEAM_READONLY_LOG:?}" ;;
+  *) exit 1 ;;
+esac
+EOF_READONLY
+chmod +x "$MOCK_BIN/pacman" "$MOCK_BIN/curl" "$MOCK_BIN/unzip" \
+  "$MOCK_BIN/steamos-devmode" "$MOCK_BIN/steamos-readonly"
 
 kernel_output="$TMP/kernel.out"
 PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
-  DEVMODE_LOG="$DEVMODE_LOG" \
+  DEVMODE_LOG="$DEVMODE_LOG" STEAM_READONLY_LOG="$STEAM_READONLY_LOG" \
+  TMP_CHARCOAL_ARCHIVE="$TMP/charcoal-archive.path" \
   TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
@@ -140,7 +168,9 @@ grep -Fqx 'enable --no-prompt' "$DEVMODE_LOG"
 printf 'stock\n' > "$PACMAN_STATE"
 : > "$PACMAN_LOG"
 if PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
-  DEVMODE_LOG="$DEVMODE_LOG" DEVMODE_FAIL=1 TURBODECKY_ROOTFS= \
+  DEVMODE_LOG="$DEVMODE_LOG" STEAM_READONLY_LOG="$STEAM_READONLY_LOG" \
+  TMP_CHARCOAL_ARCHIVE="$TMP/charcoal-archive.path" \
+  DEVMODE_FAIL=1 TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
   bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
@@ -153,8 +183,13 @@ grep -Fq 'modo desenvolvedor do SteamOS' "$TMP/devmode-failure.err"
 
 # A first installation must still display the dedicated confirmation even when
 # no linux-neptune package appears in the pacman database.
+if ui_confirm_exact_s 'Digite s para validar a remoção' <<< 'S'; then
+  printf 'a confirmação aceitou S maiúsculo\n' >&2
+  exit 1
+fi
+ui_confirm_exact_s 'Digite s para validar a remoção' <<< 's'
 confirmation_text_seen=""
-ui_confirm_required() {
+ui_confirm_exact_s() {
   confirmation_text_seen="$*"
   return 1
 }
@@ -170,6 +205,7 @@ grep -Fq 'primeira instalação do kernel Charcoal' <<< "$confirmation_text_seen
 printf 'stock\n' > "$PACMAN_STATE"
 : > "$PACMAN_LOG"
 if PATH="$MOCK_BIN:$PATH" PACMAN_INVALID=1 \
+  STEAM_READONLY_LOG="$STEAM_READONLY_LOG" TMP_CHARCOAL_ARCHIVE="$TMP/charcoal-archive.path" \
   TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
@@ -185,7 +221,7 @@ fi
 printf 'custom\n' > "$PACMAN_STATE"
 : > "$PACMAN_LOG"
 PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
-  DEVMODE_LOG="$DEVMODE_LOG" \
+  DEVMODE_LOG="$DEVMODE_LOG" STEAM_READONLY_LOG="$STEAM_READONLY_LOG" \
   TURBODECKY_ROOTFS= \
   TURBODECKY_DRY_RUN=0 TURBODECKY_ASSUME_YES=1 \
   TURBODECKY_PROGRESS_PROTOCOL=1 \
@@ -200,5 +236,8 @@ grep -Fqx 'install-stock' "$PACMAN_LOG"
 grep -Fq 'ui_progress_start' "$REPO_ROOT/lib/70-zswap-runtime-guard.sh"
 grep -Fq 'TURBODECKY_PROGRESS_PROTOCOL=1' "$REPO_ROOT/packaging/appimage/turbodecky"
 grep -Fq 'pacman -R --noconfirm' "$REPO_ROOT/lib/20-actions.sh"
+grep -Fq 'zarpon/linux-charcoal-vulcano' "$REPO_ROOT/lib/20-actions.sh"
+grep -Fq 'RELEASE-ZIP-SHA256SUM' "$REPO_ROOT/lib/20-actions.sh"
+grep -Fqx 'disable' "$STEAM_READONLY_LOG"
 
 printf 'Turbo Decky progress and kernel-install validation passed\n'

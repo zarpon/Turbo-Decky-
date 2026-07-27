@@ -42,6 +42,11 @@ grep -Fq 'Operação concluída.' "$TMP/apply.out"
 # privileged backend starts; dry-run then exits without pacman or downloads.
 PATH="$AUTH_BIN:$PATH" TURBODECKY_DRY_RUN=1 APPDIR="$APPDIR" \
   "$APPDIR/AppRun" --install-kernel \
+  <<< 'S' > "$TMP/kernel-rejected.out" 2> "$TMP/kernel-rejected.err"
+! grep -Fq 'Operação concluída.' "$TMP/kernel-rejected.out"
+
+PATH="$AUTH_BIN:$PATH" TURBODECKY_DRY_RUN=1 APPDIR="$APPDIR" \
+  "$APPDIR/AppRun" --install-kernel \
   <<< 's' > "$TMP/kernel.out" 2> "$TMP/kernel.err"
 grep -Fq 'Operação concluída.' "$TMP/kernel.out"
 printf 'Turbo Decky AppDir validation passed\n'

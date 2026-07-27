@@ -47,6 +47,23 @@ confirm_action() {
   fi
 }
 
+confirm_exact_s() {
+  local text="$1" answer prompt
+  prompt="$text"$'\n\nDigite exatamente s para continuar:'
+  if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    answer="$(yad --entry --title="Turbo Decky" --width=700 \
+      --text="$prompt" --entry-text="" 2>/dev/null)" || return 1
+  elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    answer="$(zenity --entry --title="Turbo Decky" --width=700 \
+      --text="$prompt" --entry-text="" 2>/dev/null)" || return 1
+  elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+    answer="$(kdialog --title "Turbo Decky" --inputbox "$prompt" "" 2>/dev/null)" || return 1
+  else
+    read -r -p "$prompt " answer
+  fi
+  [[ "$answer" == "s" ]]
+}
+
 PROGRESS_ACTIVE=0
 PROGRESS_PID=""
 PROGRESS_FD=""
@@ -393,7 +410,7 @@ run_action() {
     local kernel_confirmed=0 confirmation
     if [[ "$backend_action" == --install-kernel ]]; then
       confirmation="$(kernel_install_confirmation)"
-      confirm_action "$confirmation" || return 0
+      confirm_exact_s "$confirmation" || return 0
       kernel_confirmed=1
     else
       confirm_action "$(confirmation_text "$backend_action")" || return 0
