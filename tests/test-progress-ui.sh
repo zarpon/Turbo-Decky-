@@ -40,8 +40,9 @@ lavd_output="$(setup_lavd 2> "$TMP/lavd.err")"
 PROGRESS_PROTOCOL="$old_progress_protocol"
 grep -Fq $'TURBODECKY_PROGRESS\t100\tSimulação do SCX LAVD concluída' <<< "$lavd_output"
 
-# Simula a instalação do kernel: o stock deve ser removido antes do pacote
-# Charcoal e a checagem final deve confirmar o pacote customizado.
+# Simulate an installation with both the bootable stock package and its headers.
+# pacman -U must install/replace the bootable kernel first. Only after Charcoal
+# is visible may the installer remove a Neptune headers residue.
 MOCK_BIN="$TMP/mock-bin"
 mkdir -p "$MOCK_BIN"
 PACMAN_STATE="$TMP/pacman.state"
@@ -55,8 +56,17 @@ set -Eeuo pipefail
 case "${1:-}" in
   -Qq)
     state="$(cat "${PACMAN_STATE:?}")"
-    [[ "$state" == stock ]] && printf 'linux-neptune-616\n'
-    [[ "$state" == custom ]] && printf 'linux-charcoal-616\n'
+    case "$state" in
+      stock)
+        printf 'linux-neptune-616\nlinux-neptune-616-headers\n'
+        ;;
+      custom-with-stock-headers)
+        printf 'linux-charcoal-616\nlinux-neptune-616-headers\n'
+        ;;
+      custom)
+        printf 'linux-charcoal-616\n'
+        ;;
+    esac
     exit 0
     ;;
   -Qp)
@@ -64,7 +74,7 @@ case "${1:-}" in
     printf 'linux-charcoal-616\n'
     ;;
   -R)
-    printf 'remove\n' >> "${PACMAN_LOG:?}"
+    printf 'remove-stock-residue\n' >> "${PACMAN_LOG:?}"
     printf 'custom\n' > "${PACMAN_STATE:?}"
     ;;
   -Rs)
@@ -79,8 +89,9 @@ case "${1:-}" in
     printf 'stock\n' > "${PACMAN_STATE:?}"
     ;;
   -U)
-    printf 'install\n' >> "${PACMAN_LOG:?}"
-    printf 'custom\n' > "${PACMAN_STATE:?}"
+    [[ "${PACMAN_INSTALL_FAIL:-0}" != 1 ]] || exit 1
+    printf 'install-charcoal\n' >> "${PACMAN_LOG:?}"
+    printf 'custom-with-stock-headers\n' > "${PACMAN_STATE:?}"
     ;;
   *)
     printf '%s\n' "$*" >> "${PACMAN_LOG:?}"
@@ -156,15 +167,17 @@ PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
   TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
   TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
   bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" > "$kernel_output" 2> "$TMP/kernel.err"
-grep -Fq $'TURBODECKY_PROGRESS\t68\tRemovendo o kernel stock: linux-neptune-616' "$kernel_output"
-grep -Fqx 'remove' "$PACMAN_LOG"
-grep -Fqx 'install' "$PACMAN_LOG"
-[[ "$(sed -n '1p' "$PACMAN_LOG")" == remove ]]
-[[ "$(sed -n '2p' "$PACMAN_LOG")" == install ]]
+grep -Fq $'TURBODECKY_PROGRESS\t72\tInstalando o Charcoal e substituindo o kernel stock' "$kernel_output"
+grep -Fq $'TURBODECKY_PROGRESS\t86\tRemovendo pacotes stock remanescentes: linux-neptune-616-headers' "$kernel_output"
+grep -Fqx 'install-charcoal' "$PACMAN_LOG"
+grep -Fqx 'remove-stock-residue' "$PACMAN_LOG"
+[[ "$(sed -n '1p' "$PACMAN_LOG")" == install-charcoal ]]
+[[ "$(sed -n '2p' "$PACMAN_LOG")" == remove-stock-residue ]]
+[[ "$(cat "$PACMAN_STATE")" == custom ]]
 grep -Fqx 'enable --no-prompt' "$DEVMODE_LOG"
 
-# A failed SteamOS developer-mode transition must stop before the destructive
-# removal of the stock kernel.
+# A failed SteamOS developer-mode transition must stop before any package
+# transaction and leave the stock kernel untouched.
 printf 'stock\n' > "$PACMAN_STATE"
 : > "$PACMAN_LOG"
 if PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
@@ -179,7 +192,27 @@ if PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" 
   exit 1
 fi
 grep -Fq 'modo desenvolvedor do SteamOS' "$TMP/devmode-failure.err"
-! grep -Fq 'remove' "$PACMAN_LOG"
+[[ ! -s "$PACMAN_LOG" ]]
+[[ "$(cat "$PACMAN_STATE")" == stock ]]
+
+# A failed pacman -U transaction must not pre-remove linux-neptune. This is the
+# regression that broke real installations in the previous two-step flow.
+printf 'stock\n' > "$PACMAN_STATE"
+: > "$PACMAN_LOG"
+if PATH="$MOCK_BIN:$PATH" PACMAN_STATE="$PACMAN_STATE" PACMAN_LOG="$PACMAN_LOG" \
+  DEVMODE_LOG="$DEVMODE_LOG" STEAM_READONLY_LOG="$STEAM_READONLY_LOG" \
+  TMP_CHARCOAL_ARCHIVE="$TMP/charcoal-archive.path" \
+  PACMAN_INSTALL_FAIL=1 TURBODECKY_ROOTFS= \
+  TURBODECKY_DRY_RUN=0 TURBODECKY_PROGRESS_PROTOCOL=1 \
+  TURBODECKY_KERNEL_STOCK_CONFIRMED=1 \
+  bash -c 'source "$1"; require_root() { :; }; update_grub_runtime() { :; }; install_charcoal_kernel' _ "$SCRIPT" \
+  > "$TMP/pacman-failure.out" 2> "$TMP/pacman-failure.err"; then
+  printf 'falha do pacman -U foi ignorada\n' >&2
+  exit 1
+fi
+grep -Fq 'não conseguiu instalar o kernel Charcoal' "$TMP/pacman-failure.err"
+[[ ! -s "$PACMAN_LOG" ]]
+[[ "$(cat "$PACMAN_STATE")" == stock ]]
 
 # A first installation must still display the dedicated confirmation even when
 # no linux-neptune package appears in the pacman database.
@@ -201,7 +234,7 @@ TURBODECKY_KERNEL_STOCK_CONFIRMED=0
 install_charcoal_kernel
 grep -Fq 'primeira instalação do kernel Charcoal' <<< "$confirmation_text_seen"
 
-# A corrupt package must stop before the destructive removal transaction.
+# A corrupt package must stop before any package transaction.
 printf 'stock\n' > "$PACMAN_STATE"
 : > "$PACMAN_LOG"
 if PATH="$MOCK_BIN:$PATH" PACMAN_INVALID=1 \
@@ -214,7 +247,8 @@ if PATH="$MOCK_BIN:$PATH" PACMAN_INVALID=1 \
   printf 'pacote inválido foi aceito\n' >&2
   exit 1
 fi
-! grep -Fq 'remove' "$PACMAN_LOG"
+[[ ! -s "$PACMAN_LOG" ]]
+[[ "$(cat "$PACMAN_STATE")" == stock ]]
 
 # Restoring the stock kernel must query the package database before removal and
 # must choose the bootable package rather than its headers subpackage.
@@ -235,9 +269,10 @@ grep -Fqx 'install-stock' "$PACMAN_LOG"
 
 grep -Fq 'ui_progress_start' "$REPO_ROOT/lib/70-zswap-runtime-guard.sh"
 grep -Fq 'TURBODECKY_PROGRESS_PROTOCOL=1' "$REPO_ROOT/packaging/appimage/turbodecky"
-grep -Fq 'pacman -R --noconfirm' "$REPO_ROOT/lib/20-actions.sh"
+grep -Fq 'pacman -U --noconfirm' "$REPO_ROOT/lib/25-kernel-install-atomic.sh"
+grep -Fq 'substituindo o kernel stock' "$REPO_ROOT/lib/25-kernel-install-atomic.sh"
 grep -Fq 'zarpon/linux-charcoal-vulcano' "$REPO_ROOT/lib/20-actions.sh"
 grep -Fq 'RELEASE-ZIP-SHA256SUM' "$REPO_ROOT/lib/20-actions.sh"
 grep -Fqx 'disable' "$STEAM_READONLY_LOG"
 
-printf 'Turbo Decky progress and kernel-install validation passed\n'
+printf 'Turbo Decky progress and atomic kernel-install validation passed\n'
