@@ -8,8 +8,6 @@ source "$SCRIPT_DIR/lib/00-core.sh"
 source "$SCRIPT_DIR/lib/10-profiles.sh"
 # shellcheck source=lib/20-actions.sh
 source "$SCRIPT_DIR/lib/20-actions.sh"
-# shellcheck source=lib/25-kernel-install-atomic.sh
-source "$SCRIPT_DIR/lib/25-kernel-install-atomic.sh"
 # shellcheck source=lib/30-hardening.sh
 source "$SCRIPT_DIR/lib/30-hardening.sh"
 # shellcheck source=lib/40-source-sync.sh

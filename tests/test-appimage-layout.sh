@@ -38,15 +38,13 @@ PATH="$AUTH_BIN:$PATH" TURBODECKY_DRY_RUN=1 APPDIR="$APPDIR" \
   <<< 's' > "$TMP/apply.out" 2> "$TMP/apply.err"
 grep -Fq 'Operação concluída.' "$TMP/apply.out"
 
-# The kernel action must show the first-install confirmation before the
-# privileged backend starts; dry-run then exits without pacman or downloads.
-PATH="$AUTH_BIN:$PATH" TURBODECKY_DRY_RUN=1 APPDIR="$APPDIR" \
-  "$APPDIR/AppRun" --install-kernel \
-  <<< 'S' > "$TMP/kernel-rejected.out" 2> "$TMP/kernel-rejected.err"
-! grep -Fq 'Operação concluída.' "$TMP/kernel-rejected.out"
+[[ ! -e "$APPDIR/usr/lib/turbodecky/lib/25-kernel-install-atomic.sh" ]]
+! grep -RniE 'install_charcoal_kernel|restore_stock_kernel|--install-kernel|--restore-kernel' \
+  "$APPDIR/usr/lib/turbodecky" >/dev/null
 
-PATH="$AUTH_BIN:$PATH" TURBODECKY_DRY_RUN=1 APPDIR="$APPDIR" \
-  "$APPDIR/AppRun" --install-kernel \
-  <<< 's' > "$TMP/kernel.out" 2> "$TMP/kernel.err"
-grep -Fq 'Operação concluída.' "$TMP/kernel.out"
+if APPDIR="$APPDIR" "$APPDIR/AppRun" --install-kernel \
+  > "$TMP/kernel.out" 2> "$TMP/kernel.err"; then
+  printf 'a ação removida --install-kernel ainda foi aceita\n' >&2
+  exit 1
+fi
 printf 'Turbo Decky AppDir validation passed\n'

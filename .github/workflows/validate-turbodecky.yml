@@ -52,7 +52,7 @@ jobs:
           set -Eeuo pipefail
           bash tests/test-zswap-runtime-guard.sh ./InstallTD.sh
 
-      - name: Validate progress UI and kernel installation safety
+      - name: Validate progress UI
         shell: bash
         run: |
           set -Eeuo pipefail

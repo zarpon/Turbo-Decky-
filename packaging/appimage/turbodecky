@@ -174,8 +174,6 @@ select_action() {
       apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
       status "Exibir diagnóstico dos parâmetros efetivos" \
       setup-lavd "Instalar ou ativar SCX LAVD" \
-      install-kernel "Instalar o kernel Charcoal mais recente" \
-      restore-kernel "Restaurar o kernel padrão do SteamOS" \
       revert "Reverter alterações gerenciadas pelo Turbo Decky" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
@@ -186,8 +184,6 @@ select_action() {
       apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
       status "Exibir diagnóstico dos parâmetros efetivos" \
       setup-lavd "Instalar ou ativar SCX LAVD" \
-      install-kernel "Instalar o kernel Charcoal mais recente" \
-      restore-kernel "Restaurar o kernel padrão do SteamOS" \
       revert "Reverter alterações gerenciadas pelo Turbo Decky" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
@@ -196,8 +192,6 @@ select_action() {
       apply-zswap "Perfil Charcoal com ZSWAP" \
       status "Diagnóstico" \
       setup-lavd "Ativar SCX LAVD" \
-      install-kernel "Instalar kernel Charcoal" \
-      restore-kernel "Restaurar kernel padrão" \
       revert "Reverter alterações" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   else
@@ -206,10 +200,8 @@ select_action() {
 2) Aplicar perfil Charcoal com ZSWAP
 3) Exibir diagnóstico
 4) Instalar ou ativar SCX LAVD
-5) Instalar kernel Charcoal
-6) Restaurar kernel padrão
-7) Reverter alterações
-8) Sair
+5) Reverter alterações
+6) Sair
 MENU
     local answer
     read -r -p "Opção: " answer
@@ -218,9 +210,7 @@ MENU
       2) printf '%s\n' apply-zswap ;;
       3) printf '%s\n' status ;;
       4) printf '%s\n' setup-lavd ;;
-      5) printf '%s\n' install-kernel ;;
-      6) printf '%s\n' restore-kernel ;;
-      7) printf '%s\n' revert ;;
+      5) printf '%s\n' revert ;;
       *) printf 'exit\n' ;;
     esac
   fi
@@ -251,7 +241,7 @@ run_unprivileged() {
 }
 
 run_privileged() {
-  local action="$1" kernel_confirmed="${2:-0}" status=0
+  local action="$1" status=0
   local child_pid line output_fifo failure_message=""
   stage_payload
   ACTION_LOG="$(mktemp /tmp/turbodecky-action.XXXXXX.log)"
@@ -264,7 +254,6 @@ run_privileged() {
   if (( EUID == 0 )); then
     TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
       TURBODECKY_PROGRESS_PROTOCOL=1 \
-      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
       /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
     child_pid=$!
   elif command -v pkexec >/dev/null 2>&1; then
@@ -273,21 +262,18 @@ run_privileged() {
     "$pkexec_bin" /usr/bin/env \
       TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
       TURBODECKY_PROGRESS_PROTOCOL=1 \
-      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
       /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
     child_pid=$!
   elif command -v kdesu >/dev/null 2>&1; then
     local command_line
     printf -v command_line '%q ' /usr/bin/env TURBODECKY_UI=terminal \
       TURBODECKY_ASSUME_YES=1 TURBODECKY_PROGRESS_PROTOCOL=1 \
-      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
       /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action"
     kdesu -c "$command_line" >"$output_fifo" 2>&1 &
     child_pid=$!
   elif command -v sudo >/dev/null 2>&1 && [[ -t 0 ]]; then
     sudo /usr/bin/env TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
       TURBODECKY_PROGRESS_PROTOCOL=1 \
-      TURBODECKY_KERNEL_STOCK_CONFIRMED="$kernel_confirmed" \
       /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
     child_pid=$!
   else
@@ -338,43 +324,9 @@ confirmation_text() {
     --apply-zram) printf '%s' "Aplicar o perfil Charcoal com ZRAM padrão? O sistema solicitará autenticação e poderá exigir reinicialização." ;;
     --apply-zswap) printf '%s' "Aplicar o perfil Charcoal com ZSWAP? Pode ser criado um swapfile de 8 GiB e será necessária reinicialização." ;;
     --setup-lavd) printf '%s' "Instalar e ativar SCX LAVD pelo gerenciador de pacotes?" ;;
-    --install-kernel) printf '%s' "Instalar o kernel Charcoal mais recente? Esta operação altera o kernel do sistema." ;;
-    --restore-kernel) printf '%s' "Remover o kernel Charcoal e restaurar o kernel padrão do SteamOS?" ;;
     --revert) printf '%s' "Reverter as alterações gerenciadas pelo Turbo Decky usando os snapshots existentes?" ;;
     *) printf '%s' "Executar esta operação administrativa?" ;;
   esac
-}
-
-kernel_stock_present() {
-  if ! command -v pacman >/dev/null 2>&1; then
-    # A missing package database must not skip the safety confirmation; the
-    # privileged backend performs the authoritative check before removal.
-    return 0
-  fi
-  local installed
-  installed="$(pacman -Qq 2>/dev/null)" || return 0
-  grep -Eq '^linux-neptune($|[-.])' <<< "$installed"
-}
-
-kernel_charcoal_present() {
-  command -v pacman >/dev/null 2>&1 || return 1
-  local installed
-  installed="$(pacman -Qq 2>/dev/null || true)"
-  grep -Eq '^linux-charcoal($|[-.])' <<< "$installed"
-}
-
-kernel_install_confirmation() {
-  if ! kernel_charcoal_present; then
-    if kernel_stock_present; then
-      printf '%s' "Esta é a primeira instalação do kernel Charcoal. Para evitar falha, o kernel stock do SteamOS será removido obrigatoriamente antes da instalação. Continuar?"
-    else
-      printf '%s' "Esta é a primeira instalação do kernel Charcoal. Nenhum kernel stock foi detectado; se existir um pacote fora do banco do pacman, ele também deverá ser removido para evitar conflito. Continuar?"
-    fi
-  elif kernel_stock_present; then
-    printf '%s' "O kernel stock do SteamOS está instalado. Ele será removido obrigatoriamente antes da atualização do kernel Charcoal; mantê-lo pode causar falha. Continuar?"
-  else
-    confirmation_text --install-kernel
-  fi
 }
 
 run_action() {
@@ -397,8 +349,6 @@ run_action() {
     apply-zram|--apply-zram) backend_action=--apply-zram ;;
     apply-zswap|--apply-zswap) backend_action=--apply-zswap ;;
     setup-lavd|--setup-lavd) backend_action=--setup-lavd ;;
-    install-kernel|--install-kernel) backend_action=--install-kernel ;;
-    restore-kernel|--restore-kernel) backend_action=--restore-kernel ;;
     revert|--revert) backend_action=--revert ;;
     *)
       show_error "Ação inválida: $action"
@@ -407,15 +357,8 @@ run_action() {
   esac
 
   if [[ -n "${backend_action:-}" ]]; then
-    local kernel_confirmed=0 confirmation
-    if [[ "$backend_action" == --install-kernel ]]; then
-      confirmation="$(kernel_install_confirmation)"
-      confirm_exact_s "$confirmation" || return 0
-      kernel_confirmed=1
-    else
-      confirm_action "$(confirmation_text "$backend_action")" || return 0
-    fi
-    run_privileged "$backend_action" "$kernel_confirmed"
+    confirm_action "$(confirmation_text "$backend_action")" || return 0
+    run_privileged "$backend_action"
   fi
 }
 

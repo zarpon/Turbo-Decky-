@@ -30,16 +30,6 @@ Turbo Decky applies several internal improvements, including:
 - AMDGPU behavior optimizations.
 - Disabling unnecessary system services that consume resources.
 - System limit adjustments to reduce gaming bottlenecks.
-- Optional installation of a custom kernel for improved performance.
-
-Turbo Decky can install the Charcoal-vulcano custom kernel.
-
-This is a customized version of the kernel developed by V10lator.
-
-**Attention:** The kernel is currently compatible only with SteamOS version `3.8.*` on the stable channel.
-
-Charcoal kernel repository: https://github.com/zarpon/linux-charcoal-vulcano
-
 Everything is automated. Select an option and let the application complete the process.
 
 # How to install and run
@@ -54,11 +44,15 @@ Everything is automated. Select an option and let the application complete the p
 3. In Dolphin, right-click the file, open **Properties > Permissions**, and enable **Is executable**.
 4. Open the AppImage by double-clicking it.
 5. Select the desired optimization. During each procedure, a progress window shows the current stage and completion percentage; if something fails, the interrupted stage is identified. Administrative authentication is requested only when the selected action needs to modify the system.
-6. Restart the Steam Deck after applying or reverting optimizations that change memory settings, GRUB, or the kernel.
+6. Restart the Steam Deck after applying or reverting optimizations that change memory settings or GRUB.
 
-### Charcoal kernel installation
+### Charcoal kernel (optional)
 
-On the first Charcoal kernel installation, a dedicated confirmation is always shown, explaining that the SteamOS stock kernel must be removed before installation; keeping it can make the installation fail. Type exactly `s` to continue. The application uses the same installation flow as `linux-charcoal-vulcano`, validates the release ZIP and every package checksum, removes every detected `linux-neptune*` package only after confirmation, and installs Charcoal. Updates also remove any remaining stock package before installing the new packages.
+Turbo Decky does not install, remove, or manage kernels. To optionally install Charcoal-vulcano, use the official installer from the [Charcoal repository](https://github.com/zarpon/linux-charcoal-vulcano) in SteamOS Desktop Mode:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zarpon/linux-charcoal-vulcano/master/install-charcoal.sh -o install-charcoal.sh && bash install-charcoal.sh
+```
 
 ## Install from the terminal
 
@@ -92,7 +86,7 @@ The applied settings remain persistent across a normal reboot:
 - udev rules, limits, environment variables, and systemd service states;
 - SCX LAVD and `fstrim.timer` when enabled.
 
-A SteamOS update may replace settings, packages, or the kernel and require the optimizations to be applied again. Reversion restores the snapshot captured before the first application. Kernel restoration remains a separate action.
+A SteamOS update may replace settings, packages, or the kernel and require the optimizations to be applied again. Reversion restores the snapshot captured before the first application.
 
 # Acknowledgements
 
