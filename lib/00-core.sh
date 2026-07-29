@@ -419,8 +419,6 @@ ui_menu() {
         zswap "Aplicar perfil Charcoal com ZSWAP e swapfile" \
         zram "Aplicar perfil Charcoal com ZRAM padrão" \
         status "Exibir diagnóstico e parâmetros efetivos" \
-        kernel "Instalar o kernel Charcoal mais recente" \
-        stock-kernel "Restaurar o kernel padrão do SteamOS" \
         lavd "Instalar/ativar o scheduler SCX LAVD" \
         revert "Reverter somente alterações gerenciadas pelo Turbo Decky" \
         exit "Sair" 2>/dev/null || printf 'exit\n'
@@ -432,8 +430,6 @@ ui_menu() {
         zswap "Aplicar perfil Charcoal com ZSWAP e swapfile" \
         zram "Aplicar perfil Charcoal com ZRAM padrão" \
         status "Exibir diagnóstico e parâmetros efetivos" \
-        kernel "Instalar o kernel Charcoal mais recente" \
-        stock-kernel "Restaurar o kernel padrão do SteamOS" \
         lavd "Instalar/ativar o scheduler SCX LAVD" \
         revert "Reverter somente alterações gerenciadas pelo Turbo Decky" \
         exit "Sair" 2>/dev/null || printf 'exit\n'
@@ -441,15 +437,13 @@ ui_menu() {
     kdialog)
       kdialog --title "Turbo Decky $TURBODECKY_VERSION" --menu "Selecione uma ação" \
         zswap "Perfil Charcoal + ZSWAP" zram "Perfil Charcoal + ZRAM" \
-        status "Diagnóstico" kernel "Instalar kernel Charcoal" \
-        stock-kernel "Restaurar kernel padrão" lavd "Ativar SCX LAVD" \
+        status "Diagnóstico" lavd "Ativar SCX LAVD" \
         revert "Reverter alterações" exit "Sair" 2>/dev/null || printf 'exit\n'
       ;;
     dialog)
       dialog --stdout --title "Turbo Decky $TURBODECKY_VERSION" --menu "Selecione uma ação" 20 80 10 \
         zswap "Perfil Charcoal + ZSWAP" zram "Perfil Charcoal + ZRAM" \
-        status "Diagnóstico" kernel "Instalar kernel Charcoal" \
-        stock-kernel "Restaurar kernel padrão" lavd "Ativar SCX LAVD" \
+        status "Diagnóstico" lavd "Ativar SCX LAVD" \
         revert "Reverter alterações" exit "Sair" 2>/dev/tty || printf 'exit\n'
       ;;
     *)
@@ -457,18 +451,15 @@ ui_menu() {
 1) Aplicar perfil Charcoal com ZSWAP
 2) Aplicar perfil Charcoal com ZRAM padrão
 3) Exibir diagnóstico
-4) Instalar kernel Charcoal
-5) Restaurar kernel padrão
-6) Instalar/ativar SCX LAVD
-7) Reverter alterações
-8) Sair
+4) Instalar/ativar SCX LAVD
+5) Reverter alterações
+6) Sair
 MENU
       local answer
       read -r -p "Opção: " answer
       case "$answer" in
         1) printf 'zswap\n';; 2) printf 'zram\n';; 3) printf 'status\n';;
-        4) printf 'kernel\n';; 5) printf 'stock-kernel\n';; 6) printf 'lavd\n';;
-        7) printf 'revert\n';; *) printf 'exit\n';;
+        4) printf 'lavd\n';; 5) printf 'revert\n';; *) printf 'exit\n';;
       esac
       ;;
   esac

@@ -2,8 +2,6 @@
 # Compatibility cleanup and safety layer. Sourced last so upgrades from older
 # Turbo Decky releases are normalized before a new profile is applied.
 
-: "${KERNEL_TMP_DIR:=}"
-
 if ! declare -p LEGACY_GENERATED_FILES >/dev/null 2>&1; then
 LEGACY_GENERATED_FILES=(
   "/etc/systemd/system/zswap-config.service"
