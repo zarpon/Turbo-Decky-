@@ -86,6 +86,10 @@ The applied settings remain persistent across a normal reboot:
 - udev rules, limits, environment variables, and systemd service states;
 - SCX LAVD and `fstrim.timer` when enabled.
 
+When the ZSWAP profile is selected, Turbo Decky uses `zswap.compressor=lz4`,
+a 35% pool with `zsmalloc`, and a systemd unit to reapply those settings after
+the swapfile is available at boot.
+
 A SteamOS update may replace settings, packages, or the kernel and require the optimizations to be applied again. Reversion restores the snapshot captured before the first application.
 
 # Acknowledgements
