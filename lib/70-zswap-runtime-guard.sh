@@ -19,8 +19,8 @@ configure_zswap_runtime() {
 
   write_runtime_value "$ZSWAP_SYSFS_DIR/enabled" 0 || \
     die "Não foi possível preparar o ZSWAP para configuração."
-  write_runtime_value "$ZSWAP_SYSFS_DIR/compressor" zstd || \
-    die "Não foi possível configurar o compressor ZSTD do ZSWAP."
+  write_runtime_value "$ZSWAP_SYSFS_DIR/compressor" lz4 || \
+    die "Não foi possível configurar o compressor LZ4 do ZSWAP."
   write_runtime_value "$ZSWAP_SYSFS_DIR/max_pool_percent" 35 || \
     die "Não foi possível configurar o limite do pool do ZSWAP."
   write_runtime_value "$ZSWAP_SYSFS_DIR/zpool" zsmalloc || \
@@ -43,7 +43,7 @@ set -Eeuo pipefail
 readonly params=/sys/module/zswap/parameters
 [[ -d "$params" ]]
 printf '0\n' > "$params/enabled"
-printf 'zstd\n' > "$params/compressor"
+printf 'lz4\n' > "$params/compressor"
 printf '35\n' > "$params/max_pool_percent"
 printf 'zsmalloc\n' > "$params/zpool"
 printf '1\n' > "$params/shrinker_enabled"
