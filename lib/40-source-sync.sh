@@ -7,9 +7,28 @@
 status_report() {
   local profile="não aplicado" lines=()
   [[ -f "$PROFILE_STATE" ]] && profile="$(cat "$PROFILE_STATE")"
-  lines+=("Turbo Decky: $TURBODECKY_VERSION" "Perfil gerenciado: $profile")
+  local operation="não iniciado"
+  [[ ! -f "$STATE_DIR/operation-state" ]] || operation="$(cat "$STATE_DIR/operation-state")"
+  lines+=("Turbo Decky: $TURBODECKY_VERSION" "Perfil configurado: $profile" "Última operação: $operation")
+  [[ ! -d "$STATE_DIR/transaction" ]] || lines+=("RECUPERAÇÃO PENDENTE: selecione Recuperar operação antes de aplicar outro perfil.")
   if [[ -z "$ROOTFS" ]]; then
     lines+=("Kernel: $(uname -r)")
+    local enabled=indisponível compressor=indisponível pool=indisponível
+    [[ ! -r "$ZSWAP_SYSFS_DIR/enabled" ]] || enabled="$(cat "$ZSWAP_SYSFS_DIR/enabled")"
+    [[ ! -r "$ZSWAP_SYSFS_DIR/compressor" ]] || compressor="$(cat "$ZSWAP_SYSFS_DIR/compressor")"
+    [[ ! -r "$ZSWAP_SYSFS_DIR/max_pool_percent" ]] || pool="$(cat "$ZSWAP_SYSFS_DIR/max_pool_percent")"
+    lines+=("ZSWAP agora: enabled=$enabled, compressor=$compressor, pool máximo=$pool%")
+    lines+=("Swap ativo: $(swapon --show=NAME,SIZE,USED --noheadings 2>/dev/null | xargs || true)")
+    lines+=("Memória disponível: $(awk '/^MemAvailable:/ {printf "%.0f MiB", $2/1024}' /proc/meminfo)" )
+    local cmdline
+    cmdline="$(cat /proc/cmdline)"
+    case "$profile" in
+      zram) [[ "$cmdline" == *zswap.enabled=0* ]] || lines+=("Reinicialização pendente: parâmetros de boot ainda diferem do perfil ZRAM.") ;;
+      zswap) [[ "$cmdline" == *zswap.enabled=1* ]] || lines+=("Reinicialização pendente: parâmetros de boot ainda diferem do perfil ZSWAP.") ;;
+    esac
+    if [[ "$profile" != "não aplicado" && "$cmdline" != *mitigations=off* ]]; then
+      lines+=("Reinicialização pendente para mitigations=off.")
+    fi
     if command -v zramctl >/dev/null 2>&1; then
       local zram_status
       zram_status="$(zramctl --noheadings --output NAME,ALGORITHM,DISKSIZE,DATA,COMPR 2>/dev/null | xargs || true)"

@@ -73,7 +73,7 @@ grep -Fqx 'compression-algorithm = lz4 zstd' "$ZRAM_FILE"
 for file in "${LEGACY_RECOMPRESSION_FILES[@]}"; do
   target="$(p "$file")"
   mkdir -p "$(dirname "$target")"
-  : > "$target"
+  printf '# Turbo Decky legacy\n' > "$target"
 done
 cleanup_legacy_recompression
 for file in "${LEGACY_RECOMPRESSION_FILES[@]}"; do [[ ! -e "$(p "$file")" ]]; done
@@ -126,6 +126,11 @@ disable_zswap_runtime
 grep -Fqx '0' "$ZSWAP_SYSFS_DIR/enabled"
 
 : > "$SYSTEMCTL_LOG"
+cat > "$MOCK_BIN/swapon" <<'EOF_SWAPON'
+#!/usr/bin/env bash
+printf '/dev/zram0\n'
+EOF_SWAPON
+chmod +x "$MOCK_BIN/swapon"
 activate_zram
 grep -Fqx '0' "$ZSWAP_SYSFS_DIR/enabled"
 grep -Fqx 'unmask systemd-zram-setup@zram0.service' "$SYSTEMCTL_LOG"
@@ -172,7 +177,7 @@ DRY_RUN=1
 # Status e versão devem funcionar sem privilégios em um root isolado.
 status_report | grep -Fq 'Root de teste:'
 TURBODECKY_LIBRARY=0 TURBODECKY_ROOTFS="$ROOT" TURBODECKY_DRY_RUN=1 \
-  bash "$SCRIPT" --version | grep -Fqx '4.0.0-test'
+  bash "$SCRIPT" --version | grep -Fqx '4.1.0-test.1'
 
 # Ciclo completo em root isolado: aplica, cria os arquivos e reverte ao baseline.
 CYCLE_ROOT="$TMP/cycle-root"

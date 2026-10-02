@@ -3,3 +3,6 @@ dist/
 squashfs-root/
 *.AppImage
 *.AppImage.sha256
+
+__pycache__/
+*.pyc

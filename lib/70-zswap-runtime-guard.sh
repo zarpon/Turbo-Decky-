@@ -40,6 +40,8 @@ set -Eeuo pipefail
 
 readonly params=/sys/module/zswap/parameters
 [[ -d "$params" ]]
+# Ordering after swap.target is not proof of successful backing swap.
+swapon --show=NAME --noheadings --raw | grep -Fxq /home/.swap/turbodecky.swap
 printf '0\n' > "$params/enabled"
 printf 'lz4\n' > "$params/compressor"
 printf '35\n' > "$params/max_pool_percent"
@@ -89,9 +91,9 @@ remove_zswap_runtime_service() {
 
 apply_zram_profile() {
   ui_progress_start "Aplicando o perfil Charcoal com ZRAM" 100
-  ui_progress_update 5 "Preparando snapshots e permissões"
+  ui_progress_update 5 "Validando requisitos, conflitos e memória disponível"
   prepare_apply zram
-  ui_progress_update 28 "Limpando componentes legados"
+  ui_progress_update 28 "Finalizando a configuração de memória"
   remove_zswap_runtime_service
   ui_progress_update 38 "Removendo o swapfile incompatível"
   remove_created_swapfile
@@ -110,21 +112,20 @@ apply_zram_profile() {
   ui_progress_update 97 "Registrando o perfil aplicado"
   printf 'zram\n' > "$PROFILE_STATE"
   log "perfil ZRAM aplicado"
-  ui_progress_finish "Perfil ZRAM aplicado"
-  restore_steamos_readonly
+  operation_commit zram
   ui_info "Perfil ZRAM aplicado. O ZSWAP foi desativado em runtime e no próximo boot. Não há timer, serviço ou rotina de recompressão. Reinicie o sistema."
 }
 
 apply_zswap_profile() {
   ui_progress_start "Aplicando o perfil Charcoal com ZSWAP" 100
-  ui_progress_update 5 "Preparando snapshots e permissões"
+  ui_progress_update 5 "Validando requisitos, conflitos e memória disponível"
   prepare_apply zswap
   ui_progress_update 25 "Removendo a ZRAM ativa"
   remove_managed_zram
   ui_progress_update 34 "Removendo a configuração persistente da ZRAM"
   backup_file_once "$ZRAM_FILE"
   rm -f "$ZRAM_FILE"
-  ui_progress_update 48 "Validando ou recriando o swapfile de suporte de 8 GiB"
+  ui_progress_update 48 "Criando ou validando o swap exclusivo de 8 GiB"
   ensure_swapfile
   ui_progress_update 60 "Configurando o ZSWAP em runtime"
   configure_zswap_runtime
@@ -142,44 +143,40 @@ apply_zswap_profile() {
   ui_progress_update 97 "Registrando o perfil aplicado"
   printf 'zswap\n' > "$PROFILE_STATE"
   log "perfil ZSWAP aplicado"
-  ui_progress_finish "Perfil ZSWAP aplicado"
-  restore_steamos_readonly
+  operation_commit zswap
   ui_info "Perfil ZSWAP aplicado e confirmado em runtime. O serviço persistente reafirmará a ativação após o swapfile estar disponível em cada boot. Reinicie o sistema."
 }
 
 revert_all() {
   require_root revert
-  ui_confirm "A reversão restaurará os arquivos e estados capturados antes da primeira aplicação. Continuar?" || return 0
-  ui_progress_start "Revertendo as alterações do Turbo Decky" 100
-  ui_progress_update 5 "Preparando a reversão"
-  unlock_steamos
-  trap restore_steamos_readonly EXIT
-  ui_progress_update 18 "Removendo serviços persistentes do ZSWAP"
+  if [[ ! -s "$FILE_MANIFEST" ]]; then
+    ui_info "Não há snapshot do Turbo Decky para reverter. Nenhuma alteração foi feita."
+    return 0
+  fi
+  validate_snapshot || die "Snapshot inválido. Nenhuma reversão foi iniciada."
+  check_file_conflicts || die "Conflito detectado; arquivos atuais e backups preservados."
+  ui_confirm "Restaurar os snapshots verificados? O swap do SteamOS e arquivos externos serão preservados." || return 0
+  ui_progress_start "Restaurando configurações do Turbo Decky" 100
+  ui_progress_update 5 "Verificando snapshots e bloqueando outras operações"
+  operation_begin revert
+  ui_progress_update 20 "Parando o serviço ZSWAP gerenciado"
   remove_zswap_runtime_service
-  ui_progress_update 28 "Limpando componentes legados"
-  cleanup_legacy_installation
-  ui_progress_update 38 "Parando a ZRAM gerenciada"
-  remove_managed_zram
-  ui_progress_update 48 "Removendo o swapfile criado pelo Turbo Decky"
+  ui_progress_update 35 "Desativando o swap exclusivo do Turbo Decky"
   remove_created_swapfile
-  ui_progress_update 60 "Restaurando arquivos do snapshot"
+  ui_progress_update 50 "Restaurando os arquivos verificados"
   restore_files
   if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]]; then
-    ui_progress_update 80 "Restaurando serviços e configurações do sistema"
-    systemctl daemon-reload 2>/dev/null || true
+    ui_progress_update 70 "Restaurando serviços e swap anteriores"
+    systemctl daemon-reload
     restore_services
-    sysctl --system 2>/dev/null || true
-    udevadm control --reload-rules 2>/dev/null || true
-    swapon -a 2>/dev/null || true
-    ui_progress_update 90 "Atualizando o bootloader e o initramfs"
+    restore_swap_activity
+    udevadm control --reload-rules
+    ui_progress_update 84 "Atualizando bootloader e initramfs"
     update_grub_runtime
   fi
-  ui_progress_update 94 "Restaurando parâmetros de runtime"
+  ui_progress_update 94 "Restaurando parâmetros de memória em runtime"
   restore_runtime
-  ui_progress_update 96 "Removendo o estado interno do Turbo Decky"
-  rm -rf "$STATE_DIR"
-  log "reversão concluída"
-  ui_progress_finish "Reversão concluída"
-  restore_steamos_readonly
-  ui_info "Reversão concluída. Os arquivos e estados anteriores foram restaurados quando havia snapshot disponível. Reinicie o sistema."
+  operation_commit revert
+  log "reversão concluída e verificada"
+  ui_info "Configurações anteriores restauradas. Reinicie o sistema."
 }

@@ -14,7 +14,7 @@ O APP deve funcionar em qualquer aparelho que utiliza o SteamOs e também distri
 O Turbo Decky é um utilitário criado para melhorar o desempenho do SteamOS (usado no Steam Deck) e deixar o sistema mais rápido, fluido e estável — especialmente em jogos.
 
 Ele faz ajustes automáticos no sistema para aproveitar melhor a memória, o processador, o armazenamento e a placa de vídeo.
-Essas otimizações são seguras, reversíveis e voltadas para quem quer mais desempenho sem precisar entender de configurações técnicas.
+As alterações gerenciadas possuem snapshots e verificação de restauração. O resultado de desempenho depende do jogo, do kernel e da configuração do aparelho.
 
 
 ---
@@ -91,7 +91,7 @@ As configurações aplicadas são persistentes em uma reinicialização normal:
 - ZSWAP e parâmetros de kernel em `/etc/default/grub`;
 - swapfile ZSWAP em `/etc/fstab`;
 - regras udev, limites, variáveis de ambiente e estados systemd;
-- SCX LAVD e `fstrim.timer` quando ativados.
+- `fstrim.timer` quando ativado.
 
 Ao selecionar o perfil ZSWAP, o Turbo Decky usa `zswap.compressor=lz4`,
 limita o pool a 35% e usa o backend `zsmalloc` selecionado pelo próprio
@@ -105,3 +105,18 @@ Uma atualização do SteamOS pode substituir configurações, pacotes ou o kerne
 Agradecemos a toda a comunidade Linux, especialmente desenvolvedores como o time do sdweak e cryoutilities que foram grande inspiração para esse projeto. 
 
 Sinceros Agradecimentos á V10lator pelo desenvolvimento de seu Kernel Customizado para o Steam Deck.
+
+## Branch de teste — 4.1.0-test.1
+
+Esta branch mantém `mitigations=off` e remove a instalação/ativação do LAVD. Não desinstala um scheduler instalado anteriormente por outra versão ou ferramenta.
+
+- Swap exclusivo em `/home/.swap/turbodecky.swap`; `/home/swapfile` do SteamOS é preservado.
+- Snapshots com checksum, restauração atômica e bloqueio de operações simultâneas.
+- Configurações externas alteradas após a aplicação bloqueiam nova aplicação/reversão, preservando arquivos e backups.
+- Recuperação automática em caso de falha; após interrupção abrupta, selecione **Recuperar operação** ou execute `--recover`.
+- Progresso monotônico com descrição de etapa, resumo do estado e logs mantidos em `~/.local/state/turbodecky/` (ou `$XDG_STATE_HOME/turbodecky`). O percentual representa etapas concluídas, não tempo restante.
+- Requer Bash, Python 3, systemd, GRUB e ferramentas de memória/armazenamento compatíveis. Opções sem suporte falham antes de modificar o sistema.
+
+Para gerar esta versão, execute `bash packaging/appimage/build-appimage.sh`. O resultado e seu SHA-256 ficam em `dist/`. Para validar, execute os testes shell de `tests/` e `python3 tests/test-grub-config.py`. O workflow de validação gera um artifact AppImage para branches `test/**`; a release `Latest` só é publicada a partir de `main`.
+
+A versão de teste ainda precisa de validação presencial em Steam Deck LCD/OLED, incluindo interface gráfica e reinicialização. Ganhos de FPS não são presumidos: compare os jogos com as mesmas configurações antes e depois.

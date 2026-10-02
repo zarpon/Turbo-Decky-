@@ -6,6 +6,7 @@ on:
       - 'validation/**'
       - 'feature/**'
       - 'fix/**'
+      - 'test/**'
   pull_request:
   workflow_dispatch:
 
@@ -57,6 +58,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           bash tests/test-progress-ui.sh ./InstallTD.sh
+
+      - name: Validate transaction safety and GRUB parsing
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          bash tests/test-operation-safety.sh ./InstallTD.sh
+          bash tests/test-swap-ownership.sh ./InstallTD.sh
+          python3 tests/test-grub-config.py
 
       - name: Validate AppImage layout
         shell: bash

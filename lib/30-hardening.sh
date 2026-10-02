@@ -34,34 +34,19 @@ LEGACY_GENERATED_FILES=(
 readonly LEGACY_GENERATED_FILES
 fi
 
-restore_legacy_backup() {
-  local target="$1" backup="${1}.bak-turbodecky"
-  if [[ -e "$backup" || -L "$backup" ]]; then
-    rm -rf -- "$target"
-    mv -- "$backup" "$target"
-    log "backup legado restaurado: $target"
-    return 0
-  fi
-  return 1
-}
 
 prepare_apply() {
-  require_root "$@"
-  unlock_steamos
-  trap restore_steamos_readonly EXIT
-  mkdir -p "$STATE_DIR" "$BACKUP_DIR"
-  # Capture runtime and service state before legacy cleanup disables or
-  # removes anything; otherwise reversal would snapshot the already-changed
-  # state instead of the user's original state.
+  operation_begin "$1"
   snapshot_runtime_once
   snapshot_services_once
-  # This path is also listed among legacy artifacts. Snapshot it before the
-  # cleanup, otherwise the first application would erase a pre-existing
-  # user configuration and reversal could not restore it.
-  backup_file_once "$ZRAM_FILE"
+  local file
+  while IFS= read -r file; do backup_file_once "$file"; done < <(managed_files)
+  ui_progress_update 14 "Snapshots completos; verificando componentes antigos"
   cleanup_legacy_installation
+  ui_progress_update 20 "Gravando parâmetros de memória, cache e armazenamento"
   write_charcoal_sysctl
   write_charcoal_memory
   write_common_files
+  ui_progress_update 24 "Aplicando a política de serviços"
   set_service_policy
 }

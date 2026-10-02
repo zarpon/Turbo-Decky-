@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly TURBODECKY_VERSION="4.0.0-test"
-readonly TURBODECKY_AUTHOR="Jorge Luis"
-readonly TURBODECKY_REPOSITORY="zarpon/Turbo-Decky-"
+readonly TURBODECKY_VERSION="4.1.0-test.1"
 
 ROOTFS="${TURBODECKY_ROOTFS:-}"
 DRY_RUN="${TURBODECKY_DRY_RUN:-0}"
@@ -13,10 +11,8 @@ LOGFILE="${TURBODECKY_LOGFILE:-/var/log/turbodecky.log}"
 # A dry run without an explicitly supplied root must never write to the live
 # system. Use a disposable root so the normal file-generation paths are still
 # exercised without special-casing every write and remove operation.
-TURBODECKY_DRY_RUN_SANDBOX=0
 TURBODECKY_DRY_RUN_ROOT=""
 if [[ "$DRY_RUN" == 1 && -z "$ROOTFS" ]]; then
-  TURBODECKY_DRY_RUN_SANDBOX=1
   TURBODECKY_DRY_RUN_ROOT="$(mktemp -d /tmp/turbodecky-dry-run.XXXXXX)"
   ROOTFS="$TURBODECKY_DRY_RUN_ROOT"
   if [[ "${TURBODECKY_LIBRARY:-0}" != 1 ]]; then
@@ -29,8 +25,7 @@ fi
 # same updates in a terminal or a native progress dialog.
 PROGRESS_ACTIVE=0
 PROGRESS_CURRENT=0
-PROGRESS_TOTAL=100
-PROGRESS_TITLE=""
+PROGRESS_MESSAGE=""
 PROGRESS_PID=""
 PROGRESS_FD=""
 PROGRESS_DBUS_REF=""
@@ -75,15 +70,6 @@ readonly MANAGED_SERVICES=(
   "cups.service"
 )
 
-# zswap.zpool is kept only so an older Turbo Decky command line is removed
-# during migration; current kernels select zsmalloc at build time and the
-# profile never emits or writes this obsolete parameter.
-readonly MANAGED_GRUB_KEYS=(
-  zswap.enabled zswap.compressor zswap.max_pool_percent zswap.zpool
-  zswap.shrinker_enabled mitigations audit nmi_watchdog nowatchdog
-  split_lock_detect
-)
-
 readonly LEGACY_RECOMPRESSION_FILES=(
   "/etc/systemd/system/zram-recompress.timer"
   "/etc/systemd/system/zram-recompress.service"
@@ -119,7 +105,7 @@ init_paths() {
   ZRAM_FILE="$(p /etc/systemd/zram-generator.conf.d/00-turbodecky.conf)"
   FSTAB_FILE="$(p /etc/fstab)"
   GRUB_FILE="$(p /etc/default/grub)"
-  SWAPFILE="$(p /home/swapfile)"
+  SWAPFILE="$(p /home/.swap/turbodecky.swap)"
 }
 init_paths
 
@@ -137,7 +123,6 @@ log() {
 die() {
   ui_progress_fail "$*"
   ui_error "$*"
-  cleanup_dry_run_sandbox 2>/dev/null || true
   exit 1
 }
 
@@ -240,14 +225,12 @@ ui_progress_close() {
 
   PROGRESS_ACTIVE=0
   PROGRESS_CURRENT=0
-  PROGRESS_TOTAL=100
-  PROGRESS_TITLE=""
-  PROGRESS_MODE="terminal"
+      PROGRESS_MODE="terminal"
 }
 
 ui_progress_qdbus() {
   local command
-  for command in qdbus qdbus-qt5 qdbus6; do
+  for command in qdbus qdbus-qt5 qdbus-qt6 qdbus6 /usr/lib/qt6/bin/qdbus /usr/lib/qt5/bin/qdbus; do
     if command -v "$command" >/dev/null 2>&1; then
       command -v "$command"
       return 0
@@ -261,8 +244,6 @@ ui_progress_start() {
   detect_ui
   PROGRESS_ACTIVE=1
   PROGRESS_CURRENT=0
-  PROGRESS_TOTAL="$total"
-  PROGRESS_TITLE="$title"
   PROGRESS_DBUS_REF=""
   PROGRESS_DBUS_TOOL=""
   PROGRESS_DBUS_ARGS=()
@@ -324,7 +305,9 @@ ui_progress_update() {
   [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
   (( percent < 0 )) && percent=0
   (( percent > 100 )) && percent=100
+  (( percent < PROGRESS_CURRENT )) && percent="$PROGRESS_CURRENT"
   PROGRESS_CURRENT="$percent"
+  PROGRESS_MESSAGE="$message"
   message="$(ui_progress_sanitize "$message")"
 
   if [[ "$PROGRESS_PROTOCOL" == 1 ]]; then
@@ -335,7 +318,7 @@ ui_progress_update() {
   case "$UI_BACKEND" in
     yad|zenity)
       if [[ -n "${PROGRESS_FD:-}" ]]; then
-        printf '%s\n#%s\n' "$percent" "$message" >&"$PROGRESS_FD" 2>/dev/null || true
+        printf '%s\n#%s\n' "$percent" "$message" 1>&"$PROGRESS_FD" 2>/dev/null || true
       fi
       ;;
     kdialog)
@@ -348,7 +331,7 @@ ui_progress_update() {
       ;;
     dialog)
       if [[ -n "${PROGRESS_FD:-}" ]]; then
-        printf 'XXX\n%s\n%s\nXXX\n' "$message" "$percent" >&"$PROGRESS_FD" 2>/dev/null || true
+        printf 'XXX\n%s\n%s\nXXX\n' "$percent" "$message" 1>&"$PROGRESS_FD" 2>/dev/null || true
       fi
       ;;
     *)
@@ -418,11 +401,11 @@ ui_menu() {
     yad)
       yad --list --title="Turbo Decky $TURBODECKY_VERSION" --width=760 --height=500 \
         --text="Selecione uma ação. As alterações são registradas e reversíveis." \
-        --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 \
+        --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 --separator="" \
         zswap "Aplicar perfil Charcoal com ZSWAP e swapfile" \
         zram "Aplicar perfil Charcoal com ZRAM padrão" \
         status "Exibir diagnóstico e parâmetros efetivos" \
-        lavd "Instalar/ativar o scheduler SCX LAVD" \
+        recover "Recuperar uma operação interrompida" \
         revert "Reverter somente alterações gerenciadas pelo Turbo Decky" \
         exit "Sair" 2>/dev/null || printf 'exit\n'
       ;;
@@ -433,36 +416,36 @@ ui_menu() {
         zswap "Aplicar perfil Charcoal com ZSWAP e swapfile" \
         zram "Aplicar perfil Charcoal com ZRAM padrão" \
         status "Exibir diagnóstico e parâmetros efetivos" \
-        lavd "Instalar/ativar o scheduler SCX LAVD" \
+        recover "Recuperar uma operação interrompida" \
         revert "Reverter somente alterações gerenciadas pelo Turbo Decky" \
         exit "Sair" 2>/dev/null || printf 'exit\n'
       ;;
     kdialog)
       kdialog --title "Turbo Decky $TURBODECKY_VERSION" --menu "Selecione uma ação" \
         zswap "Perfil Charcoal + ZSWAP" zram "Perfil Charcoal + ZRAM" \
-        status "Diagnóstico" lavd "Ativar SCX LAVD" \
+        status "Diagnóstico" recover "Recuperar operação" \
         revert "Reverter alterações" exit "Sair" 2>/dev/null || printf 'exit\n'
       ;;
     dialog)
       dialog --stdout --title "Turbo Decky $TURBODECKY_VERSION" --menu "Selecione uma ação" 20 80 10 \
         zswap "Perfil Charcoal + ZSWAP" zram "Perfil Charcoal + ZRAM" \
-        status "Diagnóstico" lavd "Ativar SCX LAVD" \
+        status "Diagnóstico" recover "Recuperar operação" \
         revert "Reverter alterações" exit "Sair" 2>/dev/tty || printf 'exit\n'
       ;;
     *)
-      cat <<'MENU'
+      cat >&2 <<'MENU'
 1) Aplicar perfil Charcoal com ZSWAP
 2) Aplicar perfil Charcoal com ZRAM padrão
 3) Exibir diagnóstico
-4) Instalar/ativar SCX LAVD
-5) Reverter alterações
+4) Reverter alterações
+5) Recuperar operação interrompida
 6) Sair
 MENU
       local answer
-      read -r -p "Opção: " answer
+      read -r -p "Opção: " answer || { printf 'exit\n'; return 0; }
       case "$answer" in
         1) printf 'zswap\n';; 2) printf 'zram\n';; 3) printf 'status\n';;
-        4) printf 'lavd\n';; 5) printf 'revert\n';; *) printf 'exit\n';;
+        4) printf 'revert\n';; 5) printf 'recover\n';; *) printf 'exit\n';;
       esac
       ;;
   esac
@@ -493,36 +476,66 @@ atomic_write() {
   mv -f "$temporary" "$destination"
 }
 
+file_fingerprint() {
+  local file="$1"
+  if [[ -L "$file" ]]; then
+    printf 'link:%s' "$(readlink -- "$file")" | sha256sum | awk '{print $1}'
+  elif [[ -f "$file" ]]; then
+    sha256sum -- "$file" | awk '{print $1}'
+  elif [[ ! -e "$file" ]]; then
+    printf 'absent\n'
+  else
+    return 1
+  fi
+}
+
 backup_file_once() {
-  local file="$1" digest backup existed=0
+  local file="$1" digest backup existed=0 hash=absent
   mkdir -p "$BACKUP_DIR"
   touch "$FILE_MANIFEST"
-  grep -Fq "${file}"$'\t' "$FILE_MANIFEST" 2>/dev/null && return 0
+  awk -F '\t' -v file="$file" '$1 == file {found=1} END {exit !found}' "$FILE_MANIFEST" && return 0
   digest="$(printf '%s' "$file" | sha256sum | awk '{print $1}')"
   backup="$BACKUP_DIR/$digest"
   if [[ -e "$file" || -L "$file" ]]; then
-    cp -a "$file" "$backup"
+    [[ -f "$file" || -L "$file" ]] || die "O snapshot aceita somente arquivos: $file"
+    cp -a -- "$file" "$backup"
     existed=1
+    hash="$(file_fingerprint "$backup")"
   fi
-  printf '%s\t%s\t%s\n' "$file" "$backup" "$existed" >> "$FILE_MANIFEST"
+  printf '%s\t%s\t%s\t%s\n' "$file" "$backup" "$existed" "$hash" >> "$FILE_MANIFEST"
+}
+
+validate_snapshot() {
+  [[ -s "$FILE_MANIFEST" ]] || { ui_error "Snapshot ausente ou vazio; nenhuma restauração foi iniciada."; return 1; }
+  local file backup existed hash expected
+  while IFS=$'\t' read -r file backup existed hash; do
+    case "$file" in
+      "$(p /etc/)"*|"$(p /var/lib/turbodecky/)"*|"$(p /usr/local/bin/)"*) ;;
+      *) ui_error "Caminho não gerenciado no snapshot: $file"; return 1 ;;
+    esac
+    [[ "$file" != *'/../'* && "$file" != *'/./'* && "$file" != */.. && "$file" != */. ]] || return 1
+    expected="$BACKUP_DIR/$(printf '%s' "$file" | sha256sum | awk '{print $1}')"
+    [[ "$backup" == "$expected" && "$existed" =~ ^[01]$ ]] || { ui_error "Manifesto inválido: $file"; return 1; }
+    if [[ "$existed" == 1 ]]; then
+      [[ -f "$backup" || -L "$backup" ]] || { ui_error "Backup ausente: $file. O arquivo atual foi preservado."; return 1; }
+      [[ -z "$hash" || "$(file_fingerprint "$backup")" == "$hash" ]] || { ui_error "Backup corrompido: $file. O arquivo atual foi preservado."; return 1; }
+    fi
+    [[ ! -d "$file" || -L "$file" ]] || { ui_error "Destino inesperado: $file"; return 1; }
+  done < "$FILE_MANIFEST"
 }
 
 restore_files() {
-  [[ -f "$FILE_MANIFEST" ]] || return 0
-  local file backup existed
-  while IFS=$'\t' read -r file backup existed; do
-    [[ -n "$file" ]] || continue
-    case "$file" in
-      "$(p /etc/)"*|"$(p /var/lib/turbodecky/)"*) ;;
-      *)
-        log "snapshot ignorado por caminho não gerenciado: $file"
-        continue
-        ;;
-    esac
-    rm -rf -- "$file"
-    if [[ "$existed" == 1 && ( -e "$backup" || -L "$backup" ) ]]; then
+  validate_snapshot || return 1
+  local file backup existed hash temp
+  while IFS=$'\t' read -r file backup existed hash; do
+    if [[ "$existed" == 1 ]]; then
       mkdir -p "$(dirname "$file")"
-      cp -a "$backup" "$file"
+      temp="$(mktemp -d "$(dirname "$file")/.td-restore.XXXXXX")"
+      cp -a -- "$backup" "$temp/file" || { rm -rf -- "$temp"; return 1; }
+      mv -fT -- "$temp/file" "$file" || { rm -rf -- "$temp"; return 1; }
+      rmdir "$temp"
+    else
+      rm -f -- "$file" || return 1
     fi
   done < "$FILE_MANIFEST"
 }
@@ -542,13 +555,22 @@ snapshot_services_once() {
   [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
   [[ -f "$SERVICE_SNAPSHOT" ]] && return 0
   mkdir -p "$STATE_DIR"
-  : > "$SERVICE_SNAPSHOT"
-  local service enabled active
-  for service in "${MANAGED_SERVICES[@]}" fstrim.timer scx_lavd.service systemd-zram-setup@zram0.service; do
+  local final_snapshot="$SERVICE_SNAPSHOT"
+  SERVICE_SNAPSHOT="$(mktemp "$STATE_DIR/.services.XXXXXX")"
+  local service enabled active file
+  local services=("${MANAGED_SERVICES[@]}" fstrim.timer turbodecky-zswap-runtime.service systemd-zram-setup@zram0.service)
+  for file in "${LEGACY_GENERATED_FILES[@]}" "${LEGACY_RECOMPRESSION_FILES[@]}"; do
+    [[ "$file" == /etc/systemd/system/*.service || "$file" == /etc/systemd/system/*.timer ]] || continue
+    legacy_file_owned "$(p "$file")" || continue
+    services+=("${file##*/}")
+  done
+  for service in "${services[@]}"; do
     enabled="$(systemctl is-enabled "$service" 2>/dev/null || true)"
     active="$(systemctl is-active "$service" 2>/dev/null || true)"
     printf '%s\t%s\t%s\n' "$service" "${enabled:-not-found}" "${active:-inactive}" >> "$SERVICE_SNAPSHOT"
   done
+  mv -f -- "$SERVICE_SNAPSHOT" "$final_snapshot"
+  SERVICE_SNAPSHOT="$final_snapshot"
 }
 
 unlock_steamos() {
@@ -569,12 +591,11 @@ cleanup_dry_run_sandbox() {
 }
 
 restore_steamos_readonly() {
-  ui_progress_fail "A operação foi interrompida" 2>/dev/null || true
   if [[ "${STEAMOS_WAS_READONLY:-0}" == 1 ]]; then
-    steamos-readonly enable 2>/dev/null || true
+    steamos-readonly enable || return 1
   fi
   STEAMOS_WAS_READONLY=0
-  cleanup_dry_run_sandbox
+  [[ "${OPERATION_ACTIVE:-0}" == 1 ]] || cleanup_dry_run_sandbox
 }
 
 cleanup_legacy_recompression() {
@@ -591,7 +612,15 @@ write_charcoal_memory() {
   backup_file_once "$MEMORY_FILE"
   {
     printf '# Turbo Decky - perfil de memória sincronizado com linux-charcoal-vulcano\n'
-    printf '%s\n' "${CHARCOAL_MEMORY_TMPFILES[@]}"
+    local line _type path
+    for line in "${CHARCOAL_MEMORY_TMPFILES[@]}"; do
+      read -r _type path _rest <<< "$line"
+      if [[ -n "$ROOTFS" || -e "$path" ]]; then
+        printf '%s\n' "$line"
+      else
+        log "ajuste de memória indisponível neste kernel: $path"
+      fi
+    done
   } | atomic_write "$MEMORY_FILE" 0644
 }
 
@@ -601,7 +630,14 @@ write_charcoal_sysctl() {
     printf '# Turbo Decky - perfil sincronizado com linux-charcoal-vulcano\n'
     printf '# vm.swappiness permanece sob controle do SteamOS ou do usuário.\n'
     printf '# Ajustes opcionais de recompressão não fazem parte deste perfil.\n'
-    printf '%s\n' "${CHARCOAL_SYSCTL[@]}"
+    local pair
+    for pair in "${CHARCOAL_SYSCTL[@]}"; do
+      if [[ -n "$ROOTFS" ]] || sysctl -n "${pair%%=*}" >/dev/null 2>&1; then
+        printf '%s\n' "$pair"
+      else
+        log "parâmetro indisponível neste kernel: ${pair%%=*}"
+      fi
+    done
   } | atomic_write "$SYSCTL_FILE" 0644
 }
 
@@ -623,8 +659,8 @@ EOF_ENV
   backup_file_once "$UDEV_FILE"
   cat <<'EOF_UDEV' | atomic_write "$UDEV_FILE" 0644
 # Turbo Decky: ajustes conservadores, sem substituir o scheduler do kernel.
-ACTION=="add|change", KERNEL=="nvme*n*", ATTR{queue/read_ahead_kb}="512", ATTR{queue/rotational}="0", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0"
-ACTION=="add|change", KERNEL=="mmcblk*", ATTR{queue/read_ahead_kb}="1024", ATTR{queue/rotational}="0", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0"
-ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/iostats}="0", ATTR{queue/add_random}="0"
+ACTION=="add|change", ENV{DEVTYPE}=="disk", KERNEL=="nvme*n*", ATTR{queue/read_ahead_kb}="512", ATTR{queue/rotational}="0", ATTR{queue/add_random}="0"
+ACTION=="add|change", ENV{DEVTYPE}=="disk", KERNEL=="mmcblk*", ATTR{queue/read_ahead_kb}="1024", ATTR{queue/rotational}="0", ATTR{queue/add_random}="0"
+ACTION=="add|change", ENV{DEVTYPE}=="disk", KERNEL=="sd[a-z]", ATTR{queue/add_random}="0"
 EOF_UDEV
 }

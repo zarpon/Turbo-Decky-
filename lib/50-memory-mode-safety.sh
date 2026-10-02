@@ -22,28 +22,13 @@ disable_zswap_runtime() {
   esac
 }
 
-configure_zswap_runtime() {
-  [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
-  [[ -d "$ZSWAP_SYSFS_DIR" ]] || {
-    log "parâmetros runtime do ZSWAP indisponíveis; a configuração será aplicada no próximo boot"
-    return 0
-  }
-
-  # Disable first so compressor/pool limits can be changed safely, then enable only
-  # after a real backing swapfile has been activated.
-  write_runtime_value "$ZSWAP_SYSFS_DIR/enabled" 0 || true
-  write_runtime_value "$ZSWAP_SYSFS_DIR/compressor" lz4 || true
-  write_runtime_value "$ZSWAP_SYSFS_DIR/max_pool_percent" 35 || true
-  write_runtime_value "$ZSWAP_SYSFS_DIR/shrinker_enabled" 1 || true
-  write_runtime_value "$ZSWAP_SYSFS_DIR/enabled" 1 || \
-    log "não foi possível ativar o ZSWAP em runtime; ele será ativado no próximo boot"
-}
 
 snapshot_runtime_once() {
   [[ -n "$ROOTFS" || "$DRY_RUN" == 1 ]] && return 0
   [[ -f "$RUNTIME_SNAPSHOT" ]] && return 0
   mkdir -p "$STATE_DIR"
-  : > "$RUNTIME_SNAPSHOT"
+  local final_snapshot="$RUNTIME_SNAPSHOT"
+  RUNTIME_SNAPSHOT="$(mktemp "$STATE_DIR/.runtime.XXXXXX")"
 
   local pair key value relative file
   for pair in "${CHARCOAL_SYSCTL[@]}"; do
@@ -63,6 +48,18 @@ snapshot_runtime_once() {
     [[ -n "$value" ]] && printf 'sysfs\t%s\t%s\n' "$file" "$value" >> "$RUNTIME_SNAPSHOT"
   done
 
+  # Preserve the block attributes actually changed by our udev rules.
+  local device attribute
+  for device in /sys/class/block/nvme*n* /sys/class/block/mmcblk* /sys/class/block/sd[a-z]; do
+    [[ -d "$device/queue" ]] || continue
+    for attribute in read_ahead_kb rotational add_random; do
+      file="$device/queue/$attribute"
+      [[ -r "$file" ]] || continue
+      value="$(cat "$file")"
+      printf 'sysfs\t%s\t%s\n' "$file" "$value" >> "$RUNTIME_SNAPSHOT"
+    done
+  done
+
   # Keep enabled last. During restore, ZSWAP is disabled first, parameters are
   # restored, and its original enabled state is written only at the end.
   # Keep zpool only for restoring snapshots made by older releases. It is not
@@ -73,6 +70,8 @@ snapshot_runtime_once() {
     value="$(cat "$file" 2>/dev/null || true)"
     [[ -n "$value" ]] && printf 'sysfs\t%s\t%s\n' "$file" "$value" >> "$RUNTIME_SNAPSHOT"
   done
+  mv -f -- "$RUNTIME_SNAPSHOT" "$final_snapshot"
+  RUNTIME_SNAPSHOT="$final_snapshot"
 }
 
 restore_runtime() {
@@ -88,8 +87,8 @@ restore_runtime() {
   local type key value
   while IFS=$'\t' read -r type key value; do
     case "$type" in
-      sysctl) sysctl -q -w "$key=$value" 2>/dev/null || true ;;
-      sysfs) write_runtime_value "$key" "$value" 2>/dev/null || true ;;
+      sysctl) sysctl -q -w "$key=$value" || return 1 ;;
+      sysfs) write_runtime_value "$key" "$value" || return 1 ;;
     esac
   done < "$RUNTIME_SNAPSHOT"
 }
@@ -100,50 +99,65 @@ restore_services() {
 
   local service enabled active
   while IFS=$'\t' read -r service enabled active; do
-    if [[ "$enabled" == masked || "$enabled" == masked-runtime ]]; then
-      systemctl mask "$service" 2>/dev/null || true
+    if [[ "$enabled" == masked-runtime ]]; then
+      systemctl mask --runtime "$service" || return 1
+    elif [[ "$enabled" == masked ]]; then
+      systemctl mask "$service" || return 1
     else
       # static/generated/indirect units cannot be enabled, but they still must
       # be unmasked because Turbo Decky may have masked them for ZSWAP.
-      systemctl unmask "$service" 2>/dev/null || true
+      systemctl unmask "$service" || return 1
+      systemctl unmask --runtime "$service" || return 1
       case "$enabled" in
-        enabled|enabled-runtime|linked|linked-runtime|alias)
-          systemctl enable "$service" 2>/dev/null || true
+        enabled|linked|alias)
+          systemctl enable "$service" || return 1
           ;;
-        disabled)
-          systemctl disable "$service" 2>/dev/null || true
+        enabled-runtime|linked-runtime)
+          systemctl disable "$service" || return 1
+          systemctl enable --runtime "$service" || return 1
+          ;;
+        disabled|not-found)
+          [[ "$enabled" == not-found ]] || systemctl disable "$service" || return 1
           ;;
       esac
     fi
 
     if [[ "$active" == active ]]; then
-      systemctl start "$service" 2>/dev/null || true
+      systemctl start "$service" || return 1
     else
-      systemctl stop "$service" 2>/dev/null || true
+      [[ "$enabled" == not-found ]] || systemctl stop "$service" || return 1
     fi
   done < "$SERVICE_SNAPSHOT"
 }
 
+legacy_file_owned() {
+  local file="$1"
+  [[ "$file" == "$(p /var/lib/turbodecky/)"* ]] ||
+    { [[ -f "$file" ]] && grep -Eiq 'Turbo[ -]?Decky|Turbo Decky|charcoaltd' "$file"; }
+}
+
 cleanup_legacy_installation() {
-  local file
-  cleanup_legacy_recompression
-  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]] && command -v systemctl >/dev/null 2>&1; then
-    systemctl disable --now zswap-config.service zram-config.service \
-      mglru-tune.service thp-config.service turbodecky-power-monitor.service \
-      2>/dev/null || true
-  fi
-  restore_legacy_backup "$(p /etc/fstab)" || true
-  restore_legacy_backup "$(p /etc/default/grub)" || true
-  restore_legacy_backup "$(p /etc/sysctl.d/99-sdweak-performance.conf)" || \
-    rm -f -- "$(p /etc/sysctl.d/99-sdweak-performance.conf)"
-  restore_legacy_backup "$(p /usr/lib/systemd/zram-generator.conf)" || true
-  for file in "${LEGACY_GENERATED_FILES[@]}"; do
-    rm -rf -- "$(p "$file")"
+  local file service
+  # Generic filenames are never evidence of ownership. Snapshot first.
+  for file in "${LEGACY_GENERATED_FILES[@]}" "${LEGACY_RECOMPRESSION_FILES[@]}"; do
+    file="$(p "$file")"
+    [[ "$file" != "$ZRAM_FILE" ]] || continue
+    [[ -e "$file" || -L "$file" ]] || continue
+    legacy_file_owned "$file" || { log "arquivo externo preservado: $file"; continue; }
+    backup_file_once "$file"
+    if [[ -n "${OPERATION_DIR:-}" ]]; then
+      local old_manifest="$FILE_MANIFEST" old_backup="$BACKUP_DIR"
+      FILE_MANIFEST="$OPERATION_DIR/files.tsv" BACKUP_DIR="$OPERATION_DIR/backups"
+      backup_file_once "$file"
+      FILE_MANIFEST="$old_manifest" BACKUP_DIR="$old_backup"
+    fi
+    if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 && "$file" == /etc/systemd/system/* ]]; then
+      service="${file##*/}"
+      systemctl disable --now "$service" || die "Não foi possível desativar o serviço legado: $service"
+    fi
+    rm -f -- "$file"
   done
-  rm -f -- "$(p /etc/environment.d/)"turbodecky*.conf 2>/dev/null || true
-  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]] && command -v systemctl >/dev/null 2>&1; then
-    systemctl daemon-reload 2>/dev/null || true
-  fi
+  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]]; then systemctl daemon-reload; fi
 }
 
 zram_runtime_devices() {
@@ -195,4 +209,6 @@ activate_zram() {
     die "Não foi possível ativar a ZRAM em runtime."
   systemctl is-active --quiet systemd-zram-setup@zram0.service || \
     die "A unidade da ZRAM não ficou ativa após a reinicialização."
+  swapon --show=NAME --noheadings --raw | grep -Fxq /dev/zram0 || \
+    die "A unidade ZRAM está ativa, mas /dev/zram0 não aparece como swap."
 }
