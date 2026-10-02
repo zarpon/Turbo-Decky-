@@ -15,7 +15,7 @@ Turbo Decky is a utility designed to improve SteamOS performance on devices such
 
 It automatically adjusts the system to make better use of memory, processor resources, storage, and the graphics processor.
 
-These optimizations are safe, reversible, and intended for users who want better performance without having to understand advanced system configuration.
+Managed changes have snapshots and restore verification. Performance depends on the game, kernel and device configuration.
 
 ---
 
@@ -84,7 +84,7 @@ The applied settings remain persistent across a normal reboot:
 - ZSWAP and kernel parameters in `/etc/default/grub`;
 - the ZSWAP swapfile in `/etc/fstab`;
 - udev rules, limits, environment variables, and systemd service states;
-- SCX LAVD and `fstrim.timer` when enabled.
+- `fstrim.timer` when enabled.
 
 When the ZSWAP profile is selected, Turbo Decky uses `zswap.compressor=lz4`,
 limits the pool to 35%, and uses the `zsmalloc` backend selected by the kernel.
@@ -98,3 +98,11 @@ A SteamOS update may replace settings, packages, or the kernel and require the o
 Thanks to the entire Linux community, especially projects and developers such as sdweak and CryoUtilities, which were major inspirations for this project.
 
 Special thanks to V10lator for developing the custom kernel for the Steam Deck.
+
+## Test branch — 4.1.0-test.1
+
+This branch keeps `mitigations=off` and removes LAVD installation/activation. It does not uninstall an existing scheduler.
+
+It uses dedicated swap at `/home/.swap/turbodecky.swap`, preserves SteamOS `/home/swapfile`, verifies snapshot checksums, blocks concurrent operations and preserves files changed externally. Failed operations are recovered automatically when possible; select **Recover operation** or use `--recover` after an abrupt interruption. Progress describes completed steps rather than remaining time, and action logs are retained in `~/.local/state/turbodecky/` or `$XDG_STATE_HOME/turbodecky`.
+
+Build with `bash packaging/appimage/build-appimage.sh`; the AppImage and checksum are written to `dist/`. Test-branch CI uploads the AppImage as an artifact and does not publish `Latest`. On-device LCD/OLED, graphical and reboot validation remains necessary; FPS improvements have not been measured.

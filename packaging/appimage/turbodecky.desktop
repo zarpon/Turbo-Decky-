@@ -9,4 +9,4 @@ Terminal=false
 Categories=System;Settings;
 Keywords=SteamOS;Steam Deck;ZRAM;ZSWAP;Kernel;Performance;
 StartupNotify=true
-X-AppImage-Version=4.0.0-test
+X-AppImage-Version=4.1.0-test.1

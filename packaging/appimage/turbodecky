@@ -76,7 +76,7 @@ ACTION_FIFO_DIR=""
 
 progress_qdbus() {
   local command
-  for command in qdbus qdbus-qt5 qdbus6; do
+  for command in qdbus qdbus-qt5 qdbus-qt6 qdbus6 /usr/lib/qt6/bin/qdbus /usr/lib/qt5/bin/qdbus; do
     if command -v "$command" >/dev/null 2>&1; then
       command -v "$command"
       return 0
@@ -129,9 +129,12 @@ progress_start() {
 progress_update() {
   local percent="$1" message="$2"
   [[ "${PROGRESS_ACTIVE:-0}" == 1 ]] || return 0
+  [[ "$percent" =~ ^[0-9]+$ ]] || return 1
+  (( percent < PROGRESS_CURRENT )) && percent="$PROGRESS_CURRENT"
+  (( percent > 100 )) && percent=100
   PROGRESS_CURRENT="$percent"
   if [[ -n "${PROGRESS_FD:-}" ]]; then
-    printf '%s\n#%s\n' "$percent" "$message" >&"$PROGRESS_FD" 2>/dev/null || true
+    printf '%s\n#%s\n' "$percent" "$message" 1>&"$PROGRESS_FD" 2>/dev/null || true
   elif [[ -n "${PROGRESS_DBUS_REF:-}" && -n "${PROGRESS_DBUS_TOOL:-}" ]]; then
     "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" setLabelText "$message" >/dev/null 2>&1 || true
     "$PROGRESS_DBUS_TOOL" "${PROGRESS_DBUS_ARGS[@]}" Set "" value "$percent" >/dev/null 2>&1 || true
@@ -166,51 +169,55 @@ progress_close() {
 }
 
 select_action() {
+  local overview
+  overview="$(run_unprivileged --status 2>/dev/null | sed -n '1,7p')"
+  overview+=$'\n\nSelecione uma ação. O progresso mostra etapas concluídas, não uma estimativa de tempo restante.'
   if command -v yad >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
     yad --list --title="Turbo Decky" --width=820 --height=540 \
-      --text="Selecione uma ação. As operações administrativas solicitarão autenticação." \
-      --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 \
+      --text="$overview" \
+      --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 --separator="" \
       apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
       apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
       status "Exibir diagnóstico dos parâmetros efetivos" \
-      setup-lavd "Instalar ou ativar SCX LAVD" \
-      revert "Reverter alterações gerenciadas pelo Turbo Decky" \
+      recover "Recuperar uma operação interrompida" \
+      revert "Restaurar configurações anteriores verificadas" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   elif command -v zenity >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
     zenity --list --title="Turbo Decky" --width=820 --height=540 \
-      --text="Selecione uma ação. As operações administrativas solicitarão autenticação." \
+      --text="$overview" \
       --column="Ação" --column="Descrição" --print-column=1 --hide-column=1 \
       apply-zram "Aplicar perfil Charcoal com ZRAM padrão" \
       apply-zswap "Aplicar perfil Charcoal com ZSWAP" \
       status "Exibir diagnóstico dos parâmetros efetivos" \
-      setup-lavd "Instalar ou ativar SCX LAVD" \
-      revert "Reverter alterações gerenciadas pelo Turbo Decky" \
+      recover "Recuperar uma operação interrompida" \
+      revert "Restaurar configurações anteriores verificadas" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   elif command -v kdialog >/dev/null 2>&1 && [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
-    kdialog --title "Turbo Decky" --menu "Selecione uma ação" \
+    kdialog --title "Turbo Decky" --menu "$overview" \
       apply-zram "Perfil Charcoal com ZRAM" \
       apply-zswap "Perfil Charcoal com ZSWAP" \
       status "Diagnóstico" \
-      setup-lavd "Ativar SCX LAVD" \
-      revert "Reverter alterações" \
+      recover "Recuperar operação interrompida" \
+      revert "Restaurar configurações" \
       exit "Sair" 2>/dev/null || printf 'exit\n'
   else
-    cat <<'MENU'
+    printf '%s\n\n' "$overview" >&2
+    cat >&2 <<'MENU'
 1) Aplicar perfil Charcoal com ZRAM padrão
 2) Aplicar perfil Charcoal com ZSWAP
 3) Exibir diagnóstico
-4) Instalar ou ativar SCX LAVD
-5) Reverter alterações
+4) Restaurar configurações anteriores
+5) Recuperar operação interrompida
 6) Sair
 MENU
     local answer
-    read -r -p "Opção: " answer
+    read -r -p "Opção: " answer || { printf 'exit\n'; return 0; }
     case "$answer" in
       1) printf '%s\n' apply-zram ;;
       2) printf '%s\n' apply-zswap ;;
       3) printf '%s\n' status ;;
-      4) printf '%s\n' setup-lavd ;;
-      5) printf '%s\n' revert ;;
+      4) printf '%s\n' revert ;;
+      5) printf '%s\n' recover ;;
       *) printf 'exit\n' ;;
     esac
   fi
@@ -218,20 +225,25 @@ MENU
 
 stage_payload() {
   STAGED_DIR="$(mktemp -d /tmp/turbodecky-appimage.XXXXXX)"
-  install -d -m 0755 "$STAGED_DIR/lib"
-  install -m 0755 "$BACKEND" "$STAGED_DIR/InstallTD.sh"
-  cp -a "$SOURCE_DIR/lib/." "$STAGED_DIR/lib/"
+  install -d -m 0755 "$STAGED_DIR/lib" || return 1
+  install -m 0755 "$BACKEND" "$STAGED_DIR/InstallTD.sh" || return 1
+  cp -a "$SOURCE_DIR/lib/." "$STAGED_DIR/lib/" || return 1
   find "$STAGED_DIR/lib" -type d -exec chmod 0755 {} +
   find "$STAGED_DIR/lib" -type f -exec chmod 0644 {} +
 }
 
 cleanup() {
   progress_close
+  if [[ -n "${ACTION_CHILD_PID:-}" ]] && kill -0 "$ACTION_CHILD_PID" 2>/dev/null; then
+    # Keep staged files while the authorized backend completes its recovery.
+    wait "$ACTION_CHILD_PID" 2>/dev/null || true
+  fi
   [[ -z "${ACTION_FIFO_DIR:-}" ]] || rm -rf -- "$ACTION_FIFO_DIR"
   [[ -z "${STAGED_DIR:-}" ]] || rm -rf -- "$STAGED_DIR"
-  [[ -z "${ACTION_LOG:-}" ]] || rm -f -- "$ACTION_LOG"
+  # Action logs are kept for support and recovery, never deleted on failure.
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'show_info "A operação administrativa continuará até um ponto seguro. Aguarde o resultado."' INT TERM
 
 run_unprivileged() {
   # Status/version are captured by the launcher so the launcher can present a
@@ -243,13 +255,16 @@ run_unprivileged() {
 run_privileged() {
   local action="$1" status=0
   local child_pid line output_fifo failure_message=""
-  stage_payload
-  ACTION_LOG="$(mktemp /tmp/turbodecky-action.XXXXXX.log)"
+  local percent message
+  stage_payload || { show_error "Falha ao preparar o aplicativo. Nenhuma ação administrativa foi iniciada."; return 1; }
+  local log_dir="${XDG_STATE_HOME:-$HOME/.local/state}/turbodecky"
+  mkdir -p "$log_dir" || return 1
+  ACTION_LOG="$(mktemp "$log_dir/action.XXXXXX.log")" || return 1
   ACTION_FIFO_DIR="$(mktemp -d /tmp/turbodecky-output.XXXXXX)"
   output_fifo="$ACTION_FIFO_DIR/events"
   mkfifo "$output_fifo"
   progress_start "Aguardando autorização administrativa para: $action"
-  progress_update 3 "Aguardando autorização administrativa"
+  progress_update 0 "Aguardando autorização administrativa; nenhuma alteração iniciada"
 
   if (( EUID == 0 )); then
     TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
@@ -272,6 +287,8 @@ run_privileged() {
     kdesu -c "$command_line" >"$output_fifo" 2>&1 &
     child_pid=$!
   elif command -v sudo >/dev/null 2>&1 && [[ -t 0 ]]; then
+    # The FIFO belongs to the launcher; only the backend needs privilege.
+    # shellcheck disable=SC2024
     sudo /usr/bin/env TURBODECKY_UI=terminal TURBODECKY_ASSUME_YES=1 \
       TURBODECKY_PROGRESS_PROTOCOL=1 \
       /usr/bin/bash "$STAGED_DIR/InstallTD.sh" "$action" >"$output_fifo" 2>&1 &
@@ -283,6 +300,7 @@ run_privileged() {
     return 1
   fi
 
+  ACTION_CHILD_PID="$child_pid"
   while IFS= read -r line || [[ -n "$line" ]]; do
     if [[ "$line" == $'TURBODECKY_PROGRESS\t'* ]]; then
       IFS=$'\t' read -r _ percent message <<< "$line"
@@ -295,6 +313,7 @@ run_privileged() {
     fi
   done < "$output_fifo"
   wait "$child_pid" || status=$?
+  ACTION_CHILD_PID=""
   rm -rf -- "$ACTION_FIFO_DIR"
   ACTION_FIFO_DIR=""
   if (( status == 0 )); then
@@ -321,9 +340,9 @@ run_privileged() {
 
 confirmation_text() {
   case "$1" in
-    --apply-zram) printf '%s' "Aplicar o perfil Charcoal com ZRAM padrão? O sistema solicitará autenticação e poderá exigir reinicialização." ;;
-    --apply-zswap) printf '%s' "Aplicar o perfil Charcoal com ZSWAP? Pode ser criado um swapfile de 8 GiB e será necessária reinicialização." ;;
-    --setup-lavd) printf '%s' "Instalar e ativar SCX LAVD pelo gerenciador de pacotes?" ;;
+    --apply-zram) printf '%s' "Aplicar o perfil Charcoal com ZRAM padrão? O sistema verificará requisitos e criará snapshots. Mitigations permanecerão desativadas no próximo boot. Reinicialização necessária." ;;
+    --apply-zswap) printf '%s' "Aplicar o perfil Charcoal com ZSWAP? Serão usados 8 GiB em um swap exclusivo, preservando o swap do SteamOS. Mitigations permanecerão desativadas no próximo boot. Reinicialização necessária." ;;
+    --recover) printf '%s' "Restaurar a configuração anterior à operação interrompida? Os backups serão verificados." ;;
     --revert) printf '%s' "Reverter as alterações gerenciadas pelo Turbo Decky usando os snapshots existentes?" ;;
     *) printf '%s' "Executar esta operação administrativa?" ;;
   esac
@@ -348,7 +367,7 @@ run_action() {
       ;;
     apply-zram|--apply-zram) backend_action=--apply-zram ;;
     apply-zswap|--apply-zswap) backend_action=--apply-zswap ;;
-    setup-lavd|--setup-lavd) backend_action=--setup-lavd ;;
+    recover|--recover) backend_action=--recover ;;
     revert|--revert) backend_action=--revert ;;
     *)
       show_error "Ação inválida: $action"

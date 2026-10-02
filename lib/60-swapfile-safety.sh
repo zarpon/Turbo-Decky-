@@ -1,190 +1,134 @@
 #!/usr/bin/env bash
-# Final swapfile safety layer. The older implementation accepted any existing
-# /home/swapfile, including empty files and broken links, and ignored swapon
-# failures. This override guarantees a real, active 8 GiB backing swap.
-
+# Dedicated backing swap. Never replace SteamOS/user /home/swapfile.
 readonly TURBODECKY_SWAPFILE_BYTES=$((8 * 1024 * 1024 * 1024))
 readonly TURBODECKY_SWAPFILE_MIN_FREE_BYTES=$((9 * 1024 * 1024 * 1024))
 
 swapfile_resolved_path() {
-  local path="$1"
-  if [[ -L "$path" ]]; then
-    readlink -f -- "$path" 2>/dev/null
-  else
-    printf '%s\n' "$path"
-  fi
+  readlink -f -- "$1" 2>/dev/null || printf '%s\n' "$1"
 }
 
-managed_swapfile_target() {
-  p /home/.swap/turbodecky.swap
-}
+managed_swapfile_target() { p /home/.swap/turbodecky.swap; }
 
 swapfile_size_is_8g() {
-  local path="$1" size
-  [[ -f "$path" ]] || return 1
-  size="$(stat -Lc '%s' -- "$path" 2>/dev/null || printf '0')"
-  [[ "$size" == "$TURBODECKY_SWAPFILE_BYTES" ]]
+  [[ -f "$1" ]] && [[ "$(stat -Lc '%s' -- "$1")" == "$TURBODECKY_SWAPFILE_BYTES" ]]
 }
 
 swapfile_has_swap_signature() {
-  local path="$1"
-  command -v blkid >/dev/null 2>&1 || return 1
-  [[ "$(blkid -p -s TYPE -o value -- "$path" 2>/dev/null || true)" == swap ]]
+  [[ "$(blkid -p -s TYPE -o value -- "$1" 2>/dev/null || true)" == swap ]]
 }
 
 swapfile_is_active() {
-  local path="$1" expected active resolved
-  expected="$(swapfile_resolved_path "$path" 2>/dev/null || printf '%s' "$path")"
+  local expected active
+  expected="$(swapfile_resolved_path "$1")"
   while IFS= read -r active; do
-    [[ -n "$active" ]] || continue
-    resolved="$(readlink -f -- "$active" 2>/dev/null || printf '%s' "$active")"
-    [[ "$resolved" == "$expected" ]] && return 0
-  done < <(swapon --show=NAME --noheadings --raw 2>/dev/null || true)
+    [[ "$(swapfile_resolved_path "$active")" == "$expected" ]] && return 0
+  done < <(swapon --show=NAME --noheadings --raw 2>/dev/null)
   return 1
 }
 
 write_swapfile_fstab_entry() {
   backup_file_once "$FSTAB_FILE"
-  mkdir -p "$(dirname "$FSTAB_FILE")"
   {
-    if [[ -f "$FSTAB_FILE" ]]; then
-      awk -v path="$SWAPFILE" 'NF > 0 && $1 == path { next } { print }' "$FSTAB_FILE"
-    fi
-    printf '%s none swap sw,pri=-2 0 0\n' "$SWAPFILE"
+    [[ ! -f "$FSTAB_FILE" ]] || awk -v path="$SWAPFILE" 'NF == 0 || $1 != path {print}' "$FSTAB_FILE"
+    printf '%s none swap sw,pri=-2 0 0 # Turbo Decky\n' "$SWAPFILE"
   } | atomic_write "$FSTAB_FILE" 0644
 }
 
 remove_swapfile_fstab_entry() {
   [[ -f "$FSTAB_FILE" ]] || return 0
   backup_file_once "$FSTAB_FILE"
-  awk -v path="$SWAPFILE" 'NF == 0 || $1 != path { print }' "$FSTAB_FILE" |
-    atomic_write "$FSTAB_FILE" 0644
+  awk -v path="$SWAPFILE" 'NF == 0 || $1 != path {print}' "$FSTAB_FILE" | atomic_write "$FSTAB_FILE" 0644
 }
 
 remove_existing_swapfile() {
-  local actual=""
-  actual="$(swapfile_resolved_path "$SWAPFILE" 2>/dev/null || true)"
-
-  # An existing swapfile may be active even when its size or signature is
-  # wrong for this profile. Never unlink an active swapfile until swapoff has
-  # succeeded and the kernel no longer reports it in swapon --show.
-  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]] &&
-     command -v swapon >/dev/null 2>&1 && command -v swapoff >/dev/null 2>&1; then
-    if swapfile_is_active "$SWAPFILE"; then
-      swapoff "$SWAPFILE" 2>/dev/null || true
-      if swapfile_is_active "$SWAPFILE" &&
-         [[ -n "$actual" && "$actual" != "$SWAPFILE" ]]; then
-        swapoff "$actual" 2>/dev/null || true
-      fi
-      swapfile_is_active "$SWAPFILE" &&
-        die "Não foi possível desativar o swapfile existente em $SWAPFILE."
-    fi
+  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]] && swapfile_is_active "$SWAPFILE"; then
+    swapoff "$SWAPFILE" || return 1
+    swapfile_is_active "$SWAPFILE" && return 1
   fi
-
-  # Do not leave a boot-time entry pointing to the file while it is being
-  # replaced. A fresh entry is written only after the new swapfile validates.
-  remove_swapfile_fstab_entry
+  remove_swapfile_fstab_entry || return 1
   rm -f -- "$SWAPFILE"
-  if [[ "$actual" == "$(managed_swapfile_target)" ]]; then
-    rm -f -- "$actual"
-  fi
 }
 
+# Keep the file until commit so failure recovery can reactivate it.
 remove_created_swapfile() {
   [[ -f "$STATE_DIR/swapfile-created" ]] || return 0
-  remove_existing_swapfile
-  rm -f -- "$STATE_DIR/swapfile-created"
+  if [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]] && swapfile_is_active "$SWAPFILE"; then
+    swapoff "$SWAPFILE" || die "Não foi possível desativar o swap gerenciado."
+  fi
+  remove_swapfile_fstab_entry
+}
+
+finalize_swapfile_removal() {
+  [[ -f "$STATE_DIR/swapfile-created" || -f "$OPERATION_DIR/backups/$(printf '%s' "$STATE_DIR/swapfile-created" | sha256sum | awk '{print $1}')" ]] || return 0
+  [[ -z "$ROOTFS" && "$DRY_RUN" != 1 ]] && swapfile_is_active "$SWAPFILE" && return 1
+  rm -f -- "$SWAPFILE" "$STATE_DIR/swapfile-created"
 }
 
 activate_verified_swapfile() {
-  write_swapfile_fstab_entry
   if ! swapfile_is_active "$SWAPFILE"; then
-    swapon --priority -2 "$SWAPFILE" || die "Não foi possível ativar o swapfile de 8 GiB em $SWAPFILE."
+    swapon --priority -2 "$SWAPFILE" || die "Não foi possível ativar o swap exclusivo do Turbo Decky."
   fi
-  swapfile_is_active "$SWAPFILE" || die "O swapfile foi criado, mas não aparece como ativo."
+  swapfile_is_active "$SWAPFILE" || die "O swap gerenciado não aparece como ativo."
+  write_swapfile_fstab_entry
+}
+
+preflight_swapfile() {
+  local command available
+  for command in stat blkid findmnt mkswap swapon swapoff df fallocate; do
+    command -v "$command" >/dev/null 2>&1 || die "Requisito para swap ausente: $command"
+  done
+  if [[ -e "$SWAPFILE" || -L "$SWAPFILE" ]]; then
+    [[ ! -L "$SWAPFILE" && -f "$STATE_DIR/swapfile-created" ]] || die "Arquivo existente sem ownership em $SWAPFILE. Ele foi preservado."
+    swapfile_size_is_8g "$SWAPFILE" && swapfile_has_swap_signature "$SWAPFILE" || die "Swap gerenciado inválido. Recupere a operação anterior antes de continuar."
+  else
+    available="$(df -B1 --output=avail /home | awk 'NR == 2 {print $1}')"
+    [[ "$available" =~ ^[0-9]+$ ]] && (( available >= TURBODECKY_SWAPFILE_MIN_FREE_BYTES )) || \
+      die "São necessários pelo menos 9 GiB livres em /home. Nenhum swap existente foi removido."
+  fi
 }
 
 create_real_swapfile() {
-  local fs actual available
-  available="$(df -B1 --output=avail /home 2>/dev/null | awk 'NR == 2 {print $1+0}')"
-  [[ "$available" =~ ^[0-9]+$ ]] || die "Não foi possível verificar o espaço livre em /home."
-  (( available >= TURBODECKY_SWAPFILE_MIN_FREE_BYTES )) || \
-    die "São necessários pelo menos 9 GiB livres em /home para criar o swapfile de 8 GiB."
-
-  fs="$(findmnt -n -o FSTYPE --target /home 2>/dev/null || true)"
+  local fs
+  mkdir -p "$(dirname "$SWAPFILE")"
+  chmod 0700 "$(dirname "$SWAPFILE")"
+  printf '1\n' > "$OPERATION_DIR/swap-created"
+  fs="$(findmnt -n -o FSTYPE --target "$(dirname "$SWAPFILE")")"
   if [[ "$fs" == btrfs ]]; then
-    actual=/home/.swap/turbodecky.swap
-    mkdir -p /home/.swap
-    chattr +C /home/.swap 2>/dev/null || true
-    rm -f -- "$actual" "$SWAPFILE"
-    if command -v btrfs >/dev/null 2>&1 && \
-       btrfs filesystem mkswapfile --size 8G "$actual" >/dev/null 2>&1; then
-      :
-    else
-      touch "$actual"
-      chattr +C "$actual" 2>/dev/null || true
-      truncate -s 0 "$actual"
-      fallocate -l "$TURBODECKY_SWAPFILE_BYTES" "$actual" || \
-        dd if=/dev/zero of="$actual" bs=1M count=8192 status=progress
-    fi
-    chmod 600 "$actual"
-    mkswap "$actual" >/dev/null
-    ln -s "$actual" "$SWAPFILE"
+    command -v btrfs >/dev/null 2>&1 || die "btrfs é necessário para criar swap sem holes/CoW."
+    btrfs filesystem mkswapfile --size 8G "$SWAPFILE"
   else
-    actual="$SWAPFILE"
-    rm -f -- "$actual"
-    fallocate -l "$TURBODECKY_SWAPFILE_BYTES" "$actual" || \
-      dd if=/dev/zero of="$actual" bs=1M count=8192 status=progress
-    chmod 600 "$actual"
-    mkswap "$actual" >/dev/null
+    # fallocate has no measurable byte progress; expose the current step.
+    ui_progress_update 48 "Alocando 8 GiB para o swap; aguarde a conclusão desta etapa"
+    fallocate -l "$TURBODECKY_SWAPFILE_BYTES" "$SWAPFILE"
+    chmod 0600 "$SWAPFILE"
+    mkswap "$SWAPFILE" >/dev/null
   fi
-
-  swapfile_size_is_8g "$SWAPFILE" || {
-    remove_existing_swapfile
-    die "O arquivo criado não possui exatamente 8 GiB."
-  }
-  swapfile_has_swap_signature "$SWAPFILE" || {
-    remove_existing_swapfile
-    die "O arquivo criado não possui uma assinatura swap válida."
-  }
+  chmod 0600 "$SWAPFILE"
+  swapfile_size_is_8g "$SWAPFILE" || die "Tamanho do swap gerenciado incorreto."
+  swapfile_has_swap_signature "$SWAPFILE" || die "Assinatura do swap gerenciado inválida."
   activate_verified_swapfile
   printf '1\n' > "$STATE_DIR/swapfile-created"
-  log "swapfile de 8 GiB criado e ativo em $SWAPFILE"
 }
 
 ensure_swapfile() {
   mkdir -p "$STATE_DIR" "$BACKUP_DIR" "$(dirname "$SWAPFILE")"
-
-  # Isolated-root tests model persistence without allocating physical blocks or
-  # calling swapon. The apparent file size must still be exactly 8 GiB.
   if [[ -n "$ROOTFS" ]]; then
-    truncate -s "$TURBODECKY_SWAPFILE_BYTES" "$SWAPFILE"
-    chmod 600 "$SWAPFILE"
+    if [[ -e "$SWAPFILE" && ! -f "$STATE_DIR/swapfile-created" ]]; then
+      die "Arquivo de teste existente sem ownership; preservado."
+    fi
+    if [[ ! -e "$SWAPFILE" ]]; then
+      [[ -z "$OPERATION_DIR" ]] || printf '1\n' > "$OPERATION_DIR/swap-created"
+      truncate -s "$TURBODECKY_SWAPFILE_BYTES" "$SWAPFILE"
+    fi
+    chmod 0600 "$SWAPFILE"
     write_swapfile_fstab_entry
     printf '1\n' > "$STATE_DIR/swapfile-created"
     return 0
   fi
-
-  [[ "$DRY_RUN" != 1 ]] || {
-    log "DRY-RUN: criaria e validaria um swapfile de 8 GiB em $SWAPFILE"
-    return 0
-  }
-
-  for command in stat blkid findmnt mkswap swapon swapoff; do
-    command -v "$command" >/dev/null 2>&1 || die "Comando obrigatório ausente para criar o swapfile: $command"
-  done
-
-  if [[ -e "$SWAPFILE" || -L "$SWAPFILE" ]]; then
-    if swapfile_size_is_8g "$SWAPFILE" && swapfile_has_swap_signature "$SWAPFILE"; then
-      chmod 600 "$SWAPFILE" 2>/dev/null || true
-      activate_verified_swapfile
-      log "swapfile existente de 8 GiB validado e ativo: $SWAPFILE"
-      return 0
-    fi
-
-    log "swapfile existente inválido ou com tamanho diferente; removendo e recriando com 8 GiB"
-    remove_existing_swapfile
+  preflight_swapfile
+  if [[ -e "$SWAPFILE" ]]; then
+    activate_verified_swapfile
+  else
+    create_real_swapfile
   fi
-
-  create_real_swapfile
 }

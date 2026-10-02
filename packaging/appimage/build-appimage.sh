@@ -9,7 +9,7 @@ MODE="${1:-build}"
 }
 
 VERSION="${VERSION:-$(grep -Eo 'TURBODECKY_VERSION="[^"]+"' "$ROOT/lib/00-core.sh" | head -n1 | cut -d'"' -f2)}"
-VERSION="${VERSION:-4.0.0-test}"
+VERSION="${VERSION:-4.1.0-test.1}"
 ARCH="${ARCH:-x86_64}"
 BUILD_DIR="${BUILD_DIR:-$ROOT/build/appimage}"
 APPDIR="${APPDIR_OUTPUT:-$BUILD_DIR/TurboDecky.AppDir}"
@@ -28,6 +28,7 @@ install -m 0755 "$ROOT/packaging/appimage/AppRun" "$APPDIR/AppRun"
 install -m 0755 "$ROOT/packaging/appimage/turbodecky" "$APPDIR/usr/bin/turbodecky"
 install -m 0755 "$ROOT/InstallTD.sh" "$APPDIR/usr/lib/turbodecky/InstallTD.sh"
 cp -a "$ROOT/lib/." "$APPDIR/usr/lib/turbodecky/lib/"
+find "$APPDIR" -type d -name __pycache__ -prune -exec rm -rf {} +
 find "$APPDIR/usr/lib/turbodecky/lib" -type d -exec chmod 0755 {} +
 find "$APPDIR/usr/lib/turbodecky/lib" -type f -exec chmod 0644 {} +
 install -m 0644 "$ROOT/packaging/appimage/turbodecky.desktop" \
@@ -61,10 +62,16 @@ mkdir -p "$DIST_DIR" "$BUILD_DIR/tools"
 APPIMAGETOOL="${APPIMAGETOOL:-$BUILD_DIR/tools/appimagetool-${ARCH}.AppImage}"
 if [[ ! -x "$APPIMAGETOOL" ]]; then
   curl --proto '=https' --tlsv1.2 --fail --location --retry 3 \
-    "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage" \
+    "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${ARCH}.AppImage" \
     -o "$APPIMAGETOOL"
   chmod 0755 "$APPIMAGETOOL"
 fi
+
+if [[ "$ARCH" != x86_64 ]]; then
+  printf 'Esta versão de teste suporta somente x86_64.\n' >&2
+  exit 2
+fi
+printf '%s  %s\n' 'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0' "$APPIMAGETOOL" | sha256sum -c -
 
 rm -f -- "$OUTPUT"
 ARCH="$ARCH" VERSION="$VERSION" APPIMAGE_EXTRACT_AND_RUN=1 \

@@ -26,19 +26,18 @@ TURBODECKY_PROGRESS_PROTOCOL=1 bash -c 'source "$1"; apply_zram_profile' _ "$SCR
   > "$progress_output" 2> "$TMP/progress.err"
 grep -Fq $'TURBODECKY_PROGRESS\t0\tAplicando o perfil Charcoal com ZRAM' "$progress_output"
 grep -Fq $'TURBODECKY_PROGRESS\t84\tAtivando a ZRAM' "$progress_output"
-grep -Fq $'TURBODECKY_PROGRESS\t100\tPerfil ZRAM aplicado' "$progress_output"
+grep -Fq $'TURBODECKY_PROGRESS\t100\tOperação concluída e verificada' "$progress_output"
 
 terminal_output="$(bash -c 'source "$1"; ui_progress_start "Teste" 100; ui_progress_update 50 "Etapa intermediária"; ui_progress_finish "Concluído"' _ "$SCRIPT" 2>&1)"
 grep -Fq '[ 50%] Etapa intermediária' <<< "$terminal_output"
 grep -Fq '[100%] Concluído' <<< "$terminal_output"
 
-# Package actions must also expose progress and must not invoke pacman during
-# a dry-run, even when a test root is supplied explicitly.
-old_progress_protocol="$PROGRESS_PROTOCOL"
-PROGRESS_PROTOCOL=1
-lavd_output="$(setup_lavd 2> "$TMP/lavd.err")"
-PROGRESS_PROTOCOL="$old_progress_protocol"
-grep -Fq $'TURBODECKY_PROGRESS\t100\tSimulação do SCX LAVD concluída' <<< "$lavd_output"
+# Scheduler installation has been removed from backend and launcher.
+! declare -F setup_lavd >/dev/null
+if TURBODECKY_LIBRARY=0 bash "$SCRIPT" --setup-lavd > "$TMP/lavd.out" 2>&1; then
+  printf 'Removed --setup-lavd action was accepted\n' >&2
+  exit 1
+fi
 
 [[ ! -e "$REPO_ROOT/lib/25-kernel-install-atomic.sh" ]]
 ! declare -F install_charcoal_kernel >/dev/null
